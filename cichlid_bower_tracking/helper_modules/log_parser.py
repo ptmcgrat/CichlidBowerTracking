@@ -100,7 +100,8 @@ class LogParser:
                     try:
                         [x for x in self.movies if x.h264_file == t_list[1]][0].endTime = t_list[0]
                     except IndexError:
-                        pdb.set_trace()
+                        # pdb.set_trace()
+                        raise IndexError
 
         self.frames.sort(key = lambda x: x.time)
 

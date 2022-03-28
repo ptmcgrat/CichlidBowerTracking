@@ -59,7 +59,7 @@ class FileManager():
 		self.localCredentialDrive = self.localCredentialDir +  'DriveCredentials.txt'
 
 	def getAllProjectIDs(self):
-		output = subprocess.run(['rclone', 'lsf', '--dirs-only', self.cloudMasterDir], capture_output = True, encoding = 'utf-8')
+		output = subprocess.run(['rclone', 'lsf', '--dirs-only', self.cloudMasterDir + '__ProjectData'], capture_output = True, encoding = 'utf-8')
 		projectIDs = [x.rstrip('/') for x in output.stdout.split('\n') if x[0:2] != '__']
 		return projectIDs
 
@@ -588,7 +588,6 @@ class FileManager():
 			raise Exception(local_data + ' does not exist for upload')
 
 		if output.returncode != 0:
-			pdb.set_trace()
 			raise Exception('Error in uploading file: ' + output.stderr)
 
 	def uploadAndMerge(self, local_data, master_file, tarred = False, ID = False):
