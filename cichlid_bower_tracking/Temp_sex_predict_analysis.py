@@ -78,9 +78,13 @@ projectIDs = list(sub_dt.projectID)
 
 
 
-csv_file='./MasterAnalysisFiles/AllTrackedFish.csv'
-base_name='0001_vid'
+
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+TorchModel=fm_obj.localTorchWeightsFile
+model = models.resnet50(pretrained=False).to(device)
+model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(device)
+model.load_state_dict(torch.load(TorchModel)) 
+model.eval()
 
 for projectID in projectIDs:
     fm_obj.createProjectData(projectID)
@@ -89,33 +93,36 @@ for projectID in projectIDs:
     fm_obj.downloadData(fm_obj.localOldVideoCropFile)
     #ensure this is the right movie with euthanuization data
     base_name=fm_obj.lp.movies[-1].baseName
-    csv_file=fm_obj.localAllFishTracksFile
-dataloaders = {
-    'predict':
-    torch.utils.data.DataLoader(MFDataset(csv_file, base_name, device),
-                                batch_size=50,
-                                shuffle=True,
-                                num_workers=0)}
-modelpath='/home/bshi/Dropbox (GaTech)/BioSci-McGrath/PublicIndividualData/Breanna/newrun/models/pytorch/runepochsweights.h5'
-model = models.resnet50(pretrained=False).to(device)
-model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(device)
-model.load_state_dict(torch.load(modelpath)) 
-model.eval()
-tracks = pd.read_csv(csv_file)
-sex_df = pd.DataFrame(columns=list(tracks.columns)+['sex', 'sex_acc'])
-count=0
-for i, idx in dataloaders['predict']:
-    #predict
-    current_track=tracks.iloc[list(idx), 1: ]
-    sample=torch.stack( [j.to(device) for j in i])
-    pred_logits_tensor=model(sample)
-    pred_probs = F.softmax(pred_logits_tensor, dim=1).cpu().data.numpy()
-    pred_class=np.argmax(pred_probs, axis=1)
     
-    pred_acc=np.max(pred_probs, axis=1)
-    current_track['sex']=pred_class
-    current_track['sex_acc']=pred_acc
-    sex_df = pd.concat([ sex_df, current_track], ignore_index=True)
-    print(count)
-    count+=1
-sex_df.to_csv('./sex_df.csv')
+    #download the video 
+    
+    csv_file=fm_obj.localAllFishTracksFile
+    
+    dataloaders = {
+        'predict':
+        torch.utils.data.DataLoader(MFDataset(csv_file, base_name, device),
+                                    batch_size=50, 
+                                    shuffle=True,
+                                    num_workers=0)}
+    tracks = pd.read_csv(csv_file)
+    tracks=tracks[tracks.base_name==base_name]
+    sex_df = pd.DataFrame(columns=list(tracks.columns)+['sex', 'sex_acc'])
+    print('Creating csv for ...'+str(projectID))
+    print('processing ...'+base_name)
+    count=0
+    for i, idx in dataloaders['predict']:
+    #predict
+        current_track=tracks.iloc[list(idx), 1: ]
+        sample=torch.stack( [j.to(device) for j in i])
+        pred_logits_tensor=model(sample)
+        pred_probs = F.softmax(pred_logits_tensor, dim=1).cpu().data.numpy()
+        pred_class=np.argmax(pred_probs, axis=1)
+        pred_acc=np.max(pred_probs, axis=1)
+        current_track['sex']=pred_class
+        current_track['sex_acc']=pred_acc
+        sex_df = pd.concat([ sex_df, current_track], ignore_index=True)
+        if count.__mod__(1000)==0
+        print(str(count*50)+'of   '+str(len(tracks.index)))
+        count+=1
+        
+    sex_df.to_csv('./sex_df.csv')
