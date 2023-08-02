@@ -246,7 +246,7 @@ class FileManager():
 		self.localYolov5WeightsFile = self.localMLDir + 'YOLOV5/best.pt'
 		self.localYolov5InfoDir = self.localMLDir + 'YOLOV5/ModelInfo'
 
-		self.localSexClassificationModelFile = self.localMLDir + 'SexClassification/' + self.analysisID + '/best.pt'
+		self.localSexClassificationModelFile = self.localMLDir + 'SexClassification/' + self.analysisID + '/best.h5'
 
 		self.local3DModelDir = self.localMLDir + 'VideoModels/' + self.analysisID + '/'
 		self.local3DModelTempDir = self.local3DModelDir + 'Temp/'
