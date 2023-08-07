@@ -160,7 +160,8 @@ class FileManager():
         # Need information from AnalysisStates file to determine where project data is stored
         self.downloadData(self.localSummaryFile)
         a_dt = pd.read_csv(self.localSummaryFile)
-        self.localProjectDir = self.localMasterDir + '__ProjectData/' + a_dt[a_dt.projectID == projectID].Directory.values[0] + '/' + projectID + '/'
+        # replaced  a_dt[a_dt.projectID == projectID].Directory.values[0] with self.analysisID due to error
+        self.localProjectDir = self.localMasterDir + '__ProjectData/' + self.analysisID + '/' + projectID + '/'
 
         # Create logfile
         self.localLogfile = self.localProjectDir + 'Logfile.txt'
