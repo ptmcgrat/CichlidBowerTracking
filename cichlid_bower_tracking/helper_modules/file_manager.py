@@ -2,7 +2,7 @@ import os, subprocess, pdb, platform, shutil
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 
 class FileManager():
-    def __init__(self, projectID = None, modelID = None, analysisID=None, rcloneRemote = 'CichlidPiData:', masterDir = 'McGrath/Apps/CichlidPiData/'):
+    def __init__(self, projectID = None, modelID = None, analysisID=None, rcloneRemote = 'CichlidPiData:', masterDir = 'BioSci-McGrath/Apps/CichlidPiData/'):
         # Identify directory for temporary local files
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
             self._identifyPiDirectory()
@@ -189,6 +189,9 @@ class FileManager():
         self.localAllFishDetectionsFile = self.localAnalysisDir + 'AllDetectionsFish.csv'
         self.localAllTracksSummaryFile = self.localAnalysisDir + 'AllSummarizedTracks.csv'
 
+        #file created by add_fish_sex
+        self.localAllFishSexFile = self.localAnalysisDir + 'AllFishSex.csv'
+
         # Files created by manual labelerer  preparers
         self.localNewLabeledFramesFile = self.localTempDir + 'NewLabeledFrames.csv'
         self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
@@ -219,10 +222,10 @@ class FileManager():
         if modelID is None:
             self.vModelID = self.analysisID
             self.localYolov5WeightsFile = self.localMLDir + 'YOLOV5/' + self.analysisID + '/best.pt'
-            self.localTorchWeightFile=self.localMLDir+'TORCH/'+self.analysisID+'/best.h5'
+            self.localSexClassificationModelFile=self.localMLDir+'SexClassification/'+self.analysisID+'/best.h5'
         else:
             self.localYolov5WeightsFile = self.localMLDir + 'YOLOV5/' + modelID + '/best.pt'
-            self.localTorchWeightFile=self.localMLDir+'TORCH/'+self.analysisID+'/best.h5'
+            self.localSexClassificationModelFile=self.localMLDir+'SexClassification/'+self.analysisID+'/best.h5'
 
         self.local3DModelDir = self.localMLDir + 'VideoModels/' + self.vModelID + '/'
         self.local3DModelTempDir = self.localMLDir + 'VideoModels/' + self.vModelID + 'Temp/'
@@ -350,7 +353,20 @@ class FileManager():
             self.createDirectory(self.localNewLabeledFramesDir)
             self.downloadData(self.localManualLabelFramesDir, tarred_subdirs = True)
             self.downloadData(self.localBoxedFishFile)
+        elif dtype == 'AddFishSex':
+            self.createDirectory(self.localMasterDir)
+            self.createDirectory(self.localAnalysisDir)
+            self.createDirectory(self.localTroubleshootingDir)
+            self.createDirectory(self.localTempDir)
+            self.downloadData(self.localSexClassificationModelFile)
 
+            if videoIndex is not None:
+                videoObj = self.returnVideoObject(videoIndex)
+                print('Downloading video ' + str(videoIndex))
+                self.downloadData(videoObj.localVideoFile)
+            else:
+                print('Downloading video ' + self.localVideoDir)
+                self.downloadData(self.localVideoDir)
         elif dtype == 'Summary':
             self.createDirectory(self.localMasterDir)
             self.createDirectory(self.localSummaryDir)
@@ -477,6 +493,13 @@ class FileManager():
                 self.uploadAndMerge(self.localNewLabeledFramesDir, self.localLabeledFramesProjectDir, tarred = True)
             if delete:
                 shutil.rmtree(self.localProjectDir)
+        elif dtype == 'AddFishSex':
+            if not no_upload:
+                self.uploadData(self.localAllFishSexFile)
+
+            if delete:
+                shutil.rmtree(self.localProjectDir)
+                #os.remove(self.localYolov5WeightsFile)
 
         elif dtype == 'Summary':
             self.uploadData(self.localSummaryDir)
@@ -497,6 +520,7 @@ class FileManager():
         videoObj.localLabeledClustersFile = self.localTroubleshootingDir + videoObj.baseName + '_labeledClusters.csv'
         videoObj.localFishDetectionsFile = self.localTroubleshootingDir + videoObj.baseName + '_fishDetections.csv'
         videoObj.localFishTracksFile = self.localTroubleshootingDir + videoObj.baseName + '_fishTracks.csv'
+        videoObj.localFishSexFile = self.localTroubleshootingDir + videoObj.baseName + '_fishSex.csv'
 
         videoObj.localAllClipsDir = self.localAllClipsDir + videoObj.baseName + '/'
         videoObj.localManualLabelClipsDir = self.localManualLabelClipsDir + videoObj.baseName + '/'
