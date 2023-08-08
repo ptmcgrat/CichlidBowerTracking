@@ -146,8 +146,25 @@ class ProjectPreparer():
 			tdm_obj.create3DModel()
 
 	def runMLFishDetection(self):
-		pass
+		from cichlid_bower_tracking.data_preparers.add_fish_sex_preparer import  AddFishSexPreparer as AFSP
+		if videoIndexIn is None:
+			videos = list(range(len(self.fileManager.lp.movies)))
+		else:
+			videos = [videoIndexIn]
+		
+		ftp_objs = []
+		for idx in range(len(videos)):
+			AFSP(self.filemanager, idx).RunFishSexClassifier()
 
+		# Combine predictions
+		if videoIndexIn is None:
+			for videoIndex in videos:
+				videoObj = self.fileManager.returnVideoObject(videoIndex)
+				new_dt_t = pd.read_csv(videoObj.localFishSexFile)
+				c_dt_s = c_dt_t.append(new_dt_s)
+
+			c_dt_s.to_csv(self.fileManager.localAllFishSexFile)
+			
 	def runSummaryCreation(self):
 		from cichlid_bower_tracking.data_preparers.summary_preparer import SummaryPreparer as SP
 		sp_obj = SP(self.fileManager)
