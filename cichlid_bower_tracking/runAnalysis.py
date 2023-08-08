@@ -89,6 +89,9 @@ while len(projectIDs) != 0:
     elif args.AnalysisType == 'AssociateClustersWithTracks':
         p1 = subprocess.run(
             ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.associate_clusters_with_tracks', projectID, args.AnalysisID])
+    elif args.AnalysisType == 'AddFishSex':
+        p1 = subprocess.run(
+            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID])
     elif args.AnalysisType == 'Summary':
         if args.SummaryFile is None:
             p1 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.summarize', projectID])
