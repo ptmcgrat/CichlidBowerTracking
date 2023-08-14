@@ -15,7 +15,7 @@ fm_obj.downloadData(summary_file)
 dt = pd.read_csv(summary_file, index_col=False)
 projectIDs = list(dt.projectID)
 
-columns = ['projectID', 'Notes', 'tankID', 'RunAnalysis', 'StartingFiles', 'Prep', 'Depth', 'Cluster', 'ClusterClassification', 'TrackFish', 'Summary']
+columns = ['projectID', 'Notes', 'tankID', 'RunAnalysis', 'StartingFiles', 'Prep', 'Depth', 'Cluster', 'ClusterClassification', 'TrackFish','AddFishSex', 'Summary']
 
 for c in columns:
 	if c not in dt.columns:

@@ -360,13 +360,6 @@ class FileManager():
             self.createDirectory(self.localTempDir)
             self.downloadData(self.localSexClassificationModelFile)
 
-            if videoIndex is not None:
-                videoObj = self.returnVideoObject(videoIndex)
-                print('Downloading video ' + str(videoIndex))
-                self.downloadData(videoObj.localVideoFile)
-            else:
-                print('Downloading video ' + self.localVideoDir)
-                self.downloadData(self.localVideoDir)
         elif dtype == 'Summary':
             self.createDirectory(self.localMasterDir)
             self.createDirectory(self.localSummaryDir)
@@ -635,6 +628,7 @@ class FileManager():
                 else:
                     pass
             else:
+                pdb.set_trace()
                 raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
 
         if not os.path.exists(local_path + relative_name):

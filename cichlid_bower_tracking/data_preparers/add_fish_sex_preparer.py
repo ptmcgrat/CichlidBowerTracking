@@ -24,32 +24,39 @@ class AddFishSexPreparer():
     #1.) run a FishSexClassifer Model on each object detection
     #2.) averages the sex_class with respect to SORT tracks
     
-    def __init__(self, fileManager, videoIndex):
-        self.__version__ = '1.0.0'
-        self.fileManager = fileManager
-        self.videoObj = self.fileManager.returnVideoObject(videoIndex)
-        self.validateInputData()
-        
+    def __init__(self, fileManager):
         self.batch_size=50
         self.num_workers=0
         self.device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
+        self.__version__ = '1.0.0'
+        self.fileManager = fileManager
+        videos = list(range(len(self.fileManager.lp.movies)))
+        for videoIndex in videos:
+            self.videoObj = self.fileManager.returnVideoObject(videoIndex)
+            self.fileManager.downloadData(self.videoObj.localVideoFile)
+            self.fileManager.downloadData(self.videoObj.localFishTracksFile)
+            self.validateInputData()
+            self.RunFishSexClassifier()
+            os.remove(self.videoObj.localVideoFile)
+            os.remove(self.videoObj.localFishTracksFile)
+        
     def validateInputData(self):
         
-        assert os.path.exists(self.localSexClassificationModelFile)
+        assert os.path.exists(self.fileManager.localSexClassificationModelFile)
         assert os.path.exists(self.videoObj.localVideoFile)
         assert os.path.exists(self.fileManager.localTroubleshootingDir)
         assert os.path.exists(self.videoObj.localFishTracksFile)
         return
         
     def RunFishSexClassifier(self):
-            
+        
         print('Running Fish Sex Classifier on ' + self.videoObj.baseName + ' ' + str(datetime.datetime.now()), flush = True)
         dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
         
         model = models.resnet50(pretrained=False).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
-        model.load_state_dict(torch.load(self.localSexClassificationModelFile)) 
+        model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
         
         tracks = pd.read_csv(self.videoObj.localFishTracksFile)
