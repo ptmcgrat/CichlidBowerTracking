@@ -79,7 +79,7 @@ fm_obj.uploadData(summary_file)
 de = pd.read_csv(fm_obj.localEuthData, index_col = False)
 for pid in dt.projectID:
     temp_de=de[de.pid==pid]
-    pid_et=datetime.strptime(str(temp_de.dissection_time), "%m/%d/%Y %H:%M")
+    pid_et=datetime.datetime.strptime(str(temp_de.dissection_time), "%m/%d/%Y %H:%M")
     print(pid_et)
     print('break')
     fm_obj=FM(projectID = pid, analysisID = args.AnalysisID)
