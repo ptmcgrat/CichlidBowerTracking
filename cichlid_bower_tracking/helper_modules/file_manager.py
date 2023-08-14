@@ -29,6 +29,7 @@ class FileManager():
         if analysisID is not None:
             self.localAnalysisStatesDir = self.localMasterDir + '__AnalysisStates/' + analysisID + '/'
             self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
+            self.localEuthData = self.localAnalysisStatesDir + 'euthanization_data.csv'
         else:
             self.localEuthData = None
     
