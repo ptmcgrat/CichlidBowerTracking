@@ -360,6 +360,11 @@ class FileManager():
             self.createDirectory(self.localTroubleshootingDir)
             self.createDirectory(self.localTempDir)
             self.downloadData(self.localSexClassificationModelFile)
+            if videoIndex is not None:
+                videoObj = self.returnVideoObject(videoIndex)
+                print('Downloading video ' + str(videoIndex))
+                self.downloadData(videoObj.localVideoFile)
+                self.fileManager.downloadData(self.videoObj.localFishTracksFile)
 
         elif dtype == 'Summary':
             self.createDirectory(self.localMasterDir)

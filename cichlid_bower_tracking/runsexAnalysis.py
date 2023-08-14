@@ -69,21 +69,24 @@ dt.loc[dt.projectID == projectIDs[0],args.AnalysisType] = 'Running'
 dt.to_csv(summary_file, index = False)
 fm_obj.uploadData(summary_file)
 de = pd.read_csv(fm_obj.localEuthData, index_col = False)
+trialidx={}
 for pid in dt.projectID:
     temp_de=de[de.pid==pid]
-    print(temp_de.dissection_time)
-    print('break')
-    fm_obj.downloadProjectData(pid)
-    videos = list(range(fm_obj.lp.movies))
+    pid_et=datetime.datetime.strptime(str(temp_de.dissection_time.values[0]), "%m/%d/%Y %H:%M")
+    fm_obj=FM(projectID = pid, analysisID = args.AnalysisID)
+    videos = fm_obj.lp.movies
+    count=0
     for videoIndex in videos:
-        videoObj = fm_obj.returnVideoObject(videoIndex)
-        print(videoObj.endTime)
-    print('cut')
-sdfas
+        delta=videoIndex.endTime-pid_et
+        days=delta.total_seconds() / (60*60*24)
+        if days<1:
+            trialidx[pid]=count
+        count+=1
+
 
 print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
 
-subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID])
+subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', trialidx[projectIDs[0]]])
 while len(projectIDs) != 0:
     projectID = projectIDs[0]
 
@@ -126,7 +129,7 @@ while len(projectIDs) != 0:
         fm_obj.uploadData(summary_file)
 
         print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
-        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data', args.AnalysisType, '--ProjectID', projectIDs[0], '--AnalysisID', args.AnalysisID])
+        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data', args.AnalysisType, '--ProjectID', projectIDs[0], '--AnalysisID', args.AnalysisID, '--VideoIndex', trialidx[projectIDs[0]]])
 
     # Pause script until current analysis is complete and data for next project is downloaded
     p1.communicate()

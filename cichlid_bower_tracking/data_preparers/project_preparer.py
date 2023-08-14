@@ -152,7 +152,7 @@ class ProjectPreparer():
         else:
             videos = [videoIndexIn]
         
-        AFSP(self.fileManager)
+        AFSP(self.fileManager, videoIndexIn)
         # Combine predictions
         if videoIndexIn is None:
             for videoIndex in videos:
@@ -162,6 +162,8 @@ class ProjectPreparer():
                     c_dt_s = c_dt_s.append(new_dt_s)
                 except NameError:
                     c_dt_s = new_dt_s
+        else:
+            c_dt_s = pd.read_csv(videoObj.localFishSexFile)
                     
             c_dt_s.to_csv(self.fileManager.localAllFishSexFile)
             

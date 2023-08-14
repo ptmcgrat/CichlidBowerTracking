@@ -24,22 +24,28 @@ class AddFishSexPreparer():
     #1.) run a FishSexClassifer Model on each object detection
     #2.) averages the sex_class with respect to SORT tracks
     
-    def __init__(self, fileManager):
+    def __init__(self, fileManager, videoIndex=None):
         self.batch_size=50
-        self.num_workers=0
+        self.num_workers=6
         self.device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         self.__version__ = '1.0.0'
         self.fileManager = fileManager
-        videos = list(range(len(self.fileManager.lp.movies)))
-        for videoIndex in videos:
-            self.videoObj = self.fileManager.returnVideoObject(videoIndex)
-            self.fileManager.downloadData(self.videoObj.localVideoFile)
-            self.fileManager.downloadData(self.videoObj.localFishTracksFile)
+        if videoIndex is not None:
             self.validateInputData()
             self.RunFishSexClassifier()
             os.remove(self.videoObj.localVideoFile)
             os.remove(self.videoObj.localFishTracksFile)
+        else:
+            videos = list(range(len(self.fileManager.lp.movies)))
+            for videoIndex in videos:
+                self.videoObj = self.fileManager.returnVideoObject(videoIndex)
+                self.fileManager.downloadData(self.videoObj.localVideoFile)
+                self.fileManager.downloadData(self.videoObj.localFishTracksFile)
+                self.validateInputData()
+                self.RunFishSexClassifier()
+                os.remove(self.videoObj.localVideoFile)
+                os.remove(self.videoObj.localFishTracksFile)
         
     def validateInputData(self):
         
