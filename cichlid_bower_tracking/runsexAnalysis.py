@@ -1,5 +1,8 @@
 import argparse, subprocess, pdb, datetime, os, sys
 import pandas as pd
+sys.path.append('~/CichlidBowerTracking/') 
+print(sys.path)
+
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,6 +41,7 @@ def get_projects(fm_obj, analysis_type, fil_projectIDs):
 # Identify projects to run analysis on
 fm_obj = FM(analysisID = args.AnalysisID)
 fm_obj.downloadData(fm_obj.localSummaryFile)
+fm_obj.downloadData(fm_obj.localEuthData)
 if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
     print('Cant find ' + fm_obj.localSummaryFile)
     sys.exit()
@@ -64,6 +68,8 @@ dt = pd.read_csv(fm_obj.localSummaryFile, index_col = False, dtype = {'StartingF
 dt.loc[dt.projectID == projectIDs[0],args.AnalysisType] = 'Running'
 dt.to_csv(summary_file, index = False)
 fm_obj.uploadData(summary_file)
+de = pd.read_csv(fm_obj.localEuthData, index_col = False)
+print(de.columns())
 
 print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
 
