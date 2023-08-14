@@ -361,7 +361,7 @@ class FileManager():
             self.createDirectory(self.localTempDir)
             self.downloadData(self.localSexClassificationModelFile)
             if videoIndex is not None:
-                videoObj = self.returnVideoObject(videoIndex)
+                videoObj = self.returnVideoObject(int(videoIndex))
                 print('Downloading video ' + str(videoIndex))
                 self.downloadData(videoObj.localVideoFile)
                 self.fileManager.downloadData(self.videoObj.localFishTracksFile)

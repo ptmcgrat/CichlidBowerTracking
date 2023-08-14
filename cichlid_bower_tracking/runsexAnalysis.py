@@ -86,7 +86,7 @@ for pid in dt.projectID:
 
 print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
 
-subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', trialidx[projectIDs[0]]])
+subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
 while len(projectIDs) != 0:
     projectID = projectIDs[0]
 
@@ -104,13 +104,13 @@ while len(projectIDs) != 0:
             ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.classify_clusters', projectID, args.ModelID])
     elif args.AnalysisType == 'TrackFish':
         p1 = subprocess.Popen(
-            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.track_fish', projectID, args.AnalysisID])
+            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.track_fish', projectID, args.AnalysisID, ])
     elif args.AnalysisType == 'AssociateClustersWithTracks':
         p1 = subprocess.run(
             ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.associate_clusters_with_tracks', projectID, args.AnalysisID])
     elif args.AnalysisType == 'AddFishSex':
         p1 = subprocess.run(
-            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID])
+            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
     elif args.AnalysisType == 'Summary':
         if args.SummaryFile is None:
             p1 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.summarize', projectID])
@@ -129,7 +129,7 @@ while len(projectIDs) != 0:
         fm_obj.uploadData(summary_file)
 
         print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
-        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data', args.AnalysisType, '--ProjectID', projectIDs[0], '--AnalysisID', args.AnalysisID, '--VideoIndex', trialidx[projectIDs[0]]])
+        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data', args.AnalysisType, '--ProjectID', projectIDs[0], '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
 
     # Pause script until current analysis is complete and data for next project is downloaded
     p1.communicate()
