@@ -1,6 +1,6 @@
 import argparse, subprocess, pdb, datetime, os, sys
 import pandas as pd
-sys.path.append('/data/home/bshi42/CichlidBowerTracking/cichlid_bower_tracking') 
+sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
 print(sys.path)
 
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
