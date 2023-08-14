@@ -82,6 +82,7 @@ for pid in dt.projectID:
     print(temp_de.dissection_time)
     print('break')
     fm_obj=FM(projectID = pid, analysisID = args.AnalysisID)
+    pdb.set_trace()
     videos = list(range(fm_obj.lp.movies))
     for videoIndex in videos:
         videoObj = fm_obj.returnVideoObject(videoIndex)
