@@ -79,8 +79,7 @@ fm_obj.uploadData(summary_file)
 de = pd.read_csv(fm_obj.localEuthData, index_col = False)
 for pid in dt.projectID:
     temp_de=de[de.pid==pid]
-    pdb.set_trace()
-    pid_et=datetime.datetime.strptime(str(temp_de.dissection_time.values()), "%m/%d/%Y %H:%M")
+    pid_et=datetime.datetime.strptime(str(temp_de.dissection_time.values[0]), "%m/%d/%Y %H:%M")
     print(pid_et)
     print('break')
     fm_obj=FM(projectID = pid, analysisID = args.AnalysisID)
@@ -91,3 +90,4 @@ for pid in dt.projectID:
         print(videoIndex.endTime-pid_et)
         count+=1
     print('cut')
+    pdb.set_trace()
