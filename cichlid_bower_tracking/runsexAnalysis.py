@@ -69,8 +69,17 @@ dt.loc[dt.projectID == projectIDs[0],args.AnalysisType] = 'Running'
 dt.to_csv(summary_file, index = False)
 fm_obj.uploadData(summary_file)
 de = pd.read_csv(fm_obj.localEuthData, index_col = False)
-pdb.set_trace()
-print(de.columns())
+for pid in dt.projectID:
+    temp_de=de[de.pid==pid]
+    print(temp_de.dissection_time)
+    print('break')
+    fm_obj.downloadProjectData(pid)
+    videos = list(range(fm_obj.lp.movies))
+    for videoIndex in videos:
+        videoObj = fm_obj.returnVideoObject(videoIndex)
+        print(videoObj.endTime)
+    print('cut')
+sdfas
 
 print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
 
