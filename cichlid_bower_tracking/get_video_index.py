@@ -77,6 +77,7 @@ dt.loc[dt.projectID == projectIDs[0],args.AnalysisType] = 'Running'
 dt.to_csv(summary_file, index = False)
 fm_obj.uploadData(summary_file)
 de = pd.read_csv(fm_obj.localEuthData, index_col = False)
+trialidx={}
 for pid in dt.projectID:
     temp_de=de[de.pid==pid]
     pid_et=datetime.datetime.strptime(str(temp_de.dissection_time.values[0]), "%m/%d/%Y %H:%M")
@@ -87,7 +88,13 @@ for pid in dt.projectID:
     count=0
     for videoIndex in videos:
         print(videoIndex.endTime)
-        print(videoIndex.endTime-pid_et)
+        delta=videoIndex.endTime-pid_et
+        days=delta.total_seconds() / (60*60*24)
+        if days<1:
+            trialidx[pid]=count
+            print(pid+' is '+ str(count))
         count+=1
     print('cut')
-    pdb.set_trace()
+    
+print(list(trialidx)==list(dt.projectID))
+pdb.set_trace()
