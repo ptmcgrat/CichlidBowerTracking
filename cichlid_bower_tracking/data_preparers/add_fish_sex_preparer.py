@@ -5,6 +5,9 @@ Created on Wed Aug  2 16:15:16 2023
 
 @author: bshi
 """
+import sys
+sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
+
 from __future__ import print_function, division
 import os
 import torch

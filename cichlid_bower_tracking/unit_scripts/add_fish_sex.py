@@ -1,4 +1,6 @@
 import argparse, subprocess
+import sys
+sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
 from cichlid_bower_tracking.data_preparers.project_preparer import ProjectPreparer as PP
 
 parser = argparse.ArgumentParser(usage = 'This script will use Pytorch Fish Sex Detection model')

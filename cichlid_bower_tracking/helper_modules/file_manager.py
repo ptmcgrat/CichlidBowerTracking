@@ -1,4 +1,6 @@
 import os, subprocess, pdb, platform, shutil
+import sys
+sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 
 class FileManager():

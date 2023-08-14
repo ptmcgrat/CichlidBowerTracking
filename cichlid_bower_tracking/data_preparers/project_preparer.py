@@ -1,6 +1,7 @@
 import datetime, os, subprocess, pdb, math
 import pandas as pd
-
+import sys
+sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 
 class ProjectPreparer():
