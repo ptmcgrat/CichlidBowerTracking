@@ -1,7 +1,7 @@
 import argparse, subprocess, pdb, datetime, os, sys
 import pandas as pd
 sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
-print(sys.path)
+
 
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 
@@ -37,7 +37,7 @@ def get_projects(fm_obj, analysis_type, fil_projectIDs):
             if projectID not in fil_projectIDs:
                 projectIDs.remove(projectID)
     return projectIDs
-
+print(args.AnalysisID)
 # Identify projects to run analysis on
 fm_obj = FM(analysisID = args.AnalysisID)
 fm_obj.downloadData(fm_obj.localSummaryFile)
