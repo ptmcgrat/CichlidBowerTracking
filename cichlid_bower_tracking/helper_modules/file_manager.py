@@ -366,7 +366,7 @@ class FileManager():
                 videoObj = self.returnVideoObject(int(videoIndex))
                 print('Downloading video ' + str(videoIndex))
                 self.downloadData(videoObj.localVideoFile)
-                self.fileManager.downloadData(self.videoObj.localFishTracksFile)
+                self.downloadData(videoObj.localFishTracksFile)
 
         elif dtype == 'Summary':
             self.createDirectory(self.localMasterDir)
