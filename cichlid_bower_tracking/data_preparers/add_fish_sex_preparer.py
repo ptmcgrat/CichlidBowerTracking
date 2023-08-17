@@ -21,6 +21,7 @@ from torch.nn import functional as F
 import cv2 
 from PIL import Image
 import datetime
+import pdb
 
 class AddFishSexPreparer():
     
@@ -122,7 +123,11 @@ class MFDataset(Dataset):
         w=(current_track.w)
         h=(current_track.h)
         delta_xy=(int((1/2)*max(int(w)+1, int(h)+1)))+10
-        frame = frame[int(max(0, yc - delta_xy)):int(min(yc + delta_xy,height)) , int(max(0, xc - delta_xy)):int(min(xc + delta_xy, width))]
+        try:
+            frame = frame[int(max(0, yc - delta_xy)):int(min(yc + delta_xy,height)) , int(max(0, xc - delta_xy)):int(min(xc + delta_xy, width))]
+        except TypeError:
+            pdb.set_trace()
+            
         frame=cv2.resize(frame, (100, 100))
         
         frame = frame[...,::-1]
