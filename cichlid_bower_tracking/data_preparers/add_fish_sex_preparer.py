@@ -36,6 +36,7 @@ class AddFishSexPreparer():
         self.__version__ = '1.0.0'
         self.fileManager = fileManager
         if videoIndex is not None:
+            self.videoObj = self.fileManager.returnVideoObject(int(videoIndex))
             self.validateInputData()
             self.RunFishSexClassifier()
             os.remove(self.videoObj.localVideoFile)
