@@ -69,7 +69,7 @@ class AddFishSexPreparer():
         
         model = models.resnet50(pretrained=False).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2))
-        model = nn.DataParallel( model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) )
+        model = nn.DataParallel( torch.load(self.fileManager.localSexClassificationModelFile) )
         model.to(self.device)
         #model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
