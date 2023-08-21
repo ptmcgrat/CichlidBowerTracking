@@ -69,9 +69,10 @@ class AddFishSexPreparer():
         
         model = models.resnet50(pretrained=False).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2))
+        model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model = nn.DataParallel(model)
         model.to(self.device)
-        model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
+        #model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
         
         tracks = pd.read_csv(self.videoObj.localFishTracksFile)
