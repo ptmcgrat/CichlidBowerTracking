@@ -9,7 +9,7 @@ from __future__ import print_function, division
 import sys
 sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
 
-
+import time
 import os
 import torch
 import pandas as pd
@@ -31,9 +31,8 @@ class AddFishSexPreparer():
     
     def __init__(self, fileManager, videoIndex=None):
         self.batch_size=30
-        self.num_workers=1
-        self.device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+        self.num_workers=6
+        self.device=torch.device("cuda:0")
         
         self.__version__ = '1.0.0'
         self.fileManager = fileManager
@@ -68,10 +67,8 @@ class AddFishSexPreparer():
         dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
         
         model = models.resnet50(pretrained=False).to(self.device)
-        model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2))
-        model = nn.DataParallel( torch.load(self.fileManager.localSexClassificationModelFile) )
-        model.to(self.device)
-        #model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
+        model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
+        model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
         
         tracks = pd.read_csv(self.videoObj.localFishTracksFile)
@@ -80,16 +77,22 @@ class AddFishSexPreparer():
         
         for i, idx in dataloaders['predict']:
             current_track=tracks.iloc[list(idx), 0: ]
+            time1 = time.time()
             sample=torch.stack( [j.to(self.device) for j in i])
+            time2 = time.time()
             pred_logits_tensor=model(sample)
+            time3 = time.time()
             pred_probs = F.softmax(pred_logits_tensor, dim=1).cpu().data.numpy()
             pred_class=np.argmax(pred_probs, axis=1)
             pred_acc=np.max(pred_probs, axis=1)
-            
+            time4 = time.time()
             current_track['sex_class']=pred_class
             current_track['sex_p_value']=pred_acc
             sex_df = pd.concat([sex_df, current_track], ignore_index=True)
-            
+            print(time2-time1)
+            print(time2-time3)
+            print(time3-time4)
+            jgn
             if count.__mod__(1000)==0:
                 print('Proccessing: count'+ str(count*self.batch_size)+ 'of'+ str(len(tracks.frame)))
             count+=1
@@ -103,6 +106,7 @@ class MFDataset(Dataset):
     def __init__(self, csv_file, VideoFile):
         
         self.tracks = pd.read_csv(csv_file)
+        self.device =torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.video=VideoFile
         
     def __len__(self):

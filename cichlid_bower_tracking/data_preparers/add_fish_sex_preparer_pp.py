@@ -31,8 +31,8 @@ class AddFishSexPreparer():
     
     def __init__(self, fileManager, videoIndex=None):
         self.batch_size=30
-        self.num_workers=6
-        self.device=[torch.device("cuda:0"), torch.device("cuda:1"),  torch.device("cuda:2"),  torch.device("cuda:3"),  torch.device("cuda:4"),  torch.device("cuda:5"),  torch.device("cuda:6")]
+        self.num_workers=1
+        self.device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
         
         self.__version__ = '1.0.0'
@@ -68,8 +68,10 @@ class AddFishSexPreparer():
         dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
         
         model = models.resnet50(pretrained=False).to(self.device)
-        model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
-        model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
+        model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2))
+        model = nn.DataParallel( torch.load(self.fileManager.localSexClassificationModelFile) )
+        model.to(self.device)
+        #model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
         
         tracks = pd.read_csv(self.videoObj.localFishTracksFile)
@@ -101,7 +103,6 @@ class MFDataset(Dataset):
     def __init__(self, csv_file, VideoFile):
         
         self.tracks = pd.read_csv(csv_file)
-        self.device =torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.video=VideoFile
         
     def __len__(self):
