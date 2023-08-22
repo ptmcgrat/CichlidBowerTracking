@@ -92,6 +92,10 @@ class AddFishSexPreparer():
             print(time2-time1)
             print(time2-time3)
             print(time3-time4)
+            print(time1)
+            print(time2)
+            print(time3)
+            print(time4)
             jgn
             if count.__mod__(1000)==0:
                 print('Proccessing: count'+ str(count*self.batch_size)+ 'of'+ str(len(tracks.frame)))
