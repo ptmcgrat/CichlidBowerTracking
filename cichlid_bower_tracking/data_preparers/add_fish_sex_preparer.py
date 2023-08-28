@@ -30,7 +30,7 @@ class AddFishSexPreparer():
     #2.) averages the sex_class with respect to SORT tracks
     
     def __init__(self, fileManager, device, videoIndex=None):
-        self.batch_size=20
+        self.batch_size=25
         self.num_workers=1
         self.device=torch.device("cuda:"+str(device))
         self.ndevice=device
@@ -58,16 +58,13 @@ class AddFishSexPreparer():
         assert os.path.exists(self.fileManager.localSexClassificationModelFile)
         assert os.path.exists(self.videoObj.localVideoFile)
         assert os.path.exists(self.fileManager.localTroubleshootingDir)
-        print(self.videoObj.localFishTracksFile)
         assert os.path.exists(self.videoObj.localFishTracksFile)
         return
         
     def RunFishSexClassifier(self):
         
         print('Running Fish Sex Classifier on ' + self.videoObj.baseName + ' ' + str(datetime.datetime.now()), flush = True)
-        print('dataloader'+str(self.ndevice))
         dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile, self.device),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
-        print('model'+str(self.ndevice))
         model = models.resnet50(weights=None).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
         model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
@@ -79,7 +76,7 @@ class AddFishSexPreparer():
         
         for i, idx in dataloaders['predict']:
             current_track=tracks.iloc[list(idx), 0: ]
-            print('sample'+str(self.ndevice))
+            
             sample=torch.stack( [j.to(self.device) for j in i])
             
             pred_logits_tensor=model(sample)
