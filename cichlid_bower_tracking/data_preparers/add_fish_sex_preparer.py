@@ -9,7 +9,7 @@ from __future__ import print_function, division
 import sys
 sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
 
-import time
+
 import os
 import torch
 import pandas as pd
@@ -58,6 +58,7 @@ class AddFishSexPreparer():
         assert os.path.exists(self.fileManager.localSexClassificationModelFile)
         assert os.path.exists(self.videoObj.localVideoFile)
         assert os.path.exists(self.fileManager.localTroubleshootingDir)
+        print(self.videoObj.localFishTracksFile)
         assert os.path.exists(self.videoObj.localFishTracksFile)
         return
         
@@ -68,7 +69,7 @@ class AddFishSexPreparer():
         
         model = models.resnet50(pretrained=False).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
-        model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
+        model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)).to(self.device) 
         model.eval()
         
         tracks = pd.read_csv(self.videoObj.localFishTracksFile)
