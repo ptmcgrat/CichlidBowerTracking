@@ -29,10 +29,11 @@ class AddFishSexPreparer():
     #1.) run a FishSexClassifer Model on each object detection
     #2.) averages the sex_class with respect to SORT tracks
     
-    def __init__(self, fileManager, videoIndex=None):
+    def __init__(self, fileManager, device, videoIndex=None):
         self.batch_size=30
         self.num_workers=6
-        self.device=torch.device("cuda:0")
+        #self.device=torch.device("cuda:0")
+        self.device=device
         
         self.__version__ = '1.0.0'
         self.fileManager = fileManager
@@ -77,26 +78,19 @@ class AddFishSexPreparer():
         
         for i, idx in dataloaders['predict']:
             current_track=tracks.iloc[list(idx), 0: ]
-            time1 = time.time()
+            
             sample=torch.stack( [j.to(self.device) for j in i])
-            time2 = time.time()
+            
             pred_logits_tensor=model(sample)
-            time3 = time.time()
+            
             pred_probs = F.softmax(pred_logits_tensor, dim=1).cpu().data.numpy()
             pred_class=np.argmax(pred_probs, axis=1)
             pred_acc=np.max(pred_probs, axis=1)
-            time4 = time.time()
+            
             current_track['sex_class']=pred_class
             current_track['sex_p_value']=pred_acc
             sex_df = pd.concat([sex_df, current_track], ignore_index=True)
-            print(time2-time1)
-            print(time2-time3)
-            print(time3-time4)
-            print(time1)
-            print(time2)
-            print(time3)
-            print(time4)
-            jgn
+            
             if count.__mod__(1000)==0:
                 print('Proccessing: count'+ str(count*self.batch_size)+ 'of'+ str(len(tracks.frame)))
             count+=1

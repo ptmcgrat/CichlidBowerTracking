@@ -86,10 +86,11 @@ for pid in dt.projectID:
             trialidx[pid]=count
         count+=1
 
+device=list(range(7))
 
-print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
-
-subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
+for i in device: 
+    print('Downloading: ' + projectIDs[device] + ' ' + str(datetime.datetime.now()), flush = True)
+    p1=subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
 while len(projectIDs) != 0:
     projectID = projectIDs[0]
 

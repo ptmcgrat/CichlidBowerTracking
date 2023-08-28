@@ -29,11 +29,11 @@ class AddFishSexPreparer():
     #1.) run a FishSexClassifer Model on each object detection
     #2.) averages the sex_class with respect to SORT tracks
     
-    def __init__(self, fileManager, videoIndex=None):
+    def __init__(self, fileManager, device, videoIndex=None):
         self.batch_size=30
         self.num_workers=1
-        self.device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+        #self.device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device=device
         
         self.__version__ = '1.0.0'
         self.fileManager = fileManager
