@@ -1,6 +1,5 @@
 import argparse, subprocess, pdb, datetime, os, sys
 import pandas as pd
-import t
 sys.path.append('/data/home/bshi42/CichlidBowerTracking/') 
 
 
@@ -68,9 +67,6 @@ else:
 uploadProcesses = [] # Keep track of all of the processes still uploading so we don't quit before they finish
 
 dt = pd.read_csv(fm_obj.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'RunAnalysis':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str, 'TrackFish':str, 'AssociateClustersWithTracks': str, 'LabeledVideos':str,'LabeledFrames': str, 'Summary': str})
-dt.loc[dt.projectID == projectIDs[0],args.AnalysisType] = 'Running'
-dt.to_csv(summary_file, index = False)
-fm_obj.uploadData(summary_file)
 de = pd.read_csv(fm_obj.localEuthData, index_col = False)
 trialidx={}
 for pid in dt.projectID:
@@ -87,78 +83,32 @@ for pid in dt.projectID:
         count+=1
 
 device=list(range(7))
-
-for i in device: 
-    print('Downloading: ' + projectIDs[device] + ' ' + str(datetime.datetime.now()), flush = True)
-    p1=subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
 while len(projectIDs) != 0:
-    projectID = projectIDs[0]
-
-    print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
-
-    # Run appropriate analysis script
-    if args.AnalysisType == 'Prep':
-        p1 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.prep_data', projectID, args.AnalysisID])
-    elif args.AnalysisType == 'Depth':
-        p1 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.analyze_depth', projectID, args.AnalysisID])
-    elif args.AnalysisType == 'Cluster':
-        p1 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.analyze_clusters', projectID, args.AnalysisID, '--Workers', str(workers)])
-    elif args.AnalysisType == 'ClusterClassification':
-        p1 = subprocess.Popen(
-            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.classify_clusters', projectID, args.ModelID])
-    elif args.AnalysisType == 'TrackFish':
-        p1 = subprocess.Popen(
-            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.track_fish', projectID, args.AnalysisID, ])
-    elif args.AnalysisType == 'AssociateClustersWithTracks':
-        p1 = subprocess.run(
-            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.associate_clusters_with_tracks', projectID, args.AnalysisID])
-    elif args.AnalysisType == 'AddFishSex':
-        p1 = subprocess.run(
-            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
-    elif args.AnalysisType == 'Summary':
-        if args.SummaryFile is None:
-            p1 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.summarize', projectID])
-        else:
-            p1 = subprocess.Popen(
-                ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.summarize', projectID, '--SummaryFile',
-                 args.SummaryFile])
-
-    # In the meantime, download data for next project in the background
-
-    projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
-
-    if len(projectIDs) != 0:
-        dt.loc[dt.projectID == projectIDs[0],args.AnalysisType] = 'Running'
+    for i in device:
+        
+        dt.loc[dt.projectID == projectIDs[i],args.AnalysisType] = 'Running'
         dt.to_csv(summary_file, index = False)
         fm_obj.uploadData(summary_file)
-
-        print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
-        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data', args.AnalysisType, '--ProjectID', projectIDs[0], '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]])])
-
-    # Pause script until current analysis is complete and data for next project is downloaded
+        print('Downloading: ' + projectIDs[i] + ' ' + str(datetime.datetime.now()), flush = True)
+        p1=subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[i], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]) ])
     p1.communicate()
-    if p1.returncode != 0:
-        sys.exit()
-    try:
-        p2.communicate() # Need to catch an exception if only one project is analyzed
-    except NameError:
-        pass
 
-    #Modify summary file if necessary
-    fm_obj.downloadData(summary_file)
-    dt = pd.read_csv(summary_file, index_col = False, dtype = {'StartingFiles':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str,'LabeledVideos':str,'LabeledFrames': str})
 
-    dt.loc[dt.projectID == projectID,args.AnalysisType] = 'TRUE'
-    dt.to_csv(summary_file, index = False)
-    fm_obj.uploadData(summary_file)
+    for i in device: 
+        projectID = projectIDs[i]
+        print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(i)])
+    p2.communicate()
 
-    #Upload data and keep track of it
-    print('Uploading: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+    projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
+    for i in device: 
+        projectID = projectIDs[i]
+        print('Uploading: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+        uploadProcesses.append(subprocess.Popen(
+            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, '--Delete',
+             '--ProjectID', projectID, '--AnalysisID', args.AnalysisID]))
+    projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
 
-    uploadProcesses.append(subprocess.Popen(
-        ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, '--Delete',
-         '--ProjectID', projectID, '--AnalysisID', args.AnalysisID]))
-    #uploadProcesses.append(subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, projectID]))
 
 for i,p in enumerate(uploadProcesses):
     print('Finishing uploading process ' + str(i) + ': ' + str(datetime.datetime.now()), flush = True)
