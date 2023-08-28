@@ -97,7 +97,7 @@ while len(projectIDs) != 0:
     for i in device: 
         projectID = projectIDs[i]
         print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
-        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(i)])
+        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(i+1)])
     p2.communicate()
 
     projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
