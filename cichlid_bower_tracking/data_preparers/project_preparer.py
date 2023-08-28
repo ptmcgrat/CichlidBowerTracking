@@ -153,7 +153,7 @@ class ProjectPreparer():
         else:
             videos = [videoIndexIn]
         
-        AFSP(self.fileManager, videoIndexIn, device)
+        AFSP(self.fileManager, device, videoIndexIn)
         # Combine predictions
         if videoIndexIn is None:
             for videoIndex in videos:
