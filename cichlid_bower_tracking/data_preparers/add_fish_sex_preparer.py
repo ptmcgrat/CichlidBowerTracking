@@ -32,8 +32,7 @@ class AddFishSexPreparer():
     def __init__(self, fileManager, device, videoIndex=None):
         self.batch_size=30
         self.num_workers=6
-        #self.device=torch.device("cuda:0")
-        self.device=device
+        self.device=torch.device("cuda:"+str(device))
         
         self.__version__ = '1.0.0'
         self.fileManager = fileManager
@@ -65,7 +64,7 @@ class AddFishSexPreparer():
     def RunFishSexClassifier(self):
         
         print('Running Fish Sex Classifier on ' + self.videoObj.baseName + ' ' + str(datetime.datetime.now()), flush = True)
-        dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
+        dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile, self.device),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
         
         model = models.resnet50(pretrained=False).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
@@ -101,10 +100,10 @@ class MFDataset(Dataset):
     
     #This allows us to predict on detections in batches
     
-    def __init__(self, csv_file, VideoFile):
+    def __init__(self, csv_file, VideoFile, device):
         
         self.tracks = pd.read_csv(csv_file)
-        self.device =torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device =device
         self.video=VideoFile
         
     def __len__(self):
