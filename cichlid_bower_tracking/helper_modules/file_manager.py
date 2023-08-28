@@ -16,7 +16,6 @@ class FileManager():
         # Identify cloud directory for rclone
         self.rcloneRemote = rcloneRemote
         # On some computers, the first directory is McGrath, on others it's BioSci-McGrath. Use rclone to figure out which
-        pdb.set_trace()
         output = subprocess.run(['rclone', 'lsf', self.rcloneRemote + masterDir], capture_output = True, encoding = 'utf-8')
         if output.stderr == '':
             self.cloudMasterDir = self.rcloneRemote + masterDir
