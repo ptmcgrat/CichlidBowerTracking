@@ -146,14 +146,14 @@ class ProjectPreparer():
             tdm_obj.validateInputData()
             tdm_obj.create3DModel()
 
-    def runMLFishDetection(self, videoIndexIn):
+    def runMLFishDetection(self, videoIndexIn, device):
         from cichlid_bower_tracking.data_preparers.add_fish_sex_preparer import  AddFishSexPreparer as AFSP
         if videoIndexIn is None:
             videos = list(range(len(self.fileManager.lp.movies)))
         else:
             videos = [videoIndexIn]
         
-        AFSP(self.fileManager, videoIndexIn)
+        AFSP(self.fileManager, videoIndexIn, device)
         # Combine predictions
         if videoIndexIn is None:
             for videoIndex in videos:
