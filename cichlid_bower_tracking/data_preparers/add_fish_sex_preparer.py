@@ -67,7 +67,7 @@ class AddFishSexPreparer():
         print('Running Fish Sex Classifier on ' + self.videoObj.baseName + ' ' + str(datetime.datetime.now()), flush = True)
         dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile, self.device),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
         
-        model = models.resnet50(pretrained=False).to(self.device)
+        model = models.resnet50(weights=None).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
         model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
