@@ -58,7 +58,7 @@ class AddFishSexPreparer():
         assert os.path.exists(self.fileManager.localSexClassificationModelFile)
         assert os.path.exists(self.videoObj.localVideoFile)
         assert os.path.exists(self.fileManager.localTroubleshootingDir)
-        assert os.path.exists(self.videoObj.localFishTracksFile)
+        #assert os.path.exists(self.videoObj.localFishTracksFile)
         return
         
     def RunFishSexClassifier(self):
