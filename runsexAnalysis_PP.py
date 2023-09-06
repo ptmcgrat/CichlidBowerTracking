@@ -84,8 +84,9 @@ for pid in dt.projectID:
 
 device=list(range(7))
 while len(projectIDs) != 0:
+    if len(projectIDs)<len(device):
+        device=list(range(len(projectIDs)))
     for i in device:
-        
         dt.loc[dt.projectID == projectIDs[i],args.AnalysisType] = 'Running'
         dt.to_csv(summary_file, index = False)
         fm_obj.uploadData(summary_file)
