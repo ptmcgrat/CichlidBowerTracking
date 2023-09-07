@@ -30,7 +30,7 @@ class AddFishSexPreparer():
     #2.) averages the sex_class with respect to SORT tracks
     
     def __init__(self, fileManager, device, videoIndex=None):
-        self.batch_size=25
+        self.batch_size=30
         self.num_workers=1
         self.device=torch.device("cuda:"+str(device))
         self.ndevice=device
