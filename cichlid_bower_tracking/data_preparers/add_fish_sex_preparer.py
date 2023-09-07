@@ -70,7 +70,7 @@ class AddFishSexPreparer():
         model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
         
-        tracks = pd.read_csv(self.localAllFishTracksFile)
+        tracks = pd.read_csv(self.fileManager.localAllFishTracksFile)
         tracks=tracks[tracks.base_name==self.videoObj.baseName]
         sex_df = pd.DataFrame(columns=list(tracks.columns)+['sex_class', 'sex_p_value'])
         count=0
