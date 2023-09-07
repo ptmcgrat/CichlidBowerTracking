@@ -64,20 +64,20 @@ class AddFishSexPreparer():
     def RunFishSexClassifier(self):
         
         print('Running Fish Sex Classifier on ' + self.videoObj.baseName + ' ' + str(datetime.datetime.now()), flush = True)
-        dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(self.videoObj.localFishTracksFile, self.videoObj.localVideoFile, self.device),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
+        tracks = pd.read_csv(self.fileManager.localAllFishTracksFile)
+        tracks=tracks[tracks.base_name==self.videoObj.baseName]
+        
+        dataloaders = {'predict':torch.utils.data.DataLoader(MFDataset(tracks, self.videoObj.localVideoFile, self.device),batch_size=self.batch_size,shuffle=True, num_workers=self.num_workers)}
         model = models.resnet50(weights=None).to(self.device)
         model.fc = nn.Sequential(nn.Linear(2048, 128), nn.ReLU(inplace=True),nn.Linear(128, 2)).to(self.device)
         model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
         
-        tracks = pd.read_csv(self.fileManager.localAllFishTracksFile)
-        tracks=tracks[tracks.base_name==self.videoObj.baseName]
         sex_df = pd.DataFrame(columns=list(tracks.columns)+['sex_class', 'sex_p_value'])
         count=0
         
         for i, idx in dataloaders['predict']:
             current_track=tracks.iloc[list(idx), 0: ]
-            pdb.set_trace()
             sample=torch.stack( [j.to(self.device) for j in i])
             
             pred_logits_tensor=model(sample)
@@ -100,9 +100,8 @@ class MFDataset(Dataset):
     
     #This allows us to predict on detections in batches
     
-    def __init__(self, csv_file, VideoFile, device):
-        
-        self.tracks = pd.read_csv(csv_file)
+    def __init__(self, df, VideoFile, device):
+        self.tracks=df
         self.device =device
         self.video=VideoFile
         
@@ -120,7 +119,7 @@ class MFDataset(Dataset):
         height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         ret, frame = cap.read()
-
+        
         xc=(current_track.xc)
         yc=(current_track.yc)
         w=(current_track.w)
@@ -130,7 +129,7 @@ class MFDataset(Dataset):
             frame = frame[int(max(0, yc - delta_xy)):int(min(yc + delta_xy,height)) , int(max(0, xc - delta_xy)):int(min(xc + delta_xy, width))]
         except TypeError:
             pdb.set_trace()
-            
+        
         frame=cv2.resize(frame, (100, 100))
         
         frame = frame[...,::-1]
