@@ -41,7 +41,7 @@ class AddFishSexPreparer():
             self.validateInputData()
             self.RunFishSexClassifier()
             os.remove(self.videoObj.localVideoFile)
-            os.remove(self.videoObj.localFishTracksFile)
+            #os.remove(self.videoObj.localFishTracksFile)
         else:
             videos = list(range(len(self.fileManager.lp.movies)))
             for videoIndex in videos:
@@ -58,7 +58,7 @@ class AddFishSexPreparer():
         assert os.path.exists(self.fileManager.localSexClassificationModelFile)
         assert os.path.exists(self.videoObj.localVideoFile)
         assert os.path.exists(self.fileManager.localTroubleshootingDir)
-        #assert os.path.exists(self.videoObj.localFishTracksFile)
+        assert os.path.exists(self.localAllFishTracksFile)
         return
         
     def RunFishSexClassifier(self):
@@ -70,7 +70,8 @@ class AddFishSexPreparer():
         model.load_state_dict(torch.load(self.fileManager.localSexClassificationModelFile)) 
         model.eval()
         
-        tracks = pd.read_csv(self.videoObj.localFishTracksFile)
+        tracks = pd.read_csv(self.localAllFishTracksFile)
+        tracks=tracks[tracks.base_name==self.videoObj.baseName]
         sex_df = pd.DataFrame(columns=list(tracks.columns)+['sex_class', 'sex_p_value'])
         count=0
         

@@ -359,14 +359,14 @@ class FileManager():
         elif dtype == 'AddFishSex':
             self.createDirectory(self.localMasterDir)
             self.createDirectory(self.localAnalysisDir)
-            self.createDirectory(self.localTroubleshootingDir)
-            self.createDirectory(self.localTempDir)
             self.downloadData(self.localSexClassificationModelFile)
+            self.createDirectory(self.localTroubleshootingDir)
+            self.downloadData(self.localAllFishTracksFile)
             if videoIndex is not None:
                 videoObj = self.returnVideoObject(int(videoIndex))
                 print('Downloading video ' + str(videoIndex))
                 self.downloadData(videoObj.localVideoFile)
-                self.downloadData(videoObj.localFishTracksFile)
+                #self.downloadData(videoObj.localFishTracksFile)
 
         elif dtype == 'Summary':
             self.createDirectory(self.localMasterDir)
