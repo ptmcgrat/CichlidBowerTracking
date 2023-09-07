@@ -77,7 +77,7 @@ class AddFishSexPreparer():
         
         for i, idx in dataloaders['predict']:
             current_track=tracks.iloc[list(idx), 0: ]
-            
+            pdb.set_trace()
             sample=torch.stack( [j.to(self.device) for j in i])
             
             pred_logits_tensor=model(sample)
