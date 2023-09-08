@@ -74,10 +74,12 @@ class AddFishSexPreparer():
         model.eval()
         
         sex_df = pd.DataFrame(columns=list(tracks.columns)+['sex_class', 'sex_p_value'])
+        sex_df["InBounds"]=sex_df["InBounds"].astype(bool)
         count=0
         
         for i, idx in dataloaders['predict']:
             current_track=tracks.iloc[list(idx), 0: ]
+            current_track["InBounds"]=current_track["InBounds"].astype(bool)
             sample=torch.stack( [j.to(self.device) for j in i])
             
             pred_logits_tensor=model(sample)
@@ -88,8 +90,8 @@ class AddFishSexPreparer():
             
             current_track['sex_class']=pred_class
             current_track['sex_p_value']=pred_acc
-            sex_df = pd.concat([sex_df, current_track], ignore_index=True)
             
+            sex_df = pd.concat([sex_df, current_track], ignore_index=True)
             if count.__mod__(1000)==0:
                 print('Proccessing: count'+ str(count*self.batch_size)+ 'of'+ str(len(tracks.frame)))
             count+=1
