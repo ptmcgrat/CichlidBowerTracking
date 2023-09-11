@@ -164,7 +164,7 @@ class ProjectPreparer():
                 except NameError:
                     c_dt_s = new_dt_s
         else:
-            videoObj = self.fileManager.returnVideoObject(videoIndex)
+            videoObj = self.fileManager.returnVideoObject(videoIndexIn)
             c_dt_s = pd.read_csv(videoObj.localFishSexFile)
                     
             c_dt_s.to_csv(self.fileManager.localAllFishSexFile)

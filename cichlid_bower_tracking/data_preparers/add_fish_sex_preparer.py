@@ -97,6 +97,7 @@ class AddFishSexPreparer():
             count+=1
         
         sex_df.to_csv(self.videoObj.localFishSexFile)
+        print('Completed Fish Sex Classifier on ' + self.videoObj.baseName + ' ' + str(datetime.datetime.now()), flush = True)
 
 class MFDataset(Dataset):
     
@@ -116,7 +117,7 @@ class MFDataset(Dataset):
         current_track=self.tracks.iloc[idx, ]
 
         cap = cv2.VideoCapture(self.video)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, int(current_track.frame))
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(current_track.frame)-1)
         
         height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
