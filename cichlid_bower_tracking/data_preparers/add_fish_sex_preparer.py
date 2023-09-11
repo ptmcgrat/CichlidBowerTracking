@@ -131,6 +131,7 @@ class MFDataset(Dataset):
         try:
             frame = frame[int(max(0, yc - delta_xy)):int(min(yc + delta_xy,height)) , int(max(0, xc - delta_xy)):int(min(xc + delta_xy, width))]
         except TypeError:
+            print(self.video)
             pdb.set_trace()
         
         frame=cv2.resize(frame, (100, 100))
