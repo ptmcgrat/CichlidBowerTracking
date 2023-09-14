@@ -122,6 +122,12 @@ class ProjectPreparer():
         ctap_obj = CTAP(self.fileManager)
         ctap_obj.validateInputData()
         ctap_obj.runAssociationAnalysis()
+        
+    def runClusterSexAssociationAnalysis(self):
+        from cichlid_bower_tracking.data_preparers.cluster_sex_association_preparer import ClusterSexAssociationPreparer as CSAP
+        ctap_obj = CSAP(self.fileManager)
+        ctap_obj.validateInputData()
+        ctap_obj.runAssociationAnalysis()
 
     def run3DClassification(self):
         from cichlid_bower_tracking.data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP
@@ -166,7 +172,8 @@ class ProjectPreparer():
         else:
             videoObj = self.fileManager.returnVideoObject(videoIndexIn)
             c_dt_s = pd.read_csv(videoObj.localFishSexFile)
-                    
+            print(videoObj.localFishSexFile)
+            print(self.fileManager.localAllFishSexFile)
             c_dt_s.to_csv(self.fileManager.localAllFishSexFile)
             
     def runSummaryCreation(self):

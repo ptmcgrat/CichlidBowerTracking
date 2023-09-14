@@ -14,15 +14,16 @@ parser = argparse.ArgumentParser(
 parser.add_argument('AnalysisType', type=str, choices=['Prep', 'Depth', 'Cluster', 'ClusterClassification', 'TrackFish', 'AssociateClustersWithTracks', 'AddFishSex','Summary'],
                     help='Type of analysis to run')
 parser.add_argument('AnalysisID', type = str, help = 'ID of analysis state name')
+parser.add_argument('Device', type=int, help='number of the gpu you want to use')
 parser.add_argument('--ProjectIDs', type=str, nargs='+', help='Name of projectIDs to restrict analysis to')
 parser.add_argument('--Workers', type=int, help='Number of workers')
 parser.add_argument('--ModelID', type=str, help='ModelID to use to classify clusters with')
 args = parser.parse_args()
 
-device=list(range(7))
+Device=int(args.Device)
 
 def get_projects(fm_obj, analysis_type, fil_projectIDs):
-    #fm_obj.downloadData(fm_obj.localSummaryFile)
+    fm_obj.downloadData(fm_obj.localSummaryFile)
     dt = pd.read_csv(fm_obj.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'RunAnalysis':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str,'TrackFish':str, 'AssociateClustersWithTracks':str, 'LabeledVideos':str,'LabeledFrames': str, 'Summary': str})
 
     # Identify projects to run on:
@@ -32,6 +33,7 @@ def get_projects(fm_obj, analysis_type, fil_projectIDs):
     elif args.AnalysisType == 'Depth':
         sub_dt = sub_dt[sub_dt.Prep.astype(str).str.upper() == 'TRUE'] # Only analyze projects that have been prepped
     projectIDs = list(sub_dt[sub_dt[analysis_type].astype(str).str.upper() == 'FALSE'].projectID) # Only run analysis on projects that need it
+
     # Filter out projects if optional argment given
     if fil_projectIDs is not None:
         for projectID in projectIDs:
@@ -41,8 +43,8 @@ def get_projects(fm_obj, analysis_type, fil_projectIDs):
 
 # Identify projects to run analysis on
 fm_obj = FM(analysisID = args.AnalysisID)
-#fm_obj.downloadData(fm_obj.localSummaryFile)
-#fm_obj.downloadData(fm_obj.localEuthData)
+fm_obj.downloadData(fm_obj.localSummaryFile)
+fm_obj.downloadData(fm_obj.localEuthData)
 if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
     print('Cant find ' + fm_obj.localSummaryFile)
     sys.exit()
@@ -82,13 +84,13 @@ for pid in dt.projectID:
         count+=1
 
 device=list(range(1))
-for i in range(len(projectIDs)):
+while len(projectIDs) != 0:
     if len(projectIDs)<len(device):
         device=list(range(len(projectIDs)))
     for i in device:
         dt.loc[dt.projectID == projectIDs[i],args.AnalysisType] = 'Running'
         dt.to_csv(summary_file, index = False)
-        #fm_obj.uploadData(summary_file)
+        fm_obj.uploadData(summary_file)
         print('Downloading: ' + projectIDs[i] + ' ' + str(datetime.datetime.now()), flush = True)
         p1=subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[i], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]) ])
     p1.communicate()
@@ -97,16 +99,17 @@ for i in range(len(projectIDs)):
     for i in device: 
         projectID = projectIDs[i]
         print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
-        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(i)])
+        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(Device)])
     p2.communicate()
 
-    #projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
+    projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
     for i in device: 
         projectID = projectIDs[i]
         print('Uploading: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
         uploadProcesses.append(subprocess.Popen(
             ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, '--Delete',
              '--ProjectID', projectID, '--AnalysisID', args.AnalysisID]))
+    projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
 
 
 for i,p in enumerate(uploadProcesses):

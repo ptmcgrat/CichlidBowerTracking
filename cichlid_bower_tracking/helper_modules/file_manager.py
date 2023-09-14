@@ -32,6 +32,7 @@ class FileManager():
             self.localAnalysisStatesDir = self.localMasterDir + '__AnalysisStates/' + analysisID + '/'
             self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
             self.localEuthData = self.localAnalysisStatesDir + 'euthanization_data.csv'
+            self.localLastHourBehaviorFile=self.localAnalysisStatesDir + 'last_hour_behavior_data.csv'
         else:
             self.localEuthData = None
     
@@ -191,10 +192,12 @@ class FileManager():
         self.localAllFishTracksFile = self.localAnalysisDir + 'AllTrackedFish.csv'
         self.localAllFishDetectionsFile = self.localAnalysisDir + 'AllDetectionsFish.csv'
         self.localAllTracksSummaryFile = self.localAnalysisDir + 'AllSummarizedTracks.csv'
-
+        #file created by associate_clusters_with_tracks
+        self.localAllTracksAsscociationFile= self.localAnalysisDir + 'AllAssociatedTracks.csv'
         #file created by add_fish_sex
         self.localAllFishSexFile = self.localAnalysisDir + 'AllFishSex.csv'
-
+        #file created by associate_clusters_with_sex
+        self.localAllSexAsscociationFile= self.localAnalysisDir + 'AllAssociatedSex.csv'
         # Files created by manual labelerer  preparers
         self.localNewLabeledFramesFile = self.localTempDir + 'NewLabeledFrames.csv'
         self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
@@ -394,15 +397,16 @@ class FileManager():
             self.downloadData(self.local3DModelDir)
             self.downloadData(self.localEuthData, allow_errors=True, quiet=True)
         
-        elif dtype == 'AssociateTrackWithSex':
+        elif dtype == 'AssociateClustersWithSex':
             self.createDirectory(self.localLogfileDir)
             self.createDirectory(self.localMasterDir)
             self.createDirectory(self.localAnalysisDir)
             self.downloadData(self.localLogfile)
-            self.downloadData(self.localAllFishDetectionsFile)
-            self.downloadData(self.localAllFishTracksFile)
+            self.downloadData(self.localAllFishSexFile)
             self.downloadData(self.localOldVideoCropFile)
             self.downloadData(self.localAllLabeledClustersFile)
+            self.downloadData(self.localAllTracksAsscociationFile)
+            self.downloadData(self.localLastHourBehaviorFile)
 
         else:
             raise KeyError('Unknown key: ' + dtype)
@@ -501,7 +505,11 @@ class FileManager():
             if delete:
                 shutil.rmtree(self.localProjectDir)
                 #os.remove(self.localYolov5WeightsFile)
-
+        elif dtype == 'AssociateClustersWithTracks':
+            self.uploadData(self.localAllTracksAsscociationFile)
+        elif dtype == 'AssociateClustersWithSex':
+            self.uploadData(self.localAllSexAsscociationFile)
+            self.uploadData(self.localLastHourBehaviorFile)
         elif dtype == 'Summary':
             self.uploadData(self.localSummaryDir)
 

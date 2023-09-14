@@ -81,37 +81,13 @@ for pid in dt.projectID:
             trialidx[pid]=count
         count+=1
 
-device=list(range(1))
-for i in range(len(projectIDs)):
-    if len(projectIDs)<len(device):
-        device=list(range(len(projectIDs)))
-    for i in device:
-        dt.loc[dt.projectID == projectIDs[i],args.AnalysisType] = 'Running'
-        dt.to_csv(summary_file, index = False)
-        #fm_obj.uploadData(summary_file)
-        print('Downloading: ' + projectIDs[i] + ' ' + str(datetime.datetime.now()), flush = True)
-        p1=subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[i], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]) ])
-    p1.communicate()
+ 
+projectID = projectIDs[0]
+
+p1=subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[0]]) ])
+p1.communicate()
 
 
-    for i in device: 
-        projectID = projectIDs[i]
-        print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
-        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(i)])
-    p2.communicate()
-
-    #projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
-    for i in device: 
-        projectID = projectIDs[i]
-        print('Uploading: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
-        uploadProcesses.append(subprocess.Popen(
-            ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, '--Delete',
-             '--ProjectID', projectID, '--AnalysisID', args.AnalysisID]))
-
-
-for i,p in enumerate(uploadProcesses):
-    print('Finishing uploading process ' + str(i) + ': ' + str(datetime.datetime.now()), flush = True)
-    p.communicate()
 
 """
 if args.AnalysisType == 'Summary':

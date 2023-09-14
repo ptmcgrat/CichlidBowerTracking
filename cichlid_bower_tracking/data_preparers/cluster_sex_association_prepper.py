@@ -1,87 +1,20 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Sep 13 16:44:00 2023
+
+@author: bshi
+"""
+
 import subprocess, os, pdb, datetime
 import pandas as pd
 import numpy as np
 from shapely.geometry import Point, Polygon
 import datetime
 
-def bin_tracklength(tl):
-    tl = tl/30
-    if tl <= 0.5:
-        tl = '0-0.5s'
-    elif tl <= 1:
-        tl = '0.5-1.0s'
-    elif tl <= 3:
-        tl = '1.0-3.0s'
-    elif tl <= 10:
-        tl = '3.0-10.0s'
-    elif tl <= 30:
-        tl = '10.0-30.0s'
-    else:
-        tl = '>30.0s'
+class ClusterSexAssociationPreparer():
 
-    return tl
-
-class base:
- 
-    '''
-    This converts the dataframe into comparable format 
-    for example, 
-    yolo does not output boxes in a format directly useable by open CV 
-    We fix that here
-    
-    '''
-   
-    #this may need to consider switch if x y values not equal
-    ydelta=60
-    xdelta=60
-    framerate=29
-    #might be 30 sometimes
-    #IMG_W = 1296
-    #IMG_H = 972
-    IMG_W = 1
-    IMG_H = 1
-    tdelta=framerate*2
-    
-    def __init__(self, path):
-        self.path = path
-        
-    def clean_cluster(self):
-        df=pd.read_csv(self.path)
-        df['cluster_id']=df['LID'].copy()
-        df['base_name']=df['VideoID'] .copy()
-        df['yc']=df['X'].copy()
-        df['xc']=df['Y'].copy()
-        df['frame_span']=df['t_span'].copy()
-        #convert to retangle points
-        df['x1']=df['xc']-self.xdelta
-        df['y1']=df['yc']-self.ydelta
-        df['x2']=df['xc']+self.xdelta
-        df['y2']=df['yc']+self.ydelta
-        df['sframe']=(df['t']*self.framerate - self.tdelta).astype('int64')
-        df['eframe']= (df['t']*self.framerate + self.tdelta).astype('int64')
-        df=df[df['ClipCreated']=='Yes'] 
-        return df   
-
-
-    def clean_sort(self):
-        df=pd.read_csv(self.path)
-        #sort to pixel conversion rectangular form
-        df['x1']=self.IMG_W*(df['xc']-0.5*df['w'])
-        df['y1']=self.IMG_H*(df['yc']-0.5*df['h'])
-        df['x2']=self.IMG_W*(df['xc']+0.5*df['w'])
-        df['y2']=self.IMG_H*(df['yc']+0.5*df['h'])
-        df['xc']=self.IMG_W*(df['xc'])
-        df['yc']=self.IMG_H*(df['yc'])
-        #df.rename(columns={'class_id': 'class'},inplace=True)
-        return df
-
-class ClusterTrackAssociationPreparer():
-    # This class takes in directory information and a logfile containing depth information and performs the following:
-    # 1. Identifies tray using manual input
-    # 2. Interpolates and smooths depth data
-    # 3. Automatically identifies bower location
-    # 4. Analyze building, shape, and other pertinent info of the bower
-
+#rewrite everything after this line 
     def __init__(self, fileManager):
 
         self.__version__ = '1.0.0'
@@ -150,17 +83,3 @@ class ClusterTrackAssociationPreparer():
         c_obj = base(self.fm.localAllLabeledClustersFile)
         c_dt=c_obj.clean_cluster()
         a_dt=self.find_identity(c_dt, t_dt)
-        
-        #d_dt=pd.read_csv(self.fm.localAllFishDetectionsFile)
-        #s_dt=self.create_summary(poly, t_dt, d_dt)
-        
-        
-        
-
-        # 1. Summarize tracks (summarized.csv)
-        # Write code to determine the sex of each track and whether it is a reflection 
-
-        # 2. Associate track with cluster (associatedCluster.csv)
-        # Write code to add track (done), sex (done), and reflection data to each cluster
-	# Find accurate framerate using the frame of the last cluster and the total number of frames (test at 29 and 30) 
-        
