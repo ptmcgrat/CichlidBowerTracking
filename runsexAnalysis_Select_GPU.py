@@ -20,7 +20,8 @@ parser.add_argument('--Workers', type=int, help='Number of workers')
 parser.add_argument('--ModelID', type=str, help='ModelID to use to classify clusters with')
 args = parser.parse_args()
 
-Device=int(args.Device)
+Device=list(str(args.Device))
+print(' Running analysis on GPU '+str(Device))
 
 def get_projects(fm_obj, analysis_type, fil_projectIDs):
     fm_obj.downloadData(fm_obj.localSummaryFile)
@@ -83,7 +84,7 @@ for pid in dt.projectID:
             trialidx[pid]=count
         count+=1
 
-device=list(range(1))
+device=list(range(len(Device)))
 while len(projectIDs) != 0:
     if len(projectIDs)<len(device):
         device=list(range(len(projectIDs)))
@@ -99,7 +100,7 @@ while len(projectIDs) != 0:
     for i in device: 
         projectID = projectIDs[i]
         print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
-        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(Device)])
+        p2 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.add_fish_sex', projectID, args.AnalysisID, '--VideoIndex', str(trialidx[projectIDs[i]]), '--Device', str(Device[i])])
     p2.communicate()
 
     projectIDs = get_projects(fm_obj, args.AnalysisType, args.ProjectIDs)
