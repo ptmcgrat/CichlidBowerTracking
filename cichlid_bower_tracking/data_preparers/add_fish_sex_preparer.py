@@ -30,7 +30,7 @@ class AddFishSexPreparer():
     #2.) averages the sex_class with respect to SORT tracks
     
     def __init__(self, fileManager, device, videoIndex=None):
-        self.batch_size=30
+        self.batch_size=50
         self.num_workers=1
         self.device=torch.device("cuda:"+str(device))
         self.ndevice=device
@@ -107,6 +107,8 @@ class MFDataset(Dataset):
         self.tracks=df
         self.device =device
         self.video=VideoFile
+        self.IMG_W = 1296
+        self.IMG_H = 972
         
     def __len__(self):
         
@@ -127,11 +129,17 @@ class MFDataset(Dataset):
         yc=(current_track.yc)
         w=(current_track.w)
         h=(current_track.h)
+        if (xc<= 1) and (yc<=1) and (w<=1) and (h<=1):
+            xc=self.IMG_W*(current_track.xc)
+            yc=self.IMG_H*(current_track.yc)
+            w=self.IMG_W*(current_track.w)
+            h=self.IMG_H*(current_track.h)
         delta_xy=(int((1/2)*max(int(w)+1, int(h)+1)))+10
         try:
             frame = frame[int(max(0, yc - delta_xy)):int(min(yc + delta_xy,height)) , int(max(0, xc - delta_xy)):int(min(xc + delta_xy, width))]
         except TypeError:
             print(self.video)
+            print(current_track.frame)
             pdb.set_trace()
         
         frame=cv2.resize(frame, (100, 100))

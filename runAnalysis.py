@@ -38,6 +38,9 @@ def get_projects(fm_obj, analysis_type, fil_projectIDs):
 # Identify projects to run analysis on
 fm_obj = FM(analysisID = args.AnalysisID)
 fm_obj.downloadData(fm_obj.localSummaryFile)
+fm_obj.downloadData(fm_obj.localSummaryFile)
+fm_obj.downloadData(fm_obj.localEuthData)
+fm_obj.downloadData(fm_obj.localLastHourFrameFile)
 if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
     print('Cant find ' + fm_obj.localSummaryFile)
     sys.exit()
@@ -51,6 +54,55 @@ if len(projectIDs) == 0:
 
 print('This script will analyze the folllowing projectIDs: ' + ','.join(projectIDs))
 
+
+dt = pd.read_csv(fm_obj.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'RunAnalysis':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str, 'TrackFish':str, 'AssociateClustersWithTracks': str, 'LabeledVideos':str,'LabeledFrames': str, 'Summary': str})
+de = pd.read_csv(fm_obj.localEuthData, index_col = False)
+dh = pd.read_csv(fm_obj.localLastHourFrameFile, index_col = False)
+clusterdict={'d': 'sand_drop','t': 'feed_spit','m': 'feed_multiple', 'f': 'feed_scoop','s': 'quiver_spawn','b': 'bower_multi','c': 'bower_scoop','p': 'bower_spit', 'o': 'Fishother', 'x': 'NoFishOther'}
+trialidx={}
+for pid in dt.projectID:
+    temp_de=de[de.pid==pid]
+    pid_et=datetime.datetime.strptime(str(temp_de.dissection_time.values[0]), "%m/%d/%Y %H:%M")
+    fm_obj=FM(projectID = pid, analysisID = args.AnalysisID)
+    videos = fm_obj.lp.movies
+    count=0
+    for videoIndex in videos:
+        delta=videoIndex.endTime-pid_et
+        days=delta.total_seconds() / (60*60*24)
+        if days<1:
+            trialidx[pid]=videoIndex.baseName
+        count+=1
+euth_min1=100
+euth_min2=30
+dh=pd.DataFrame(columns=list(dh.columns))
+for pid in dt.projectID:
+    temp_de=de[de.pid==pid]
+    pid_et=datetime.datetime.strptime(str(temp_de.dissection_time.values[0]), "%m/%d/%Y %H:%M")
+    fm_obj=FM(projectID = pid, analysisID = args.AnalysisID)
+    videos = fm_obj.lp.movies
+    for videoIndex in videos:
+        delta=videoIndex.endTime-pid_et
+        days=delta.total_seconds() / (60*60*24)
+        if trialidx[pid]==videoIndex.baseName:
+                stime=int((pid_et-datetime.timedelta(minutes=euth_min1)-videoIndex.startTime).total_seconds()*29)
+                etime=int((pid_et+datetime.timedelta(minutes=euth_min2)-videoIndex.startTime).total_seconds()*29)
+                new_row = {'Unnamed: 0': videoIndex.baseName,'trial': pid, 'sframe': stime, 'eframe': etime, 'euth-time': pid_et, 'video_end': videoIndex.endTime, 'total_sec_end_et': days }
+                df2 = pd.DataFrame([new_row])
+                dh = pd.concat([dh, df2], ignore_index=True)
+dh.to_csv(fm_obj.local10030FrameFile)
+fm_obj.uploadData(fm_obj.local10030FrameFile)
+
+b_list=[]
+for i in clusterdict.values():
+    val1='male_'+i
+    val2='female_'+i
+    b_list+=[val1,val2]
+    
+with open(fm_obj.local10030BehaviorFile, 'w', newline='') as file:
+
+    file.write(','.join(['trial']+b_list)) 
+file.close()
+fm_obj.uploadData(summary_file)
 # Set workers
 if args.Workers is None:
     workers = os.cpu_count()
@@ -63,16 +115,17 @@ uploadProcesses = [] # Keep track of all of the processes still uploading so we 
 dt = pd.read_csv(fm_obj.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'RunAnalysis':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str, 'TrackFish':str, 'AssociateClustersWithTracks': str, 'LabeledVideos':str,'LabeledFrames': str, 'Summary': str})
 dt.loc[dt.projectID == projectIDs[0],args.AnalysisType] = 'Running'
 dt.to_csv(summary_file, index = False)
-fm_obj.uploadData(summary_file)
+#fm_obj.uploadData(fm_obj.local10030BehaviorFile)
 
 print('Downloading: ' + projectIDs[0] + ' ' + str(datetime.datetime.now()), flush = True)
-
-subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID])
+csv_list=[]
+#subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data',args.AnalysisType, '--ProjectID', projectIDs[0], '--ModelID', str(args.ModelID), '--AnalysisID', args.AnalysisID])
 while len(projectIDs) != 0:
     projectID = projectIDs[0]
-
+    fm_obj1 = FM(analysisID = args.AnalysisID, projectID=projectID)
     print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
-
+    csv_list.append(fm_obj1.localAllMaleBehaviorSummaryFile)
+    print(fm_obj1.localAllMaleBehaviorSummaryFile)
     # Run appropriate analysis script
     if args.AnalysisType == 'Prep':
         p1 = subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.prep_data', projectID, args.AnalysisID])
@@ -131,19 +184,33 @@ while len(projectIDs) != 0:
     dt.loc[dt.projectID == projectID,args.AnalysisType] = 'TRUE'
     dt.to_csv(summary_file, index = False)
     fm_obj.uploadData(summary_file)
-
+    
     #Upload data and keep track of it
-    print('Uploading: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+    #print('Uploading: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
-    uploadProcesses.append(subprocess.Popen(
-        ['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, '--Delete',
-         '--ProjectID', projectID, '--AnalysisID', args.AnalysisID]))
+    #uploadProcesses.append(subprocess.Popen(
+        #['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, '--Delete',
+         #'--ProjectID', projectID, '--AnalysisID', args.AnalysisID]))
     #uploadProcesses.append(subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, projectID]))
 
-for i,p in enumerate(uploadProcesses):
-    print('Finishing uploading process ' + str(i) + ': ' + str(datetime.datetime.now()), flush = True)
-    p.communicate()
+#for i,p in enumerate(uploadProcesses):
+    #print('Finishing uploading process ' + str(i) + ': ' + str(datetime.datetime.now()), flush = True)
+    #p.communicate()\
 
+#fm_obj.uploadData(fm_obj.local10030BehaviorFile)
+import csv
+
+outfile = open(fm_obj.local10030BehaviorFile, 'a', newline='')
+writer = csv.writer(outfile)
+outfile.write('\n')
+for infile in csv_list:
+
+    with open(infile) as csvfile:
+       reader = csv.reader(csvfile)
+       for row in reader:
+           writer.writerow(row)
+outfile.close()
+fm_obj.uploadData(fm_obj.local10030BehaviorFile)
 """
 if args.AnalysisType == 'Summary':
     import PyPDF2 as pypdf

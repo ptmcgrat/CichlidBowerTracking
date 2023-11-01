@@ -33,6 +33,9 @@ class FileManager():
             self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
             self.localEuthData = self.localAnalysisStatesDir + 'euthanization_data.csv'
             self.localLastHourBehaviorFile=self.localAnalysisStatesDir + 'last_hour_behavior_data.csv'
+            self.local10030BehaviorFile=self.localAnalysisStatesDir + '100_30_behavior_data.csv'
+            self.localLastHourFrameFile=self.localAnalysisStatesDir + 'last_hour_frame_data.csv'
+            self.local10030FrameFile=self.localAnalysisStatesDir + '100_30_frame_data.csv'
         else:
             self.localEuthData = None
     
@@ -198,6 +201,7 @@ class FileManager():
         self.localAllFishSexFile = self.localAnalysisDir + 'AllFishSex.csv'
         #file created by associate_clusters_with_sex
         self.localAllSexAsscociationFile= self.localAnalysisDir + 'AllAssociatedSex.csv'
+        self.localAllMaleBehaviorSummaryFile = self.localAnalysisDir + 'AllMaleBehaviorSummary.csv'
         # Files created by manual labelerer  preparers
         self.localNewLabeledFramesFile = self.localTempDir + 'NewLabeledFrames.csv'
         self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
@@ -252,6 +256,7 @@ class FileManager():
 
         self.localBoxedFishFile = self.localObjectDetectionDir + 'BoxedFish.csv'
         self.localBoxedFishDir = self.localObjectDetectionDir + 'BoxedImages/'
+        self.localAddFishSexDir = self.localAnnotationDir+ 'AddFishSex/'
 
     def downloadProjectData(self, dtype, videoIndex = None):
 
@@ -403,10 +408,9 @@ class FileManager():
             self.createDirectory(self.localAnalysisDir)
             self.downloadData(self.localLogfile)
             self.downloadData(self.localAllFishSexFile)
-            self.downloadData(self.localOldVideoCropFile)
-            self.downloadData(self.localAllLabeledClustersFile)
             self.downloadData(self.localAllTracksAsscociationFile)
             self.downloadData(self.localLastHourBehaviorFile)
+            self.downloadData(self.localLastHourFrameFile)
 
         else:
             raise KeyError('Unknown key: ' + dtype)

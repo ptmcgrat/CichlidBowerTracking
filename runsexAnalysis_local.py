@@ -78,7 +78,8 @@ for pid in dt.projectID:
         delta=videoIndex.endTime-pid_et
         days=delta.total_seconds() / (60*60*24)
         if days<1:
-            trialidx[pid]=count
+            if days>0:
+                trialidx[pid]=count
         count+=1
 
 device=list(range(1))
