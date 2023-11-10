@@ -39,7 +39,7 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 		elif args.AnalysisType == 'Depth':
 			from data_preparers.depth_preparer import DepthPreparer as DP
 			dp_obj = DP(fm_obj)
-			dp_obj.downloadProjectData()
+			#dp_obj.downloadProjectData()
 			dp_obj.validateInputData()
 			dp_obj.createSmoothedArray()
 			dp_obj.createDepthFigures()
