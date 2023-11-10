@@ -202,6 +202,7 @@ class FileManager():
 		# Files created by summary preparer
 
 		# miscellaneous files
+		self.localPiErrorFile = self.localProjectDir + 'PiErrors.txt'
 
 		try:
 			self.downloadData(self.localLogfile)

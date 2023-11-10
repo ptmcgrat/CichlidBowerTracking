@@ -1,4 +1,4 @@
-import platform, sys, os, shutil, datetime, subprocess, pdb, time, sendgrid, psutil
+import platform, sys, os, shutil, datetime, subprocess, pdb, time, sendgrid, psutil, csv
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 from cichlid_bower_tracking.helper_modules.googleController import GoogleController as GC
@@ -318,7 +318,7 @@ class CichlidTracker:
                     self.videoCounter += 1
 
             # Capture a frame and background if necessary
-           
+            logObj = LP(self.fileManager.localLogfile)
                 
                 
                 
@@ -331,6 +331,9 @@ class CichlidTracker:
                     subprocess.Popen(['python3', 'unit_scripts/drive_updater.py', self.loggerFile])
                 else:
                     out = self._captureFrame(current_frame_time, stdev_threshold = stdev_threshold)
+                    if len(logObj.frames) > 1 and logObj.frames[-1].std< 0.00001 and logObj.frames[-1].gp==logObj.frames[-2].gp:
+                        self.reboot_rs('Duplicate Datapoint')
+                        self.captureFrames()
             else:
                 while datetime.datetime.now() < current_frame_time:
                     time.sleep(5)
@@ -418,7 +421,8 @@ class CichlidTracker:
             
             if not b:
                 self._print('realsense error attempting reboot')
-                self.reboot_rs()
+                message = 'ReturnDepth Error'
+                self.reboot_rs(message)
                 self._returnDepth()
                 
             frames = self.align.process(frames)
@@ -432,9 +436,10 @@ class CichlidTracker:
             data[data==0] = np.nan # 0 indicates bad data from RealSense
             return data[self.r[1]:self.r[1]+self.r[3], self.r[0]:self.r[0]+self.r[2]]
     
-    def reboot_rs(self):  
-        if self.device == 'realsense': 
-            self.send_email('wait for frames error. The rs is attempting reboot.')
+    def reboot_rs(self,message):  
+        if self.device == 'realsense':
+            self.write_restart_to_logs(message,'0')
+            self.send_email(message + ' The rs is attempting reboot.')
             try:
                 self._print('stopping realsense')
                 self.pipeline.stop()
@@ -447,26 +452,36 @@ class CichlidTracker:
             except Exception as e:
                 self._print('Error starting realsense: ' + str(e))
                 raise Exception
-    def reboot_pi(self):
-        self.send_email('wait for frames error. The pi will reboot.')
-        self._print('Rebooting Pi : ')
-        try:
-            os.system('sudo reboot -h now')
-        except Exception as e:
-                self._print('Error rebooting down pi: ' + str(e))
-                raise Exception
+            
+    # We are currently not rebooting the pi for errors. But this is the code that would do it.
+    #def reboot_pi(self,message):
+    #    self.write_restart_to_logs(message,'1')
+    #    self.send_email(message + ' The pi is attempting reboot.')
+    #    self._print('Rebooting Pi : ')
+    #    try:
+    #        os.system('sudo reboot -h now')
+    #    except Exception as e:
+    #            self._print('Error rebooting down pi: ' + str(e))
+    #            raise Exception
 
-
-    def send_email(self, message):
+    def send_email(self, reason):
         from_email=Email("themcgrathlab@gmail.com")
         to_email=[To("bshi42@gatech.edu"),To("jtata6@gatech.edu")]
         subject= self.tankID + " encountered an error"
-        content=Content("text/plain","The error was "+message)
+        content=Content("text/plain","The error was "+reason)
         new_email = Mail(from_email,to_email,subject,content)
         response = self.sg.send(new_email)
         self._print(response.status_code)
         self._print(response.body)
         self._print(response.headers)
+        
+    def write_restart_to_logs(self,reason,isPiReboot):
+        restart_time = datetime.datetime.now()
+        data = [restart_time, reason, isPiReboot]
+        with open(self.fileManager.localPiErrorFile, 'a', encoding='UTF8') as f:
+             writer = csv.writer(f)
+             writer.writerow(data)
+
 
     def _returnCommand(self):
 
