@@ -22,8 +22,8 @@ if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 
 for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
-		#if projectID not in  ['MC_s9_tr6_BowerBuilding','MC_s15_tr2_BowerBuilding','MC_s34_tr1_BowerBuilding']:
-		#	continue
+		if projectID not in  ['MC_s9_tr6_BowerBuilding','MC_s15_tr2_BowerBuilding','MC_s34_tr1_BowerBuilding']:
+			continue
 
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
@@ -39,7 +39,7 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 		elif args.AnalysisType == 'Depth':
 			from data_preparers.depth_preparer import DepthPreparer as DP
 			dp_obj = DP(fm_obj)
-			dp_obj.downloadProjectData()
+			#dp_obj.downloadProjectData()
 			dp_obj.validateInputData()
 			dp_obj.createSmoothedArray()
 			dp_obj.createDepthFigures()
