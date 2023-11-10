@@ -1,33 +1,42 @@
 # Things to add
 
 import argparse,sys,pdb
-from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
+from helper_modules.file_manager import FileManager as FM
 
 parser = argparse.ArgumentParser()
 parser.add_argument('AnalysisType', type = str, choices=['Prep','Depth','Cluster','ClusterClassification', 'TrackFish','AddFishSex','Summary','All'], help = 'What type of analysis to perform')
-parser.add_argument('AnalysisID', type = str, help = 'The ID of the analysis state this project belongs to')
+parser.add_argument('SubjectID', type = str, help = 'Identify the projects you want to analyze.')
 parser.add_argument('ProjectID', type = str, help = 'Identify the projects you want to analyze.')
 parser.add_argument('--Workers', type = int, help = 'Number of workers to use to analyze data')
 parser.add_argument('--VideoIndex', nargs = '+', help = 'Restrict which videos to run the analysis on')
+parser.add_argument('--DownloadOnly', action = 'store_true', help = 'Use this flag to predownload the data')
+parser.add_argument('--AnalysisOnly', action = 'store_true', help = 'Use this flag to predownload the data')
 
 args = parser.parse_args()
 
-fm_obj = FM(args.AnalysisID, projectID = args.ProjectID, check = True)
+fm_obj = FM()
+fm_obj.setProjectID(args.SubjectID,args.ProjectID)
 
 # Run appropriate analysis script
 if args.AnalysisType == 'Prep':
 	from cichlid_bower_tracking.data_preparers.prep_preparer import PrepPreparer as PrP
 	prp_obj = PrP(fm_obj)
+	if not args.AnalysisOnly:
+		prp_obj.downloadProjectData()
 	prp_obj.validateInputData()
-	prp_obj.prepData()
+	if not args.DownloadOnly:
+		prp_obj.prepData()
 
 elif args.AnalysisType == 'Depth':
-	from cichlid_bower_tracking.data_preparers.depth_preparer import DepthPreparer as DP
+	from data_preparers.depth_preparer import DepthPreparer as DP
 	dp_obj = DP(fm_obj)
+	if not args.AnalysisOnly:
+		dp_obj.downloadProjectData()
 	dp_obj.validateInputData()
-	dp_obj.createSmoothedArray()
-	dp_obj.createDepthFigures()
-	dp_obj.createRGBVideo()
+	if not args.DownloadOnly:
+		dp_obj.createSmoothedArray()
+		dp_obj.createDepthFigures()
+		#dp_obj.createRGBVideo()
 
 elif args.AnalysisType == 'Cluster':
 	from cichlid_bower_tracking.data_preparers.cluster_preparer import ClusterPreparer as CP
@@ -39,6 +48,7 @@ elif args.AnalysisType == 'Cluster':
 
 	for videoIndex in videos:
 		cp_obj = CP(fm_obj, videoIndex, args.Workers)
+		cp_obj.downloadProjectData()
 		cp_obj.validateInputData()
 		cp_obj.runClusterAnalysis()
 

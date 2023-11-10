@@ -26,6 +26,8 @@ class LogParser:
         self.alldata = []
         self.backgrounds = []
         self.movies = []
+        self.tankresetstart = []
+        self.tankresetstop = []
         
         with open(self.logfile) as f:
             for line in f:
@@ -110,8 +112,16 @@ class LogParser:
                     try:
                         [x for x in self.movies if x.h264_file == t_list[1]][0].endTime = t_list[0]
                     except IndexError:
-                        pass
-                        pdb.set_trace()
+                        print('LogError: Video stopped without start ' + self.projectID)
+                        continue
+                if info_type == 'TankResetStart':
+                    t_list = self._ret_data(line, ['Time'])
+                    self.tankresetstart.append(t_list[0])
+                
+                if info_type == 'TankResetStop':
+                    t_list = self._ret_data(line, ['Time'])
+                    self.tankresetstop.append(t_list[0])
+
 
         self.frames.sort(key = lambda x: x.time)
 

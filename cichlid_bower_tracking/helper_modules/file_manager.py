@@ -1,9 +1,9 @@
 import os, subprocess, pdb, platform, shutil
-from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
+from helper_modules.log_parser import LogParser as LP
 import pandas as pd 
 
 class FileManager():
-    def __init__(self, analysisID = 'MC_multi', projectID = None, rcloneRemote = 'CichlidPiData:', masterDir = 'BioSci-McGrath/Apps/CichlidPiData/', check = False):
+    def __init__(self, analysisID = 'MC_multi', projectID = None, rcloneRemote = 'CichlidPiData:', masterDir = 'McGrath/Apps/CichlidPiData/', check = False):
         # Identify directory for temporary local files
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
             self._identifyPiDirectory()
@@ -29,7 +29,10 @@ class FileManager():
         # Store analysis state information
         self.analysisID = analysisID
         self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
-        
+        self.downloadData(self.localSummaryFile)
+        self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
+        self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
+
         # Create file names and parameters
         if projectID is not None:
             self.setProjectID(projectID, check_exists = check)
@@ -43,55 +46,19 @@ class FileManager():
 
         self._createParameters()
 
-    def setProjectID(self, projectID, check_exists = False):
+    def setSubjectID(self,subjectID, dissection_time):
+        self.subjectID = subjectID
+        self.dissectionTime = dissection_time
+
+    def setProjectID(self, subjectID, projectID, check_exists = False):
+        self.subjectID = subjectID
         self.projectID = projectID
+        self.dissectionTime = self.s_dt.loc[subjectID]['DissectionTime']
         self._createProjectData(projectID)
         if check_exists:
             assert self.checkFileExists(self.localLogfile)
-                
-    def identifyProjectsToRun(self, analysis_type, filtered_projectIDs):
-        self.downloadData(self.localSummaryFile)
-        dt = pd.read_csv(self.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'RunAnalysis':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str,'TrackFish':str, 'AssociateClustersWithTracks':str, 'Summary': str})
+        self._createSubjectData()
 
-        # Identify projects to run on:
-        sub_dt = dt[dt.RunAnalysis.str.upper() == 'TRUE'] # Only analyze projects that are indicated
-        if analysis_type == 'Prep':
-            sub_dt = sub_dt[sub_dt.StartingFiles.str.upper() == 'TRUE'] # Only analyze projects that have the right starting files
-        elif analysis_type == 'Depth':
-            sub_dt = sub_dt[sub_dt.StartingFiles.str.upper() == 'TRUE'] # Only analyze projects that have the right starting files
-            sub_dt = sub_dt[sub_dt.Prep.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-        elif analysis_type == 'Cluster':
-            sub_dt = sub_dt[sub_dt.StartingFiles.str.upper() == 'TRUE'] # Only analyze projects that have the right starting files
-            sub_dt = sub_dt[sub_dt.Prep.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-        elif analysis_type == 'ClusterClassification':
-            sub_dt = sub_dt[sub_dt.StartingFiles.str.upper() == 'TRUE'] # Only analyze projects that have the right starting files
-            sub_dt = sub_dt[sub_dt.Prep.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-            sub_dt = sub_dt[sub_dt.Cluster.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-        elif analysis_type == 'TrackFish':
-            sub_dt = sub_dt[sub_dt.StartingFiles.str.upper() == 'TRUE'] # Only analyze projects that have the right starting files
-            sub_dt = sub_dt[sub_dt.Prep.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-        elif analysis_type == 'AssociateClustersWithTracks':
-            sub_dt = sub_dt[sub_dt.StartingFiles.str.upper() == 'TRUE'] # Only analyze projects that have the right starting files
-            sub_dt = sub_dt[sub_dt.Prep.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-            sub_dt = sub_dt[sub_dt.TrackFish.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-            sub_dt = sub_dt[sub_dt.ClusterClassification.str.upper() == 'TRUE'] # Only analyze projects that have been prepped
-
-        projectIDs = list(sub_dt[sub_dt[analysis_type].str.upper() == 'FALSE'].projectID) # Only run analysis on projects that need it
-
-        # Filter out projects if optional argment given
-        if filtered_projectIDs is not None:
-            for projectID in projectIDs:
-                if projectID not in fil_projectIDs:
-                    projectIDs.remove(projectID)
-        return projectIDs
-
-    def updateSummaryFile(self, projectID, analysis_type):
-        self.downloadData(self.localSummaryFile)
-        dt = pd.read_csv(self.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str,'LabeledVideos':str,'LabeledFrames': str})
-
-        dt.loc[dt.projectID == projectID, analysis_type] = 'TRUE'
-        dt.to_csv(self.localSummaryFile, index = False)
-        self.uploadData(self.localSummaryFile)
 
     def getProjectStates(self):
 
@@ -154,13 +121,15 @@ class FileManager():
             row_data[analysis_type] = all([os.path.basename(x) in directories[os.path.dirname(os.path.realpath(x))] for x in local_files])
         print('Individual file info added to csv file')
         return row_data
-        
+    
+    def _createSubjectData(self):
+        self.localSubjectDir = self.localMasterDir + '__ProjectData/' + self.analysisID + '/' + self.subjectID + '/'
+        self.localSubjectDepthFile = self.localAnalysisDir + 'smoothedDepthData.npy'
+        self.localSubjectDepthDataFrame = self.localAnalysisDir + 'smoothedDepthData.csv'
+
     def _createProjectData(self, projectID):
 
         # Need information from AnalysisStates file to determine where project data is stored
-        self.downloadData(self.localSummaryFile)
-        a_dt = pd.read_csv(self.localSummaryFile)
-        # replaced  a_dt[a_dt.projectID == projectID].Directory.values[0] with self.analysisID due to error
         self.localProjectDir = self.localMasterDir + '__ProjectData/' + self.analysisID + '/' + projectID + '/'
 
         # Create logfile
@@ -203,9 +172,9 @@ class FileManager():
 
         # Files created by depth preparer
         self.localSmoothDepthFile = self.localAnalysisDir + 'smoothedDepthData.npy'
+        self.localSmoothDepthDT = self.localAnalysisDir + 'smoothedDepthData.csv'
         self.localRGBDepthVideo = self.localAnalysisDir + 'DepthRGBVideo.mp4'
         self.localRawDepthFile = self.localTroubleshootingDir + 'rawDepthData.npy'
-        self.localInterpDepthFile = self.localTroubleshootingDir + 'interpDepthData.npy'
         self.localDepthSummaryFile = self.localSummaryDir + 'DataSummary.xlsx'
         self.localDailyDepthSummaryFigure = self.localSummaryDir + 'DailyDepthSummary.pdf'
         self.localHourlyDepthSummaryFigure = self.localSummaryDir + 'HourlyDepthSummary.pdf'
@@ -424,9 +393,9 @@ class FileManager():
         elif dtype == 'Depth':
             if not no_upload:
                 self.uploadData(self.localSmoothDepthFile)
-                self.uploadData(self.localRGBDepthVideo)
-                self.uploadData(self.localRawDepthFile)
-                self.uploadData(self.localInterpDepthFile)
+                self.uploadData(self.localSmoothDepthDT)
+                
+                #self.uploadData(self.localRGBDepthVideo)
                 self.uploadData(self.localDepthLogfile)
                 self.uploadData(self.localDailyDepthSummaryFigure)
                 self.uploadData(self.localHourlyDepthSummaryFigure)
