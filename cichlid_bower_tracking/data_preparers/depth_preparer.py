@@ -62,7 +62,7 @@ class DepthPreparer:
         #self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
         self.fileManager.uploadData(self.fileManager.localDepthLogfile)
         self.fileManager.uploadData(self.fileManager.localDailyDepthSummaryFigure)
-        self.fileManager.uploadData(self.fileManager.localHourlyDepthSummaryFigure)
+        #self.fileManager.uploadData(self.fileManager.localHourlyDepthSummaryFigure)
 
             #self.uploadData(self.localPaceDir)
         if delete:
@@ -229,7 +229,7 @@ class DepthPreparer:
 
             figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
 
-
+        """
         # Create summary figure of hourly values
         figHourly = plt.figure(figsize=(11, 8.5))
         gridHourly = plt.GridSpec(self.lp.numDays, int(11 / hourlyDelta) + 2, wspace=0.05, hspace=0.05)
@@ -284,7 +284,7 @@ class DepthPreparer:
                 current_ax.set_title('Daily\nChange')
 
         figHourly.savefig(self.fileManager.localHourlyDepthSummaryFigure)
-
+        """
         plt.close('all')
 
     def createRGBVideo(self):
