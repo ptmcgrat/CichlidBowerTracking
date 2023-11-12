@@ -26,7 +26,8 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 		#	continue
 		if projectID in ['MC_s15_tr1_BowerBuilding','MC_s12_tr1_BowerBuilding','MC_s15_tr2_BowerBuilding','MC_s34_tr1_BowerBuilding','MC_s10_tr1_BowerBuilding','MC_s10_tr2_BowerBuilding',
 						 'MC_s32_tr1_BowerBuilding','MC_s28_tr1_BowerBuilding','MC_s28_tr2_BowerBuilding','MC_s4_tr1_BowerBuilding','MC_s4_tr2_BowerBuilding',
-						 'MC_s33_tr1_BowerBuilding','MC_s25_tr1_BowerBuilding','MC_s21_tr1_BowerBuilding','MC_s12_tr1_BowerBuilding']:
+						 'MC_s33_tr1_BowerBuilding','MC_s25_tr1_BowerBuilding','MC_s21_tr1_BowerBuilding','MC_s12_tr1_BowerBuilding','MC_s29_tr1_BowerBuilding',
+						 'MC_s29_tr2_BowerBuilding','MC_s29_tr3_BowerBuilding','MC_s29_tr4_BowerBuilding','MC_s24_tr1_BowerBuilding','MC_s7_tr1_BowerBuilding']:
 			continue
 
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
