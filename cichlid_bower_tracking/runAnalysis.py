@@ -24,8 +24,6 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
 		#if projectID not in  ['MC_s9_tr6_BowerBuilding','MC_s15_tr2_BowerBuilding','MC_s34_tr1_BowerBuilding']:
 		#	continue
-		if projectID != 'MC_s14_tr1_BowerBuilding':
-			continue
 		
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
