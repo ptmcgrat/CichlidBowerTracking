@@ -56,7 +56,7 @@ class DepthPreparer:
         assert os.path.exists(self.fileManager.localDepthCropFile)
 
     def uploadProjectData(self, delete = True):
-        #self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
+        self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
         self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
         #self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
