@@ -239,7 +239,7 @@ class DepthPreparer:
                     current_grid_idx += 1
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
 
-                current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days)]) for n in [0, 1, 2]]
+                current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
                 current_axs[0].set_title('%i' % (day))
                 current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
