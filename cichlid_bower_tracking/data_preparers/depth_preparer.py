@@ -133,7 +133,6 @@ class DepthPreparer:
         
         print(np.isnan(depthData).sum())
    
-        pdb.set_trace()
         depth_dt['Trial'] = ''
         assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
 
@@ -158,15 +157,19 @@ class DepthPreparer:
         # Mask out data with too many nans
         non_nans = np.count_nonzero(~np.isnan(daytimeData), axis = 0)
         depthData[:,non_nans < minimumGoodData*daytimeData.shape[0]] = np.nan
+        print(np.isnan(depthData).sum())
+
 
         # Filter out data with bad standard deviations
         stds = np.nanstd(daytimeData, axis = 0)
         depthData[:,stds > 6] = np.nan # Filter out data with std > 1.5 cm
+        print(np.isnan(depthData).sum())
 
         # Filter out data that is too close or too far from the sensor
         average_depth = np.nanmean(daytimeData, axis = 0)
         median_height = np.nanmedian(average_depth)
         depthData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
+        print(np.isnan(depthData).sum())
 
 
         # Smooth data with savgol_filter
@@ -174,6 +177,7 @@ class DepthPreparer:
         np.save(self.fileManager.localSmoothDepthFile, depthData)
         self.depth_dt = depth_dt
         depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
+        pdb.set_trace()
 
     def createDepthFigures(self, hourlyDelta=2):
 
