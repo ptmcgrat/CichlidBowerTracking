@@ -186,13 +186,12 @@ class DepthPreparer:
         # Otherwise, skip creation of Depth Figures
         self.da_obj = DA(self.fileManager)
         self.depth_dt = pd.read_csv(self.fileManager.localSmoothDepthDT, index_col = 0)
+        self.depth_dt = self.depth_dt[~self.depth_dt.Trial.isna()]
         project_info = self.depth_dt[self.depth_dt.DaytimeData == True].groupby('Trial').agg(first_index = ('Index','first'), last_index = ('Index','last'))
         num_trials = len(self.lp.tankresetstart)
-        pdb.set_trace()
-        rows = np.ceil((self.depth_dt[~(self.depth_dt.Trial.str.contains('Reset')) & ~(self.depth_dt.Trial == '')].groupby(['Trial']).nunique()['RelativeDay']/10)).sum()
+        rows = int(np.ceil((self.depth_dt[~(self.depth_dt.Trial.str.contains('Reset')) & ~(self.depth_dt.Trial == '')].groupby(['Trial']).nunique()['RelativeDay']/10)).sum())
 
         # figures based on the depth data
-
         # Create summary figure of daily values
         figDaily = plt.figure(num=1, figsize=(11, 8.5))
         figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
