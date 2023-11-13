@@ -193,9 +193,9 @@ class DepthAnalyzer:
                 t1 = t1.to_pydatetime()
             except AttributeError:
                 raise Exception('Timepoints to must be datetime.datetime objects')
-        if t0 > t1:
-            print('Warning: Second timepoint ' + str(t1) + ' is earlier than first timepoint ' + str(t0),
-                  file=sys.stderr)
+        #if t0 > t1:
+        #    print('Warning: Second timepoint ' + str(t1) + ' is earlier than first timepoint ' + str(t0),
+        #          file=sys.stderr)
 
 
 class ClusterAnalyzer:
@@ -399,7 +399,7 @@ class ClusterAnalyzer:
                 t1 = t1.to_pydatetime()
             except AttributeError:
                 raise Exception('Timepoints to must be datetime.datetime objects')
-        if t0 > t1:
-            print('Warning: Second timepoint ' + str(t1) + ' is earlier than first timepoint ' + str(t0),
-                  file=sys.stderr)
+        #if t0 > t1:
+            #print('Warning: Second timepoint ' + str(t1) + ' is earlier than first timepoint ' + str(t0),
+            #      file=sys.stderr)
 

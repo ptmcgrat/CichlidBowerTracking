@@ -193,7 +193,7 @@ class DepthPreparer:
 
         # figures based on the depth data
         # Create summary figure of daily values
-        figDaily = plt.figure(num=1, figsize=(11, 8.5))
+        figDaily = plt.figure(num=1, figsize=(11, rows*3))
         figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
         gridDaily = gridspec.GridSpec(num_trials + rows, 1)
 
@@ -228,8 +228,6 @@ class DepthPreparer:
 
             v = 2.0
 
-
-
             for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
                 if j % num_days == 0:
                     if j!=0:
@@ -248,8 +246,9 @@ class DepthPreparer:
                 [ax.set_adjustable('box') for ax in current_axs]
             cax = figDaily.add_subplot(midGrid[:, -1])
             plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
+            current_grid_idx += 1
 
-            figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
+        figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
 
         """
         # Create summary figure of hourly values
