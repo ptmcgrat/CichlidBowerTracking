@@ -103,7 +103,7 @@ class DepthPreparer:
 
             depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
 
-        pdb.set_trace()
+        print(np.isnan(depthData).sum())
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby('RelativeDay').agg(first_index = ('Index','first'), last_index = ('Index','last'))
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
@@ -131,6 +131,9 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
+        print(np.isnan(depthData).sum())
+   
+        pdb.set_trace()
         depth_dt['Trial'] = ''
         assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
 
