@@ -95,7 +95,9 @@ class DepthPreparer:
                 depthData[i] = depthData[i-1]
             else:
                 try: 
-                    depthData[i] = data.astype('float16')
+                    #depthData[i] = data.astype('float16')
+                    depthData[i] = data
+
                 except ValueError:
                     pdb.set_trace()
 
