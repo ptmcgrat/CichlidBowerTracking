@@ -232,6 +232,10 @@ class DepthPreparer:
 
             for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
                 if j % num_days == 0:
+                    if j!=0:
+                        cax = figDaily.add_subplot(midGrid[:, -1])
+                        plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
+
                     current_grid_idx += 1
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
 
