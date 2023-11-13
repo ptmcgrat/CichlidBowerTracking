@@ -42,7 +42,7 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 			from data_preparers.depth_preparer import DepthPreparer as DP
 			dp_obj = DP(fm_obj)
 			#dp_obj.downloadProjectData()
-			#dp_obj.validateInputData()
+			dp_obj.validateInputData()
 			#dp_obj.createSmoothedArray()
 			dp_obj.createDepthFigures()
 				#dp_obj.createRGBVideo()
