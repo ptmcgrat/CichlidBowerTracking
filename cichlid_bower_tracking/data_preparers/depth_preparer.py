@@ -191,7 +191,7 @@ class DepthPreparer:
         self.da_obj = DA(self.fileManager)
         project_info = self.depth_dt[self.depth_dt.DaytimeData == True].groupby('Trial').agg(first_index = ('Index','first'), last_index = ('Index','last'))
         num_trials = len(self.lp.tankresetstart)
-        
+        pdb.set_trace()
 
         # figures based on the depth data
 
@@ -230,7 +230,7 @@ class DepthPreparer:
             for i, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
                 current_axs = [figDaily.add_subplot(midGrid[n, i]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[0].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
-                current_axs[0].set_title('Day %i' % (day))
+                current_axs[0].set_title('%i' % (day))
                 current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
                 current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
