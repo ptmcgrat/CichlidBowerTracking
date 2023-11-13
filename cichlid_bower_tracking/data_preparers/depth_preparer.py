@@ -162,6 +162,8 @@ class DepthPreparer:
 
         # Filter out data with bad standard deviations
         stds = np.nanstd(daytimeData, axis = 0)
+        pdb.set_trace()
+
         depthData[:,stds > 6] = np.nan # Filter out data with std > 1.5 cm
         print(np.isnan(depthData).sum())
 
@@ -177,7 +179,6 @@ class DepthPreparer:
         np.save(self.fileManager.localSmoothDepthFile, depthData)
         self.depth_dt = depth_dt
         depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
-        pdb.set_trace()
 
     def createDepthFigures(self, hourlyDelta=2):
 
