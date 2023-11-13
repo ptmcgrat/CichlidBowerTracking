@@ -188,6 +188,7 @@ class DepthPreparer:
         self.depth_dt = pd.read_csv(self.fileManager.localSmoothDepthDT, index_col = 0)
         project_info = self.depth_dt[self.depth_dt.DaytimeData == True].groupby('Trial').agg(first_index = ('Index','first'), last_index = ('Index','last'))
         num_trials = len(self.lp.tankresetstart)
+        pdb.set_trace()
         rows = np.ceil((self.depth_dt[~(self.depth_dt.Trial.str.contains('Reset')) & ~(self.depth_dt.Trial == '')].groupby(['Trial']).nunique()['RelativeDay']/10)).sum()
 
         # figures based on the depth data
