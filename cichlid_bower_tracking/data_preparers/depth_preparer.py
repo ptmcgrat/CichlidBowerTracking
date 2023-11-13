@@ -103,7 +103,6 @@ class DepthPreparer:
 
             depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
 
-        print(np.isnan(depthData).sum())
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby('RelativeDay').agg(first_index = ('Index','first'), last_index = ('Index','last'))
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
@@ -131,10 +130,12 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
-        print(np.isnan(depthData).sum())
    
         depth_dt['Trial'] = ''
-        assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
+        try:
+            assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
+        except:
+            print('Fix logfile for tankreset start and stop')
 
         previous_start = 0
         for i,(start_time,stop_time) in enumerate(zip(self.lp.tankresetstart,self.lp.tankresetstop)):
@@ -157,21 +158,17 @@ class DepthPreparer:
         # Mask out data with too many nans
         non_nans = np.count_nonzero(~np.isnan(daytimeData), axis = 0)
         depthData[:,non_nans < minimumGoodData*daytimeData.shape[0]] = np.nan
-        print(np.isnan(depthData).sum())
 
 
         # Filter out data with bad standard deviations
         stds = np.nanstd(daytimeData, axis = 0)
-        pdb.set_trace()
 
         depthData[:,stds > 6] = np.nan # Filter out data with std > 1.5 cm
-        print(np.isnan(depthData).sum())
 
         # Filter out data that is too close or too far from the sensor
         average_depth = np.nanmean(daytimeData, axis = 0)
         median_height = np.nanmedian(average_depth)
         depthData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
-        print(np.isnan(depthData).sum())
 
 
         # Smooth data with savgol_filter
@@ -182,31 +179,33 @@ class DepthPreparer:
 
     def createDepthFigures(self, hourlyDelta=2):
 
-        print('Creating Depth Figure')
         # Create all figures based on depth data. Adjust hourlyDelta to influence the resolution of the
         # HourlyDepthSummary.pdf figure
 
         # Check that the DepthAnalzer object has been created, indicating that the required files are present.
         # Otherwise, skip creation of Depth Figures
         self.da_obj = DA(self.fileManager)
+        self.depth_dt = pd.read_csv(self.fileManager.localSmoothDepthDT, index_col = 0)
         project_info = self.depth_dt[self.depth_dt.DaytimeData == True].groupby('Trial').agg(first_index = ('Index','first'), last_index = ('Index','last'))
         num_trials = len(self.lp.tankresetstart)
-        pdb.set_trace()
+        rows = np.ceil((self.depth_dt[~(self.depth_dt.Trial.str.contains('Reset')) & ~(self.depth_dt.Trial == '')].groupby(['Trial']).nunique()['RelativeDay']/10)).sum()
 
         # figures based on the depth data
 
         # Create summary figure of daily values
         figDaily = plt.figure(num=1, figsize=(11, 8.5))
         figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
-        gridDaily = gridspec.GridSpec(2*num_trials, 1)
+        gridDaily = gridspec.GridSpec(num_trials + rows, 1)
 
+        current_grid_idx = 0
         for i in range(1,num_trials + 1):
+
             start_index = project_info.loc['Trial_' + str(i)].first_index
             last_index = project_info.loc['Trial_' + str(i)].last_index
             reset_index = project_info.loc['Trial_' + str(i) + '_Reset'].last_index
             #totalChangeData = vars(self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time, self.lp.frames[last_index].time))
 
-            topGrid = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gridDaily[2*(i-1) + 0])
+            topGrid = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gridDaily[current_grid_idx])
 
             # Show picture of total depth change
             topAx1 = figDaily.add_subplot(topGrid[0])
@@ -223,12 +222,20 @@ class DepthPreparer:
             topAx2.tick_params(colors=[0, 0, 0, 0])
             plt.colorbar(topAx2_ax, ax=topAx2)
 
-            day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last'))
-            midGrid = gridspec.GridSpecFromSubplotSpec(3, len(day_info) + 1, subplot_spec=gridDaily[2*(i-1) + 1])
+            day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last')).sort_index(ascending = False)
+
+            num_days = min(len(day_info),10)
 
             v = 2.0
-            for i, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
-                current_axs = [figDaily.add_subplot(midGrid[n, i]) for n in [0, 1, 2]]
+
+
+
+            for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
+                if j % num_days == 0:
+                    current_grid_idx += 1
+                    midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
+
+                current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days)]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[0].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
                 current_axs[0].set_title('%i' % (day))
                 current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
