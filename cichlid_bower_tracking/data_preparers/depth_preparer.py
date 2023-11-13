@@ -82,7 +82,7 @@ class DepthPreparer:
     def createSmoothedArray(self, start_hour  = 8, stop_hour = 6, goodDataCutoff = 0.8, minimumGoodData = 0.95, tunits = 71, order = 4, max_depth = 4, max_height = 8):
         
         # Create arrays to store raw depth data and data in the daytime
-        depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width), dtype = 'float16')
+        depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
         depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay'])
 
         # Read in each frame and store it. Also keep track of the indeces that are in the daytime
