@@ -172,7 +172,7 @@ class DepthPreparer:
 
 
         # Smooth data with savgol_filter
-        depthData = scipy.signal.savgol_filter(depthData, tunits, order, axis = 0, mode = 'mirror')
+        #depthData = scipy.signal.savgol_filter(depthData, tunits, order, axis = 0, mode = 'mirror')
         np.save(self.fileManager.localSmoothDepthFile, depthData)
         self.depth_dt = depth_dt
         depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
@@ -193,7 +193,7 @@ class DepthPreparer:
 
         # figures based on the depth data
         # Create summary figure of daily values
-        figDaily = plt.figure(num=1, figsize=(11, rows*3))
+        figDaily = plt.figure(num=1, figsize=(11, rows*3 + 3))
         figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
         gridDaily = gridspec.GridSpec(num_trials + rows, 1)
 
