@@ -20,7 +20,7 @@ if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 	print('Cant find ' + fm_obj.localSummaryFile)
 	sys.exit()
 
-"""
+
 p_flag = False
 for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
@@ -53,7 +53,7 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 				#dp_obj.createRGBVideo()
 			dp_obj.uploadProjectData(delete = False)
 
-"""
+
 if args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
 	writer = pypdf.PdfFileWriter()
