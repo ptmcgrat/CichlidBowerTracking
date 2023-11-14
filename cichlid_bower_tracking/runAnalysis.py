@@ -67,5 +67,5 @@ if args.AnalysisType == 'Depth':
 	with open(fm_obj.localAnalysisDir + 'Collated_DepthSummary.pdf', 'wb') as f:
 		writer.write(f)
 	print('Finished analysis: ' + str(datetime.datetime.now()), flush = True)
-	fm_obj.uploadData(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf')
+	fm_obj.uploadData(fm_obj.localAnalysisDir + 'Collated_DepthSummary.pdf')
 
