@@ -79,7 +79,7 @@ class DepthPreparer:
             print('Nodename: ' + os.uname().nodename, file = f)
             print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 
-    def createSmoothedArray(self, start_hour  = 8, stop_hour = 6, goodDataCutoff = 0.8, minimumGoodData = 0.95, tunits = 71, order = 4, max_depth = 4, max_height = 8):
+    def createSmoothedArray(self, goodDataCutoff = 0.8, minimumGoodData = 0.95, std_cutoff = 0.15, max_depth = 4, max_height = 8):
         
         # Create arrays to store raw depth data and data in the daytime
         depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
@@ -89,17 +89,14 @@ class DepthPreparer:
         for i, frame in enumerate(self.lp.frames):
             try:
                 data = np.load(self.fileManager.localProjectDir + frame.npy_file)
+                std = np.load(self.fileManager.localProjectDir + frame.std_file)
+                data[std > std_cutoff] = np.nan
 
             except FileNotFoundError:
                 print('Bad frame: ' + str(i) + ', ' + frame.npy_file)
                 depthData[i] = depthData[i-1]
             else:
-                try: 
-                    #depthData[i] = data.astype('float16')
-                    depthData[i] = data
-
-                except ValueError:
-                    pdb.set_trace()
+                depthData[i] = data
 
             depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
 
@@ -159,20 +156,12 @@ class DepthPreparer:
         non_nans = np.count_nonzero(~np.isnan(daytimeData), axis = 0)
         depthData[:,non_nans < minimumGoodData*daytimeData.shape[0]] = np.nan
 
-
-        # Filter out data with bad standard deviations
-        stds = np.nanstd(daytimeData, axis = 0)
-
-        depthData[:,stds > 6] = np.nan # Filter out data with std > 1.5 cm
-
         # Filter out data that is too close or too far from the sensor
         average_depth = np.nanmean(daytimeData, axis = 0)
         median_height = np.nanmedian(average_depth)
         depthData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
 
 
-        # Smooth data with savgol_filter
-        #depthData = scipy.signal.savgol_filter(depthData, tunits, order, axis = 0, mode = 'mirror')
         np.save(self.fileManager.localSmoothDepthFile, depthData)
         self.depth_dt = depth_dt
         depth_dt.to_csv(self.fileManager.localSmoothDepthDT)

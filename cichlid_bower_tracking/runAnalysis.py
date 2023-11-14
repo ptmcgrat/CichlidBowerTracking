@@ -23,7 +23,7 @@ if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 p_flag = False
 for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
-		if not p_flag and projectID != 'MC_s12_tr1_BowerBuilding':
+		if not p_flag and projectID != 'MC_s7_tr1_BowerBuilding':
 			continue
 		else:
 			p_flag = True
