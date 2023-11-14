@@ -320,7 +320,6 @@ class CichlidTracker:
                     self.videoCounter += 1
 
             # Capture a frame and background if necessary
-            logObj = LP(self.fileManager.localLogfile)
             
             #the rs needs to run on at 6:30am and turn off before the video are uploaded at 6pm
             if(now.hour < 6) or (now.hour == 6 and now.minute >= 30) or (now.hour >= 18) or (now.hour == 17 and now.minute >= 50):
@@ -346,6 +345,7 @@ class CichlidTracker:
                            current_background_time += datetime.timedelta(seconds = 60 * background_delta)
                         subprocess.Popen(['python3', 'unit_scripts/drive_updater.py', self.loggerFile])
                     else:
+                        logObj = LP(self.fileManager.localLogfile)
                         out = self._captureFrame(current_frame_time, stdev_threshold = stdev_threshold)
                         if len(logObj.frames) > 1 and logObj.frames[-1].std< 0.00001 and logObj.frames[-1].gp==logObj.frames[-2].gp:
                             self.reboot_rs('Duplicate Datapoint')
