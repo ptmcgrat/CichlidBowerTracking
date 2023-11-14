@@ -61,8 +61,10 @@ class CichlidTracker:
         #self.personalization.add_to(sendgrid.To('pmcgrath7@gatech.edu'))
         #for email in ['bshi42@gatech.edu', 'bhegarty6@gatech.edu', 'zjohnson37@gatech.edu']:
             #self.personalization.add_bcc(sendgrid.Bcc(email))
-
-        # 9: Await instructions
+            
+        # 9: Declare class variable for rs running flag
+        self.is_rs_running = False
+        # 10: Await instructions
         print('Monitoring commands')
         self.running = False
 
@@ -319,24 +321,38 @@ class CichlidTracker:
 
             # Capture a frame and background if necessary
             logObj = LP(self.fileManager.localLogfile)
-                
-                
-                
-       
-            if self.device != 'None':
-                if now > current_background_time:
-                    out = self._captureFrame(current_frame_time)
-                    if out is not None:
-                        current_background_time += datetime.timedelta(seconds = 60 * background_delta)
-                    subprocess.Popen(['python3', 'unit_scripts/drive_updater.py', self.loggerFile])
-                else:
-                    out = self._captureFrame(current_frame_time, stdev_threshold = stdev_threshold)
-                    if len(logObj.frames) > 1 and logObj.frames[-1].std< 0.00001 and logObj.frames[-1].gp==logObj.frames[-2].gp:
-                        self.reboot_rs('Duplicate Datapoint')
-                        self.captureFrames()
+            
+            #the rs needs to run on at 6:30am and turn off before the video are uploaded at 6pm
+            if(now.hour < 6) or (now.hour == 6 and now.minute >= 30) or (now.hour >= 18) or (now.hour == 17 and now.minute >= 50):
+                if self.is_rs_running:
+                    try:
+                        self.pipeline.stop()
+                    except:
+                        print('pipeline not running')
+                    self.is_rs_running = False
+                self.googleController.modifyPiGS('Error','Realsense Off', ping= True)
+                time.sleep(300)    
             else:
-                while datetime.datetime.now() < current_frame_time:
-                    time.sleep(5)
+                if not self.is_rs_running:
+                    try:
+                        self._start_kinect()
+                    except:
+                        print('pipeline already running')
+                    self.is_rs_running = True
+                if self.device != 'None':
+                    if now > current_background_time:
+                        out = self._captureFrame(current_frame_time)
+                        if out is not None:
+                           current_background_time += datetime.timedelta(seconds = 60 * background_delta)
+                        subprocess.Popen(['python3', 'unit_scripts/drive_updater.py', self.loggerFile])
+                    else:
+                        out = self._captureFrame(current_frame_time, stdev_threshold = stdev_threshold)
+                        if len(logObj.frames) > 1 and logObj.frames[-1].std< 0.00001 and logObj.frames[-1].gp==logObj.frames[-2].gp:
+                            self.reboot_rs('Duplicate Datapoint')
+                            self.captureFrames()
+                else:
+                    while datetime.datetime.now() < current_frame_time:
+                        time.sleep(5)
 
             current_frame_time += datetime.timedelta(seconds = 60 * frame_delta)
 
@@ -513,7 +529,7 @@ class CichlidTracker:
             #device = self.profile.get_device()
             #depth_sensor = device.first_depth_sensor()
             #device.hardware_reset()
-
+            self.is_rs_running = True
             frames = self.pipeline.wait_for_frames(1000)
             depth = frames.get_depth_frame()
             self.r = (0,0,depth.width,depth.height)
