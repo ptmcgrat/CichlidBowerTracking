@@ -64,7 +64,7 @@ if args.AnalysisType == 'Depth':
 			reader = pypdf.PdfFileReader(f)
 			for page_number in range(reader.numPages):
 				writer.addPage(reader.getPage(page_number))
-	with open(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf', 'wb') as f:
+	with open(fm_obj.localAnalysisDir + 'Collated_DepthSummary.pdf', 'wb') as f:
 		writer.write(f)
 	print('Finished analysis: ' + str(datetime.datetime.now()), flush = True)
 	fm_obj.uploadData(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf')
