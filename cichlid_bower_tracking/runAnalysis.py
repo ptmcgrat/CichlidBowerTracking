@@ -20,8 +20,14 @@ if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 	print('Cant find ' + fm_obj.localSummaryFile)
 	sys.exit()
 
+p_flag = False
 for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
+		if not p_flag and projectID != 'MC_s12_tr1_BowerBuilding':
+			continue
+		else:
+			p_flag == True
+
 		#if projectID not in  ['MC_s9_tr6_BowerBuilding','MC_s15_tr2_BowerBuilding','MC_s34_tr1_BowerBuilding']:
 		#	continue
 		
