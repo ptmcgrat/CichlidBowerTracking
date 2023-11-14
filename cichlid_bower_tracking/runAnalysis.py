@@ -20,6 +20,7 @@ if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 	print('Cant find ' + fm_obj.localSummaryFile)
 	sys.exit()
 
+"""
 p_flag = False
 for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
@@ -53,17 +54,18 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 			dp_obj.uploadProjectData(delete = False)
 
 """
-if args.AnalysisType == 'Summary':
+if args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
-	paths = [x for x in os.listdir(fm_obj.localAnalysisStatesDir) if '_DepthSummary.pdf' in x]
 	writer = pypdf.PdfFileWriter()
-	for path in paths:
-		f = open(fm_obj.localAnalysisStatesDir + path, 'rb')
-		reader = pypdf.PdfFileReader(f)
-		for page_number in range(reader.numPages):
-			writer.addPage(reader.getPage(page_number))
+	for subjectID, row in fm_obj.s_dt.iterrows():
+		for projectID in row.ProjectIDs.split(',,'):
+			fm_obj.setProjectID(subjectID, projectID)
+			f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
+			reader = pypdf.PdfFileReader(f)
+			for page_number in range(reader.numPages):
+				writer.addPage(reader.getPage(page_number))
 	with open(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf', 'wb') as f:
 		writer.write(f)
 	print('Finished analysis: ' + str(datetime.datetime.now()), flush = True)
 	fm_obj.uploadData(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf')
-"""
+
