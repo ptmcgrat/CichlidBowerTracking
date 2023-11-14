@@ -26,7 +26,7 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 		if not p_flag and projectID != 'MC_s12_tr1_BowerBuilding':
 			continue
 		else:
-			p_flag == True
+			p_flag = True
 
 		#if projectID not in  ['MC_s9_tr6_BowerBuilding','MC_s15_tr2_BowerBuilding','MC_s34_tr1_BowerBuilding']:
 		#	continue
