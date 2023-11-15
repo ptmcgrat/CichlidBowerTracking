@@ -119,6 +119,21 @@ class DepthPreparer:
                         if len(x_interp) != 0: # Only interpolate if there is missing data
                             interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
                             dailyData[x_interp, i, j] = interp_data
+            
+            # Mask out data with too many nans
+            non_nans = np.count_nonzero(~np.isnan(dailyData), axis = 0)
+            dailyData[:,non_nans < minimumGoodData*dailyData.shape[0]] = np.nan
+
+            # Filter out data that is too close or too far from the sensor
+            average_depth = np.nanmean(dailyData, axis = 0)
+            median_height = np.nanmedian(dailyData)
+            dailyData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
+
+            # Smooth with savgol filter
+            smoothDepthData = scipy.signal.savgol_filter(dailyData, 71, 4, axis = 0, mode = 'nearest')
+
+        # Set nighttime data as mean of before and after
+        for day, (start_index,stop_index) in daytime_data.iterrows():
             if start_index != 0: #no previous night data
                 if night_start == 0:
                     depthData[night_start:start_index] = depthData[start_index]
@@ -127,7 +142,7 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
-   
+        # Divide into trials based on
         depth_dt['Trial'] = ''
         try:
             assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
@@ -150,17 +165,6 @@ class DepthPreparer:
         ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
         manual_crop_mask = np.array(img)
         smoothDepthData[:,manual_crop_mask == 0] = np.nan"""
-
-        daytimeData = depthData[depth_dt[depth_dt.DaytimeData == True].Index]
-        # Mask out data with too many nans
-        non_nans = np.count_nonzero(~np.isnan(daytimeData), axis = 0)
-        depthData[:,non_nans < minimumGoodData*daytimeData.shape[0]] = np.nan
-
-        # Filter out data that is too close or too far from the sensor
-        average_depth = np.nanmean(daytimeData, axis = 0)
-        median_height = np.nanmedian(average_depth)
-        depthData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
-
 
         np.save(self.fileManager.localSmoothDepthFile, depthData)
         self.depth_dt = depth_dt
@@ -227,10 +231,10 @@ class DepthPreparer:
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
 
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
-                current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
+                current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
                 current_axs[0].set_title('%i' % (day))
-                current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
-                current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
+                current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, cropped=True), vmin=-v, vmax=v)
+                current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=True, cropped=True), vmin=-v, vmax=v)
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
             cax = figDaily.add_subplot(midGrid[:, -1])
