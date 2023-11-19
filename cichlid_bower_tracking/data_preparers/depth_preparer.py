@@ -180,17 +180,19 @@ class DepthPreparer:
         self.da_obj = DA(self.fileManager)
         self.depth_dt = pd.read_csv(self.fileManager.localSmoothDepthDT, index_col = 0)
         self.depth_dt = self.depth_dt[~self.depth_dt.Trial.isna()]
+
         project_info = self.depth_dt[self.depth_dt.DaytimeData == True].groupby('Trial').agg(first_index = ('Index','first'), last_index = ('Index','last'))
         num_trials = len(self.lp.tankresetstart)
         rows = int(np.ceil((self.depth_dt[~(self.depth_dt.Trial.str.contains('Reset')) & ~(self.depth_dt.Trial == '')].groupby(['Trial']).nunique()['RelativeDay']/10)).sum())
 
         # figures based on the depth data
         # Create summary figure of daily values
-        figDaily = plt.figure(num=1, figsize=(11, rows*3 + 3))
+        figDaily = plt.figure(num=1, figsize=(11, rows*3 + 6))
         figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
-        gridDaily = gridspec.GridSpec(num_trials + rows, 1)
+        gridDaily = gridspec.GridSpec(num_trials + rows +1, 1)
 
         current_grid_idx = 0
+        hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
         for i in range(1,num_trials + 1):
 
             start_index = project_info.loc['Trial_' + str(i)].first_index
@@ -204,14 +206,16 @@ class DepthPreparer:
             topAx1 = figDaily.add_subplot(topGrid[0])
             topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
                 self.lp.frames[start_index].time, self.lp.frames[last_index].time, cropped=False), vmin=-3, vmax=3)
-            topAx1.set_title('Total Depth Change (cm)')
+            bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time,self.lp.frames[last_index].time).depthBowerVolume
+            topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm)')
             topAx1.tick_params(colors=[0, 0, 0, 0])
             plt.colorbar(topAx1_ax, ax=topAx1)
 
             # Show picture of pit and castle mask
             topAx2 = figDaily.add_subplot(topGrid[1])
             topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(self.lp.frames[reset_index].time, self.lp.frames[last_index].time, cropped = False), vmin = -3, vmax = 3)
-            topAx2.set_title('Reset Depth Change (cm)')
+            bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[reset_index].time,self.lp.frames[last_index].time).depthBowerVolume
+            topAx2.set_title('Reset Depth Change ('+ str(int(bowerVolume)) + 'cm)')
             topAx2.tick_params(colors=[0, 0, 0, 0])
             plt.colorbar(topAx2_ax, ax=topAx2)
 
@@ -232,16 +236,38 @@ class DepthPreparer:
 
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
-                current_axs[0].set_title('%i' % (day))
+                bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start-1].time,self.lp.frames[day_stop+1].time).depthBowerVolume
+                current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
                 current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, cropped=True), vmin=-v, vmax=v)
                 current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=True, cropped=True), vmin=-v, vmax=v)
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
+
+                good_data_start = self.lp.frames[day_start].time
+                good_data_stop = self.lp.frames[day_stop].time
+                day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
+                for k in range(8,20):
+                    start = day_stamp + datetime.timedelta(hours=k)
+                    stop = day_stamp + datetime.timedelta(hours=k+1)
+                    if stop < good_data_start or start > good_data_stop:
+                        continue
+                    volume = self.da_obj.returnVolumeSummary(max(start,good_data_start),min(stop,good_data_stop)).depthBowerVolume
+                    hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume]
+
+
             cax = figDaily.add_subplot(midGrid[:, -1])
             plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
             current_grid_idx += 1
 
+        hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
+        bottomGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[-1], hspace=0.05)
+        bIAx = figDaily.add_subplot(bottomGrid[0])
+        bIAx.axhline(linewidth=1, alpha=0.5, y=0)
+        bIAx.scatter(hourly_dt['NewTime'], hourly_dt['Volume'])
+        bIAx.set_xlabel('Hour')
+        bIAx.set_ylabel('Volume (cm3)')
         figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
+
 
         """
         # Create summary figure of hourly values

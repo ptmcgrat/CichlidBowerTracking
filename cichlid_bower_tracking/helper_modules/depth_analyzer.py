@@ -61,7 +61,10 @@ class DepthAnalyzer:
         timeChange = t1 - t0
 
         # Determine threshold and minimum size of bower to use based upon timeChange
-        if timeChange.total_seconds() < 7300:  # 2 hours or less
+        if t0 > t1:
+            totalThreshold = self.fileManager.totalDepthThreshold
+            minPixels = self.fileManager.totalMinPixels
+        elif timeChange.total_seconds() < 7300:  # 2 hours or less
             totalThreshold = self.fileManager.hourlyDepthThreshold
             minPixels = self.fileManager.hourlyMinPixels
         elif timeChange.total_seconds() < 129600:  # 2 hours to 1.5 days
