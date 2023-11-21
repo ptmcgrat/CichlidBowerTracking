@@ -197,7 +197,6 @@ class DepthPreparer:
 
             start_index = project_info.loc['Trial_' + str(i)].first_index
             last_index = project_info.loc['Trial_' + str(i)].last_index
-            pdb.set_trace()
             reset_index = project_info.loc['Trial_' + str(i) + '_Reset'].last_index
             #totalChangeData = vars(self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time, self.lp.frames[last_index].time))
 
