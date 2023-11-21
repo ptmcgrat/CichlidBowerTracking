@@ -195,7 +195,6 @@ class DepthPreparer:
         hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
         for i in range(1,num_trials + 1):
 
-            pdb.set_trace()
             start_index = project_info.loc['Trial_' + str(i)].first_index
             last_index = project_info.loc['Trial_' + str(i)].last_index
             reset_index = project_info.loc['Trial_' + str(i) + '_Reset'].last_index
