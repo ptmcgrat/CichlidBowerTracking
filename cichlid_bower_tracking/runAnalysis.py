@@ -25,7 +25,7 @@ p_flag = False
 for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
 
-		while not p_flag and projectID != 'Running: MC_s9_tr3_BowerBuilding':
+		if not p_flag and projectID != 'Running: MC_s9_tr3_BowerBuilding':
 			continue
 		p_flag = True		
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
