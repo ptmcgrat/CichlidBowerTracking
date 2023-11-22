@@ -172,6 +172,8 @@ class DepthAnalyzer:
         try:
             threshold = sortedData[-1 * bowerIndex_pixels]
         except IndexError:
+            print('Warning: threshold error')
+            threshold = 0
             pdb.set_trace()
         outData.thresholdCastleVolume = np.nansum(heightChangeAbs[(bowerLocations == 1) & (heightChangeAbs > threshold)])
         outData.thresholdPitVolume = np.nansum(heightChangeAbs[(bowerLocations == -1) & (heightChangeAbs > threshold)])
