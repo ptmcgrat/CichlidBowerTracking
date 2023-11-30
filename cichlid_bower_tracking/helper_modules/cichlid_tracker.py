@@ -302,7 +302,7 @@ class CichlidTracker:
 
             # Grab new time
             now = datetime.datetime.now()
-            
+
             # Fix camera if it needs to be
             if self.piCamera:
                 if self._video_recording() and not self.camera.recording:
@@ -320,9 +320,10 @@ class CichlidTracker:
                     self.videoCounter += 1
 
             # Capture a frame and background if necessary
-            
-            #the rs needs to run on at 6:30am and turn off before the video are uploaded at 6pm
-            if(now.hour < 6) or (now.hour == 6 and now.minute >= 30) or (now.hour >= 18) or (now.hour == 17 and now.minute >= 50):
+            day_of_week = now.isocalendar().weekday
+            #the rs needs to alternatively turn on at 6 am and 7:45
+            # 1 - Monday, 2 - Tuesday, 3 - Wednesday, 4- Thursday, 5 - Friday, 6 - Saturday, 7 - Sunday
+            if (day_of_week % 2 == 0 and now.hour < 6) or (day_of_week % 2 != 0 and ((now.hour < 7) or (now.hour == 7 and now.minute <= 45))) or (now.hour >= 18) or (now.hour == 17 and now.minute >= 50):
                 if self.is_rs_running:
                     try:
                         self.pipeline.stop()
