@@ -320,9 +320,8 @@ class CichlidTracker:
                     self.videoCounter += 1
 
             # Capture a frame and background if necessary
-            day_of_week = now.isocalendar().weekday
+            day_of_week = datetime.datetime.today().weekday()
             #the rs needs to alternatively turn on at 6 am and 7:45
-            # 1 - Monday, 2 - Tuesday, 3 - Wednesday, 4- Thursday, 5 - Friday, 6 - Saturday, 7 - Sunday
             if (day_of_week % 2 == 0 and now.hour < 6) or (day_of_week % 2 != 0 and ((now.hour < 7) or (now.hour == 7 and now.minute <= 45))) or (now.hour >= 18) or (now.hour == 17 and now.minute >= 50):
                 if self.is_rs_running:
                     try:
