@@ -79,7 +79,7 @@ class DepthPreparer:
             print('Nodename: ' + os.uname().nodename, file = f)
             print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 
-    def createSmoothedArray(self, goodDataCutoff = 0.8, minimumGoodData = 0.8, std_cutoff = 0.15, max_depth = 4, max_height = 8):
+    def createSmoothedArray(self, goodDataCutoff = 0.7, minimumGoodData = 0.7, std_cutoff = 0.15, max_depth = 4, max_height = 8):
         
         # Create arrays to store raw depth data and data in the daytime
         depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
@@ -110,8 +110,8 @@ class DepthPreparer:
 
         previous_start = 0
         for i,(start_time,stop_time) in enumerate(zip(self.lp.tankresetstart,self.lp.tankresetstop)):
-            depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time < start_time),'Trial'] = 'Trial_' + str(i+1)
-            depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time > start_time) & (depth_dt.Time <= stop_time),'Trial'] = 'Trial_' + str(i+1) + '_Reset'
+            depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time < start_time - datetime.timedelta(minutes = 5)),'Trial'] = 'Trial_' + str(i+1)
+            depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time > start_time - datetime.timedelta(minutes = 5)) & (depth_dt.Time <= stop_time + datetime.timedelta(minutes = 5)),'Trial'] = 'Trial_' + str(i+1) + '_Reset'
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
