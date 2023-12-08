@@ -83,7 +83,7 @@ class DepthPreparer:
         
         # Create arrays to store raw depth data and data in the daytime
         depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
-        depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay'])
+        depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay','BadStdPixels'])
 
         # Read in each frame and store it. Also keep track of the indeces that are in the daytime
         for i, frame in enumerate(self.lp.frames):
@@ -91,8 +91,6 @@ class DepthPreparer:
                 data = np.load(self.fileManager.localProjectDir + frame.npy_file)
                 std = np.load(self.fileManager.localProjectDir + frame.std_file)
                 data[std > std_cutoff] = np.nan
-                print(np.sum(std>std_cutoff))
-                pdb.set_trace()
 
             except FileNotFoundError:
                 print('Bad frame: ' + str(i) + ', ' + frame.npy_file)
@@ -100,7 +98,7 @@ class DepthPreparer:
             else:
                 depthData[i] = data
 
-            depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
+            depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days,np.sum(std>std_cutoff)]
 
         
         # Divide into trials based on
@@ -136,6 +134,7 @@ class DepthPreparer:
                             dailyData[x_interp, i, j] = interp_data
             
             # Mask out data with too many nans
+            pdb.set_trace()
             non_nans = np.count_nonzero(~np.isnan(dailyData), axis = 0)
             dailyData[:,non_nans < minimumGoodData*dailyData.shape[0]] = np.nan
 
