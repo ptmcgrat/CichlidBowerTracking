@@ -52,6 +52,7 @@ class FileManager():
         self._createProjectData(projectID)
         if check_exists:
             assert self.checkFileExists(self.localLogfile)
+        self.dissectionTime = self.lp.frames[0].time
 
     def getProjectStates(self):
 
