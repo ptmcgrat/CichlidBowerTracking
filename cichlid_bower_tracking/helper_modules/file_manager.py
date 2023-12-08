@@ -3,7 +3,7 @@ from helper_modules.log_parser import LogParser as LP
 import pandas as pd 
 
 class FileManager():
-    def __init__(self, analysisID = 'MC_multi', projectID = None, rcloneRemote = 'CichlidPiData:', masterDir = 'McGrath/Apps/CichlidPiData/', check = False):
+    def __init__(self, analysisID = 'YH_Build', projectID = None, rcloneRemote = 'CichlidPiData:', masterDir = 'McGrath/Apps/CichlidPiData/', check = False):
         # Identify directory for temporary local files
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
             self._identifyPiDirectory()
@@ -32,7 +32,7 @@ class FileManager():
         self.localAnalysisStatesDir = self.localMasterDir + '__AnalysisStates/' + analysisID + '/'
         self.downloadData(self.localSummaryFile)
         self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
-        self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
+        self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0, dtype = {'RunAnalysis':str, 'StartingFiles':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str,'TrackFish':str, 'AssociateClustersWithTracks':str, 'Summary': str})
 
         # Create file names and parameters
         if projectID is not None:
@@ -47,19 +47,11 @@ class FileManager():
 
         self._createParameters()
 
-    def setSubjectID(self,subjectID, dissection_time):
-        self.subjectID = subjectID
-        self.dissectionTime = dissection_time
-
-    def setProjectID(self, subjectID, projectID, check_exists = False):
-        self.subjectID = subjectID
+    def setProjectID(self, projectID, check_exists = False):
         self.projectID = projectID
-        self.dissectionTime = self.s_dt.loc[subjectID]['DissectionTime']
         self._createProjectData(projectID)
         if check_exists:
             assert self.checkFileExists(self.localLogfile)
-        self._createSubjectData()
-
 
     def getProjectStates(self):
 

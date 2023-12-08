@@ -11,7 +11,6 @@ parser.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of 
 parser.add_argument('--Workers', type=int, help='Number of workers')
 args = parser.parse_args()
 
-analysisID = 'MC_multi'
 # Identify projects to run analysis on
 fm_obj = FM()
 fm_obj.downloadData(fm_obj.localSummaryFile)
@@ -20,46 +19,41 @@ if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 	print('Cant find ' + fm_obj.localSummaryFile)
 	sys.exit()
 
+# Filter to projects that should be run
+projects = fm_obj.s_dt[(fm_obj.s_dt.RunAnalysis.str.upper() == 'TRUE') & (fm_obj.s_dt[args.AnalysisType].str.upper() == 'FALSE')]
+for projectID,row in projects.iterrows():
 
-p_flag = False
-for subjectID, row in fm_obj.s_dt.iterrows():
-	for projectID in row.ProjectIDs.split(',,'):
+	print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
-		if not p_flag and projectID != 'MC_s9_tr3_BowerBuilding':
-			continue
-		p_flag = True		
-		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+	fm_obj.setProjectID(projectID)
+	if args.AnalysisType == 'Prep':
+		from data_preparers.prep_preparer import PrepPreparer as PrP
+		prp_obj = PrP(fm_obj)
+		prp_obj.downloadProjectData()
+		prp_obj.validateInputData()
+		prp_obj.prepData()
+		prp_obj.uploadProjectData(delete = False)
 
-		fm_obj.setProjectID(subjectID, projectID)
-		if args.AnalysisType == 'Prep':
-			from data_preparers.prep_preparer import PrepPreparer as PrP
-			prp_obj = PrP(fm_obj)
-			prp_obj.downloadProjectData()
-			prp_obj.validateInputData()
-			prp_obj.prepData()
-			prp_obj.uploadProjectData(delete = False)
-
-		elif args.AnalysisType == 'Depth':
-			from data_preparers.depth_preparer import DepthPreparer as DP
-			dp_obj = DP(fm_obj)
-			#dp_obj.downloadProjectData()
-			dp_obj.validateInputData()
-			dp_obj.createSmoothedArray()
-			dp_obj.createDepthFigures()
-				#dp_obj.createRGBVideo()
-			dp_obj.uploadProjectData(delete = False)
+	elif args.AnalysisType == 'Depth':
+		from data_preparers.depth_preparer import DepthPreparer as DP
+		dp_obj = DP(fm_obj)
+		#dp_obj.downloadProjectData()
+		dp_obj.validateInputData()
+		dp_obj.createSmoothedArray()
+		dp_obj.createDepthFigures()
+			#dp_obj.createRGBVideo()
+		dp_obj.uploadProjectData(delete = False)
 
 
 if args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
 	writer = pypdf.PdfFileWriter()
-	for subjectID, row in fm_obj.s_dt.iterrows():
-		for projectID in row.ProjectIDs.split(',,'):
-			fm_obj.setProjectID(subjectID, projectID)
-			f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
-			reader = pypdf.PdfFileReader(f)
-			for page_number in range(reader.numPages):
-				writer.addPage(reader.getPage(page_number))
+	for projectID,row in projectIDs.iterrows():
+		fm_obj.setProjectID(subjectID, projectID)
+		f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
+		reader = pypdf.PdfFileReader(f)
+		for page_number in range(reader.numPages):
+			writer.addPage(reader.getPage(page_number))
 	with open(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf', 'wb') as f:
 		writer.write(f)
 	print('Finished analysis: ' + str(datetime.datetime.now()), flush = True)
