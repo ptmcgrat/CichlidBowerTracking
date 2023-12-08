@@ -79,7 +79,7 @@ class DepthPreparer:
             print('Nodename: ' + os.uname().nodename, file = f)
             print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 
-    def createSmoothedArray(self, goodDataCutoff = 0.7, minimumGoodData = 0.7, std_cutoff = 0.15, max_depth = 4, max_height = 8):
+    def createSmoothedArray(self, goodDataCutoff = 0.7, minimumGoodData = 0.7, std_cutoff = 0.25, max_depth = 4, max_height = 8):
         
         # Create arrays to store raw depth data and data in the daytime
         depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
@@ -251,6 +251,9 @@ class DepthPreparer:
                 current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=True, cropped=True), vmin=-v, vmax=v)
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
+
+                if day == 7:
+                    pdb.set_trace()
 
                 good_data_start = self.lp.frames[day_start].time
                 good_data_stop = self.lp.frames[day_stop].time
