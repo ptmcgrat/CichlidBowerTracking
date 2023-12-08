@@ -104,6 +104,7 @@ class DepthPreparer:
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
+        pdb.set_trace()
         for day, (start_index,stop_index) in daytime_data.iterrows():
             dailyData = depthData[start_index:stop_index] # Create view of numpy array just creating a single day during the daytime
             goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
