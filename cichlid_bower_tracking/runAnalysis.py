@@ -48,7 +48,7 @@ for projectID,row in projects.iterrows():
 if args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
 	writer = pypdf.PdfFileWriter()
-	for projectID,row in projectIDs.iterrows():
+	for projectID,row in projects.iterrows():
 		fm_obj.setProjectID(subjectID, projectID)
 		f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
 		reader = pypdf.PdfFileReader(f)
