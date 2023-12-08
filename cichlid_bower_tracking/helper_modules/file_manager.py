@@ -172,7 +172,6 @@ class FileManager():
         self.localDepthSummaryFile = self.localSummaryDir + 'DataSummary.xlsx'
         self.localDailyDepthSummaryFigure = self.localSummaryDir + 'DailyDepthSummary.pdf'
         self.localHourlyDepthSummaryFigure = self.localSummaryDir + 'HourlyDepthSummary.pdf'
-        self.localDepthFrameInfo = self.localTroubleshootingDir + 'depthFrameInfo.csv'
 
         # Files created by cluster classifier preparer
         self.localTempClassifierDir = self.localProjectDir + 'TempClassifier/'

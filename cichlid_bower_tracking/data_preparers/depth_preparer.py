@@ -159,8 +159,6 @@ class DepthPreparer:
         depthData[night_start:] = depthData[night_start-1]
         
 
-        depthData.to_csv(self.fileManager.localDepthFrameInfo)
-        self.fileManager.uploadData(self.fileManager.localDepthFrameInfo)
         # Save interpolated data
         
         # Read in manual crop and mask out data outside of crop
@@ -176,6 +174,7 @@ class DepthPreparer:
         np.save(self.fileManager.localSmoothDepthFile, depthData)
         self.depth_dt = depth_dt
         depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
+        self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
     def createDepthFigures(self, hourlyDelta=2):
 
