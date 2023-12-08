@@ -132,7 +132,7 @@ class DepthPreparer:
                         if len(x_interp) != 0: # Only interpolate if there is missing data
                             interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
                             dailyData[x_interp, i, j] = interp_data
-            
+            print(str(day) + '_' + str(trial))
             # Mask out data with too many nans
             non_nans = np.count_nonzero(~np.isnan(dailyData), axis = 0)
             dailyData[:,non_nans < minimumGoodData*dailyData.shape[0]] = np.nan
