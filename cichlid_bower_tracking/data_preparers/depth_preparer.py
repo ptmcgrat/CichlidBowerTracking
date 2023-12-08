@@ -247,13 +247,13 @@ class DepthPreparer:
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
                 bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start-1].time,self.lp.frames[day_stop+1].time).depthBowerVolume
                 current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
-                current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, cropped=True), vmin=-v, vmax=v)
-                current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=True, cropped=True), vmin=-v, vmax=v)
+                current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
+                current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
 
-                if day == 7:
-                    self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped = True, pdb_flag=True)
+                #if day == 7:
+                #    self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped = True, pdb_flag=True)
 
                 good_data_start = self.lp.frames[day_start].time
                 good_data_stop = self.lp.frames[day_stop].time
