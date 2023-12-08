@@ -83,7 +83,7 @@ class DepthPreparer:
         
         # Create arrays to store raw depth data and data in the daytime
         depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
-        depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay','BadStdPixels','TotalBadPixels'])
+        depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay','BadStdPixels','LoadedBadPixels'])
 
         # Read in each frame and store it. Also keep track of the indeces that are in the daytime
         for i, frame in enumerate(self.lp.frames):
@@ -158,6 +158,7 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
+        pdb.set_trace()
 
         # Save interpolated data
         
@@ -240,8 +241,6 @@ class DepthPreparer:
                     current_grid_idx += 1
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
 
-                if day >= 7:
-                    pdb.set_trace()
 
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
