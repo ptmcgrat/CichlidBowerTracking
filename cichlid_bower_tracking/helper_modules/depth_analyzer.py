@@ -136,7 +136,7 @@ class DepthAnalyzer:
         if masked:
             change[self.returnBowerLocations(t0, t1, cropped=cropped) == 0] = 0
 
-        if pdb:
+        if pdb_flag:
             pdb.set_trace()
 
         return change

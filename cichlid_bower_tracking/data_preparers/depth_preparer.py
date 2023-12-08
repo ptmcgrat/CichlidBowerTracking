@@ -253,7 +253,7 @@ class DepthPreparer:
                 [ax.set_adjustable('box') for ax in current_axs]
 
                 if day == 7:
-                    self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped = True, pdb=True)
+                    self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped = True, pdb_flag=True)
 
                 good_data_start = self.lp.frames[day_start].time
                 good_data_stop = self.lp.frames[day_stop].time
