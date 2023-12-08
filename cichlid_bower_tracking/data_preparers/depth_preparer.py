@@ -100,7 +100,6 @@ class DepthPreparer:
 
             depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
 
-        daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby('RelativeDay').agg(first_index = ('Index','first'), last_index = ('Index','last'))
         
         # Divide into trials based on
         depth_dt['Trial'] = ''
@@ -116,8 +115,11 @@ class DepthPreparer:
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
+        daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby(['RelativeDay','Trial']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
+
         pdb.set_trace()
-        for day, (start_index,stop_index) in daytime_data.iterrows():
+        for (day,trial), (start_index,stop_index) in daytime_data.iterrows():
+            pdb.set_trace()
             dailyData = depthData[start_index:stop_index] # Create view of numpy array just creating a single day during the daytime
             goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
 
