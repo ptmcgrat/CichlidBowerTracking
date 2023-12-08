@@ -105,7 +105,7 @@ class DepthAnalyzer:
 
         return change
 
-    def returnHeightChange(self, t0, t1, masked=False, cropped=False, force_window=False):
+    def returnHeightChange(self, t0, t1, masked=False, cropped=False, force_window=False, pdb = False):
         # return the height change, based on the smoothedDepthData numpy, from the frame closest to t0 to the frame
         # closest to t1. If cropped is True, crop the frame to include only the area defined by tray_r. If masked is
         # True, set the pixel value in all non-bower regions (see returnBowerLocations) to 0
@@ -136,7 +136,8 @@ class DepthAnalyzer:
         if masked:
             change[self.returnBowerLocations(t0, t1, cropped=cropped) == 0] = 0
 
-
+        if pdb:
+            pdb.set_trace()
 
         return change
 
