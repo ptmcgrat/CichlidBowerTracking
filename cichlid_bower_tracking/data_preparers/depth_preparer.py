@@ -83,7 +83,7 @@ class DepthPreparer:
         
         # Create arrays to store raw depth data and data in the daytime
         depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
-        depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay','BadStdPixels'])
+        depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay','BadStdPixels','TotalBadPixels'])
 
         # Read in each frame and store it. Also keep track of the indeces that are in the daytime
         for i, frame in enumerate(self.lp.frames):
@@ -98,7 +98,7 @@ class DepthPreparer:
             else:
                 depthData[i] = data
 
-            depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days,np.sum(std>std_cutoff)]
+            depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days,np.sum(std>std_cutoff), np.sum(np.isnan(data))]
 
         
         # Divide into trials based on
@@ -158,6 +158,9 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
+
+        depthData.to_csv(self.fileManager.localDepthFrameInfo)
+        self.fileManager.uploadData(self.fileManager.localDepthFrameInfo)
         # Save interpolated data
         
         # Read in manual crop and mask out data outside of crop
