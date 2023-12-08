@@ -158,7 +158,6 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
-        pdb.set_trace()
         # Save interpolated data
         
         # Read in manual crop and mask out data outside of crop
