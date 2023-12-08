@@ -79,7 +79,7 @@ class DepthPreparer:
             print('Nodename: ' + os.uname().nodename, file = f)
             print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 
-    def createSmoothedArray(self, goodDataCutoff = 0.8, minimumGoodData = 0.95, std_cutoff = 0.15, max_depth = 4, max_height = 8):
+    def createSmoothedArray(self, goodDataCutoff = 0.8, minimumGoodData = 0.8, std_cutoff = 0.15, max_depth = 4, max_height = 8):
         
         # Create arrays to store raw depth data and data in the daytime
         depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
@@ -134,14 +134,16 @@ class DepthPreparer:
                             dailyData[x_interp, i, j] = interp_data
             
             # Mask out data with too many nans
-            pdb.set_trace()
             non_nans = np.count_nonzero(~np.isnan(dailyData), axis = 0)
             dailyData[:,non_nans < minimumGoodData*dailyData.shape[0]] = np.nan
+            print('Nans: ' + str(np.sum(non_nans < minimumGoodData*dailyData.shape[0])))
 
             # Filter out data that is too close or too far from the sensor
             average_depth = np.nanmean(dailyData, axis = 0)
             median_height = np.nanmedian(dailyData)
             dailyData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
+            print('Height: ' + str(np.sum((average_depth > median_height + max_depth) | (average_depth < median_height - max_height))))
+
 
             # Smooth with savgol filter
             smoothDepthData = scipy.signal.savgol_filter(dailyData, 71, 4, axis = 0, mode = 'nearest')
@@ -156,7 +158,7 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
- 
+        pdb.set_trace()
         # Save interpolated data
         
         # Read in manual crop and mask out data outside of crop
