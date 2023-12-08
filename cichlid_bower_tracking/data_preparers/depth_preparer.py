@@ -158,7 +158,6 @@ class DepthPreparer:
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
-        pdb.set_trace()
         depth_dt['FinalGoodPixels'] = ''
         for i, frame in enumerate(depthData):
             depth_dt.loc[i,'FinalGoodPixels'] = np.sum(~np.isnan(frame))
