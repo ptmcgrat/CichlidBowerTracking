@@ -245,7 +245,7 @@ class DepthPreparer:
 
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
-                bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start-1].time,self.lp.frames[day_stop].time).depthBowerVolume
+                bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start].time,self.lp.frames[day_stop].time).depthBowerVolume
                 current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
                 current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
                 current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
