@@ -91,6 +91,7 @@ class DepthPreparer:
                 data = np.load(self.fileManager.localProjectDir + frame.npy_file)
                 std = np.load(self.fileManager.localProjectDir + frame.std_file)
                 data[std > std_cutoff] = np.nan
+                print(np.sum(std>std_cutoff))
 
             except FileNotFoundError:
                 print('Bad frame: ' + str(i) + ', ' + frame.npy_file)
