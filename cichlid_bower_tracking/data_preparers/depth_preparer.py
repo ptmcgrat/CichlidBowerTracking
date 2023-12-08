@@ -132,17 +132,17 @@ class DepthPreparer:
                         if len(x_interp) != 0: # Only interpolate if there is missing data
                             interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
                             dailyData[x_interp, i, j] = interp_data
-            print(str(day) + '_' + str(trial))
+            #print(str(day) + '_' + str(trial))
             # Mask out data with too many nans
             non_nans = np.count_nonzero(~np.isnan(dailyData), axis = 0)
             dailyData[:,non_nans < minimumGoodData*dailyData.shape[0]] = np.nan
-            print('Nans: ' + str(np.sum(non_nans < minimumGoodData*dailyData.shape[0])))
+            #print('Nans: ' + str(np.sum(non_nans < minimumGoodData*dailyData.shape[0])))
 
             # Filter out data that is too close or too far from the sensor
             average_depth = np.nanmean(dailyData, axis = 0)
             median_height = np.nanmedian(dailyData)
             dailyData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
-            print('Height: ' + str(np.sum((average_depth > median_height + max_depth) | (average_depth < median_height - max_height))))
+            #print('Height: ' + str(np.sum((average_depth > median_height + max_depth) | (average_depth < median_height - max_height))))
 
 
             # Smooth with savgol filter
@@ -159,7 +159,9 @@ class DepthPreparer:
         depthData[night_start:] = depthData[night_start-1]
         
         pdb.set_trace()
-
+        depth_dt['FinalGoodPixels'] = ''
+        for i, frame in enumerate(depthData):
+            depth_dt.loc[i,'FinalGoodPixels'] = np.sum(~np.isnan(frame))
         # Save interpolated data
         
         # Read in manual crop and mask out data outside of crop
