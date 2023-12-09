@@ -1,4 +1,4 @@
-import argparse, subprocess, pdb, datetime, os, sys
+import argparse, subprocess, pdb, datetime, os, sys,multiprocessing
 import pandas as pd
 sys.path = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))] + sys.path
 from helper_modules.file_manager import FileManager as FM
@@ -46,7 +46,8 @@ for projectID,row in projects.iterrows():
 
 	elif args.AnalysisType == 'Cluster':
 		from data_preparers.cluster_preparer import ClusterPreparer as CP
-		cp_obj = CP(fm_obj)
+		cp_obj = CP(fm_obj,multiprocessing.cpu_count()
+)
 		cp_obj.downloadProjectData()
 		cp_obj.validateInputData()
 		videos = list(range(len(fm_obj.lp.movies)))

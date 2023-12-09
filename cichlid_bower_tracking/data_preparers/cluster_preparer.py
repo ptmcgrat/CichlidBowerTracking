@@ -8,20 +8,31 @@ class ClusterPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, videoIndex, workers):
+	def __init__(self, fileManager, workers):
 
 		self.__version__ = '1.0.0'
 
 		self.fileManager = fileManager
-		self.videoObj = self.fileManager.returnVideoObject(videoIndex)
 		self.workers = workers
-		self.videoIndex = videoIndex
+
+	def downloadProjectData(self):
+	    self.createDirectory(self.fileManager.localLogfileDir)
+        self.createDirectory(self.fileManager.localMasterDir)
+        self.createDirectory(self.fileManager.localAnalysisDir)
+        self.createDirectory(self.fileManager.localTroubleshootingDir)
+        self.createDirectory(self.fileManager.localTempDir)
+        self.createDirectory(self.fileManager.localAllClipsDir)
+        self.createDirectory(self.fileManager.localManualLabelClipsDir)
+        self.createDirectory(self.fileManager.localManualLabelFramesDir)
+        #self.createDirectory(self.localPaceDir)
+
+        self.downloadData(self.localLogfile)
+        print('Downloading video ' + self.localVideoDir)
+        self.downloadData(self.localVideoDir)
 
 
 	def validateInputData(self):
 		
-		assert os.path.exists(self.videoObj.localVideoFile)
-
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
 		assert os.path.exists(self.fileManager.localAnalysisDir)
 		assert os.path.exists(self.fileManager.localTempDir)
@@ -30,7 +41,11 @@ class ClusterPreparer():
 		assert os.path.exists(self.fileManager.localManualLabelFramesDir)
 		assert os.path.exists(self.fileManager.localLogfileDir)
 
-	def runClusterAnalysis(self):
+	def runClusterAnalysis(self, videoIndex):
+		self.videoObj = self.fileManager.returnVideoObject(videoIndex)
+		assert os.path.exists(self.videoObj.localVideoFile)
+
+
 		command = ['python3', 'VideoFocus.py']
 		command.extend(['--Movie_file', self.videoObj.localVideoFile])
 		command.extend(['--Video_framerate', str(self.videoObj.framerate)])
