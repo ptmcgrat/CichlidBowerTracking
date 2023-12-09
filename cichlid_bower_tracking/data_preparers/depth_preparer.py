@@ -156,7 +156,7 @@ class DepthPreparer:
                 if night_start == 0:
                     depthData[night_start:start_index] = depthData[start_index]
                 else:
-                    depthData[night_start:start_index] = (depthData[start_index] + depthData[night_start - 1])/2
+                    depthData[night_start-1:start_index+1] = (depthData[start_index] + depthData[night_start - 1])/2
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
@@ -236,7 +236,6 @@ class DepthPreparer:
             v = 2.0
 
             for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
-                pdb.set_trace()
                 if j % num_days == 0:
                     if j!=0:
                         cax = figDaily.add_subplot(midGrid[:, -1])
