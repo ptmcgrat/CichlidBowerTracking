@@ -149,8 +149,9 @@ class DepthPreparer:
             # Smooth with savgol filter
             smoothDepthData = scipy.signal.savgol_filter(dailyData, 71, 4, axis = 0, mode = 'nearest')
 
+        daytime_data2 = daytime_data.reset_index().groupby('RelativeDay').agg({'first_index':'min','last_index':'max'})
         # Set nighttime data as mean of before and after
-        for day, (start_index,stop_index) in daytime_data.iterrows():
+        for day, (start_index,stop_index) in daytime_data2.iterrows():
             if start_index != 0: #no previous night data
                 if night_start == 0:
                     depthData[night_start:start_index] = depthData[start_index]
