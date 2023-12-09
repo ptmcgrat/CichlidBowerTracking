@@ -48,7 +48,7 @@ for projectID,row in projects.iterrows():
 		from data_preparers.cluster_preparer import ClusterPreparer as CP
 		cp_obj = CP(fm_obj,multiprocessing.cpu_count()
 )
-		cp_obj.downloadProjectData()
+		#cp_obj.downloadProjectData()
 		cp_obj.validateInputData()
 		videos = list(range(len(fm_obj.lp.movies)))
 		for videoIndex in videos:
