@@ -39,10 +39,10 @@ for projectID,row in projects.iterrows():
 		dp_obj = DP(fm_obj)
 		#dp_obj.downloadProjectData()
 		dp_obj.validateInputData()
-		dp_obj.createSmoothedArray()
-		dp_obj.createDepthFigures()
+		#dp_obj.createSmoothedArray()
+		#dp_obj.createDepthFigures()
 			#dp_obj.createRGBVideo()
-		dp_obj.uploadProjectData(delete = False)
+		#dp_obj.uploadProjectData(delete = False)
 
 	elif args.AnalysisType == 'Cluster':
 		from data_preparers.cluster_preparer import ClusterPreparer as CP
@@ -58,7 +58,7 @@ if args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
 	writer = pypdf.PdfFileWriter()
 	for projectID,row in projects.iterrows():
-		fm_obj.setProjectID(subjectID, projectID)
+		fm_obj.setProjectID(projectID)
 		f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
 		reader = pypdf.PdfFileReader(f)
 		for page_number in range(reader.numPages):
