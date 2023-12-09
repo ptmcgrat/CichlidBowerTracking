@@ -117,7 +117,6 @@ class DepthPreparer:
         night_start = 0
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby(['RelativeDay','Trial']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
 
-        pdb.set_trace()
         for (day,trial), (start_index,stop_index) in daytime_data.iterrows():
             dailyData = depthData[start_index:stop_index] # Create view of numpy array just creating a single day during the daytime
             goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
