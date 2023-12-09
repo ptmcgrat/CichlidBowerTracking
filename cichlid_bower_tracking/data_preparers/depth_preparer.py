@@ -233,6 +233,9 @@ class DepthPreparer:
 
             v = 2.0
 
+            if i == 3:
+                pdb.set_trace()
+
             for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
                 if j % num_days == 0:
                     if j!=0:
@@ -242,11 +245,8 @@ class DepthPreparer:
                     current_grid_idx += 1
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
 
-                if day == 7:
-                    pdb.set_trace()
-
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
-                current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
+                current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
                 bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start].time,self.lp.frames[day_stop].time).depthBowerVolume
                 current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
                 current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
