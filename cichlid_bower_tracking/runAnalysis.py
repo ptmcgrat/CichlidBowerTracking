@@ -44,6 +44,15 @@ for projectID,row in projects.iterrows():
 			#dp_obj.createRGBVideo()
 		dp_obj.uploadProjectData(delete = False)
 
+	elif args.AnalysisType == 'Cluster':
+		from data_preparers.cluster_preparer import ClusterPreparer as CP
+		cp_obj = CP(fm_obj)
+		cp_obj.downloadProjectData()
+		cp_obj.validateInputData()
+		videos = list(range(len(fm_obj.lp.movies)))
+		for videoIndex in videos:
+			cp_obj.runClusterAnalysis(videoIndex)
+
 
 if args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
