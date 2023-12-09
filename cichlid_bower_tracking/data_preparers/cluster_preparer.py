@@ -16,19 +16,19 @@ class ClusterPreparer():
         self.workers = workers
 
     def downloadProjectData(self):
-        self.createDirectory(self.fileManager.localLogfileDir)
-        self.createDirectory(self.fileManager.localMasterDir)
-        self.createDirectory(self.fileManager.localAnalysisDir)
-        self.createDirectory(self.fileManager.localTroubleshootingDir)
-        self.createDirectory(self.fileManager.localTempDir)
-        self.createDirectory(self.fileManager.localAllClipsDir)
-        self.createDirectory(self.fileManager.localManualLabelClipsDir)
-        self.createDirectory(self.fileManager.localManualLabelFramesDir)
+        self.fileManager.createDirectory(self.fileManager.localLogfileDir)
+        self.fileManager.createDirectory(self.fileManager.localMasterDir)
+        self.fileManager.createDirectory(self.fileManager.localAnalysisDir)
+        self.fileManager.createDirectory(self.fileManager.localTroubleshootingDir)
+        self.fileManager.createDirectory(self.fileManager.localTempDir)
+        self.fileManager.createDirectory(self.fileManager.localAllClipsDir)
+        self.fileManager.createDirectory(self.fileManager.localManualLabelClipsDir)
+        self.fileManager.createDirectory(self.fileManager.localManualLabelFramesDir)
         #self.createDirectory(self.localPaceDir)
 
-        self.downloadData(self.localLogfile)
-        print('Downloading video ' + self.localVideoDir)
-        self.downloadData(self.localVideoDir)
+        self.fileManager.downloadData(self.fileManager.localLogfile)
+        print('Downloading video ' + self.fileManager.localVideoDir)
+        self.fileManager.downloadData(self.fileManager.localVideoDir)
 
 
     def validateInputData(self):
