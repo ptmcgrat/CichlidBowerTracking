@@ -115,7 +115,7 @@ class DepthPreparer:
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
-        depth_dt['DaytimeData'] = [True if x.time() > datetime.time(7,0,0,0) and x.time() < datetime.time(18,55,0,0) else False for x in depth_dt.Time]
+        #depth_dt['DaytimeData'] = [True if x.time() > datetime.time(7,0,0,0) and x.time() < datetime.time(18,55,0,0) else False for x in depth_dt.Time]
 
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby(['RelativeDay','Trial']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
 
