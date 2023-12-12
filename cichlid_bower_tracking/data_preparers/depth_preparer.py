@@ -152,14 +152,13 @@ class DepthPreparer:
             smoothDepthData = scipy.signal.savgol_filter(dailyData, 71, 4, axis = 0, mode = 'nearest')
 
         daytime_data2 = daytime_data.reset_index().groupby('RelativeDay').agg({'first_index':'min','last_index':'max'})
-        pdb.set_trace()
         # Set nighttime data as mean of before and after
         for day, (start_index,stop_index) in daytime_data2.iterrows():
             if start_index != 0: #no previous night data
                 if night_start == 0:
                     depthData[night_start:start_index] = depthData[start_index]
                 else:
-                    depthData[night_start-1:start_index+1] = (depthData[start_index] + depthData[night_start - 1])/2
+                    depthData[night_start:start_index] = (depthData[start_index] + depthData[night_start - 1])/2
             night_start = stop_index + 1
         depthData[night_start:] = depthData[night_start-1]
         
@@ -239,7 +238,6 @@ class DepthPreparer:
             v = 2.0
 
             for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
-                pdb.set_trace()
                 if j % num_days == 0:
                     if j!=0:
                         cax = figDaily.add_subplot(midGrid[:, -1])
@@ -263,13 +261,23 @@ class DepthPreparer:
                 good_data_start = self.lp.frames[day_start].time
                 good_data_stop = self.lp.frames[day_stop].time
                 day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
-                for k in range(8,20):
-                    start = day_stamp + datetime.timedelta(hours=k)
-                    stop = day_stamp + datetime.timedelta(hours=k+1)
-                    if stop < good_data_start or start > good_data_stop:
-                        continue
+
+
+                for k in range(7,18):
+                    start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
+                    if k == 7:
+                        try:
+                            volume = self.da_obj.returnVolumeSummary(previous_stop, start).depthBowerVolume
+                            hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), start - datetime.timedelta(hours = 12)/2,volume]
+                        except NameError:
+                            pass
+
+                    stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
                     volume = self.da_obj.returnVolumeSummary(max(start,good_data_start),min(stop,good_data_stop)).depthBowerVolume
                     hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume]
+
+                    previous_stop = stop
+
 
 
             cax = figDaily.add_subplot(midGrid[:, -1])
