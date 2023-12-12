@@ -116,7 +116,6 @@ class DepthPreparer:
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
         depth_dt['DaytimeData'] = [True if x.time() > datetime.time(7,0,0,0) and x.time() < datetime.time(18,55,0,0) else False for x in depth_dt.Time]
-        pdb.set_trace()
 
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby(['RelativeDay','Trial']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
 
@@ -239,6 +238,7 @@ class DepthPreparer:
             v = 2.0
 
             for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
+                pdb.set_trace()
                 if j % num_days == 0:
                     if j!=0:
                         cax = figDaily.add_subplot(midGrid[:, -1])
