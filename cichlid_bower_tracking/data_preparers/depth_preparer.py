@@ -115,6 +115,7 @@ class DepthPreparer:
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
+        pdb.set_trace()
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby(['RelativeDay','Trial']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
 
         for (day,trial), (start_index,stop_index) in daytime_data.iterrows():
