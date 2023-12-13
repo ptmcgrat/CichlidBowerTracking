@@ -272,7 +272,7 @@ class DepthPreparer:
                 day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
 
                 volume = self.da_obj.returnVolumeSummary(day_stamp.replace(hour = 8), day_stamp.replace(hour = 18)).depthBowerVolume
-                hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),day_stamp.replace(hour = 5),volume, start, day_stamp.replace(hour = 8), day_stamp.replace(hour = 18)]
+                hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),day_stamp.replace(hour = 5),volume, day_stamp.replace(hour = 8), day_stamp.replace(hour = 18)]
                 for k in range(8,18):
                     start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
                     if k == 8 and j != 0:
