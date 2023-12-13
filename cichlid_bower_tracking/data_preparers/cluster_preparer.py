@@ -36,7 +36,7 @@ class ClusterPreparer():
 
         videos = list(range(len(self.fileManager.lp.movies)))
         for videoIndex in videos:
-            videoObj = self.returnVideoObject(videoIndex)
+            videoObj = self.fileManager.returnVideoObject(videoIndex)
             self.fileManager.uploadData(videoObj.localAllClipsDir, tarred = True)
             self.fileManager.uploadData(videoObj.localManualLabelClipsDir, tarred = True)
             self.fileManager.uploadData(videoObj.localManualLabelFramesDir, tarred = True)
