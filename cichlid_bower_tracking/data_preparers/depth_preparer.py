@@ -115,7 +115,7 @@ class DepthPreparer:
 
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
-        #depth_dt['DaytimeData'] = [True if x.time() > datetime.time(7,0,0,0) and x.time() < datetime.time(18,55,0,0) else False for x in depth_dt.Time]
+        #depth_dt['DaytimeData'] = [True if x.time() > datetime.time(8,0,0,0) and x.time() < datetime.time(1,55,0,0) else False for x in depth_dt.Time]
 
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby(['RelativeDay','Trial']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
 
@@ -245,6 +245,9 @@ class DepthPreparer:
 
                     current_grid_idx += 1
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
+
+                pdb.set_trace()
+
 
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
