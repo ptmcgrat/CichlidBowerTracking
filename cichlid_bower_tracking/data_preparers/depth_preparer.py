@@ -280,7 +280,8 @@ class DepthPreparer:
 
                     stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
                     volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
-                    hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume, start, stop]
+                    if stop > start:
+                        hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume, start, stop]
 
                     previous_stop = stop
 
@@ -290,7 +291,6 @@ class DepthPreparer:
             plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
             current_grid_idx += 1
 
-        pdb.set_trace()
 
 
         hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
