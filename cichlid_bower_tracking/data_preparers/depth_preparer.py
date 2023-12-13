@@ -252,12 +252,15 @@ class DepthPreparer:
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
                 current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, video_stop_time, cropped=True), vmin=-v, vmax=v)
                 bowerVolume = self.da_obj.returnVolumeSummary(video_start_time, video_stop_time).depthBowerVolume
-                current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
                 current_axs[1].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time, cropped=True), vmin=-v, vmax=v)
                 if j!=0:
                     #current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
                     current_axs[2].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time_old,  cropped=True), vmin=-v, vmax=v)
-             
+                    bowerVolume2 = self.da_obj.returnVolumeSummary(video_start_time, video_stop_time_old).depthBowerVolume
+                else:
+                    bowerVolume2 = ''
+                current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)) + '_' + str(int(bowerVolume2)))
+
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
 
@@ -268,7 +271,8 @@ class DepthPreparer:
                 good_data_stop = self.lp.frames[day_stop].time
                 day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
 
-
+                volume = self.da_obj.returnVolumeSummary(day_stamp.replace(hour = 8), day_stamp.replace(hour = 18)).depthBowerVolume
+                hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),day_stamp.replace(hour = 5),volume, start, day_stamp.replace(hour = 8), day_stamp.replace(hour = 18)]
                 for k in range(8,18):
                     start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
                     if k == 8 and j != 0:
