@@ -487,7 +487,7 @@ class FileManager():
     def _createParameters(self):
 
         # Depth related parameters
-        self.hourlyDepthThreshold = 0.3  # cm
+        self.hourlyDepthThreshold = 0.4  # cm
         self.dailyDepthThreshold = 0.4  # cm
         self.totalDepthThreshold = 1.0  # cm
 

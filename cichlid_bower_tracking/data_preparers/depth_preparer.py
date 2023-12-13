@@ -256,7 +256,7 @@ class DepthPreparer:
                 current_axs[1].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time, cropped=True), vmin=-v, vmax=v)
                 if j!=0:
                     #current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
-                    current_axs[2].imshow(self.da_obj.returnHeightChange(video_stop_time_old, video_start_time, cropped=True), vmin=-v, vmax=v)
+                    current_axs[2].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time_old,  cropped=True), vmin=-v, vmax=v)
              
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
@@ -274,12 +274,12 @@ class DepthPreparer:
                     if k == 8:
                         try:
                             volume = self.da_obj.returnVolumeSummary(previous_stop, start).depthBowerVolume
-                            hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), start - datetime.timedelta(hours = 12)/2,volume]
+                            hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume]
                         except NameError:
                             pass
 
                     stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
-                    volume = self.da_obj.returnVolumeSummary(max(start,good_data_start),min(stop,good_data_stop)).depthBowerVolume
+                    volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
                     hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume]
 
                     previous_stop = stop
