@@ -271,13 +271,10 @@ class DepthPreparer:
 
                 for k in range(8,18):
                     start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
-                    if k == 8:
-                        try:
-                            volume = self.da_obj.returnVolumeSummary(previous_stop, start).depthBowerVolume
-                            hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, previous_stop, start]
-                        except NameError:
-                            pass
-
+                    if k == 8 and j != 0:
+                        volume = self.da_obj.returnVolumeSummary(previous_stop, start).depthBowerVolume
+                        hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, previous_stop, start]
+                        
                     stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
                     volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
                     if stop > start:
