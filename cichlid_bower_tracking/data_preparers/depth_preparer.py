@@ -259,7 +259,8 @@ class DepthPreparer:
                     bowerVolume2 = str(int(self.da_obj.returnVolumeSummary(video_start_time, video_stop_time_old).depthBowerVolume))
                 else:
                     bowerVolume2 = ''
-                current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)) + '_' + bowerVolume2)
+                current_axs[0].set_title(str(int(bowerVolume)) + '_' + bowerVolume2, fontsize = 8)
+                #current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)) + '_' + bowerVolume2)
 
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
@@ -271,8 +272,8 @@ class DepthPreparer:
                 good_data_stop = self.lp.frames[day_stop].time
                 day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
 
-                volume = self.da_obj.returnVolumeSummary(day_stamp.replace(hour = 8), day_stamp.replace(hour = 18)).depthBowerVolume
-                hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),day_stamp.replace(hour = 5),volume, day_stamp.replace(hour = 8), day_stamp.replace(hour = 18)]
+                volume = self.da_obj.returnVolumeSummary(video_start_time, video_stop_time).depthBowerVolume
+                hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),day_stamp.replace(hour = 5),volume, video_start_time, video_stop_time]
                 for k in range(8,18):
                     start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
                     if k == 8 and j != 0:
@@ -292,7 +293,6 @@ class DepthPreparer:
             plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
             current_grid_idx += 1
 
-        pdb.set_trace()
 
         hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
         bottomGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[-1], hspace=0.05)
