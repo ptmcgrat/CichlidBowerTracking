@@ -246,7 +246,6 @@ class DepthPreparer:
                     current_grid_idx += 1
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
 
-                pdb.set_trace()
                 video_start_time = max(self.lp.frames[day_start].time,self.lp.frames[day_start].time.replace(hour = 8, minute = 0, second = 0, microsecond = 0))
                 video_stop_time = min(self.lp.frames[day_stop].time,self.lp.frames[day_stop].time.replace(hour = 18, minute = 0, second = 0, microsecond = 0))
 
