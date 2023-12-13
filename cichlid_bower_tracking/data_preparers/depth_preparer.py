@@ -291,7 +291,7 @@ class DepthPreparer:
             plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
             current_grid_idx += 1
 
-
+        pdb.set_trace()
 
         hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
         bottomGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[-1], hspace=0.05)
