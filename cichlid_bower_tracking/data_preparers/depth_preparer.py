@@ -256,10 +256,10 @@ class DepthPreparer:
                 if j!=0:
                     #current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
                     current_axs[2].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time_old,  cropped=True), vmin=-v, vmax=v)
-                    bowerVolume2 = self.da_obj.returnVolumeSummary(video_start_time, video_stop_time_old).depthBowerVolume
+                    bowerVolume2 = str(int(self.da_obj.returnVolumeSummary(video_start_time, video_stop_time_old).depthBowerVolume))
                 else:
                     bowerVolume2 = ''
-                current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)) + '_' + str(int(bowerVolume2)))
+                current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)) + '_' + bowerVolume2)
 
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
