@@ -276,11 +276,12 @@ class DepthPreparer:
                 hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),day_stamp.replace(hour = 5),volume, video_start_time, video_stop_time]
                 for k in range(8,18):
                     start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
-                    if k == 18 and j != 0:
-                        volume = self.da_obj.returnVolumeSummary(stop, previous_start).depthBowerVolume
-                        hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, previous_stop, start]
-                        
                     stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
+
+                    if k == 17 and j != 0:
+                        volume = self.da_obj.returnVolumeSummary(stop, previous_start).depthBowerVolume
+                        hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, stop, previous_start]
+                        
                     volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
                     if stop > start:
                         hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume, start, stop]
