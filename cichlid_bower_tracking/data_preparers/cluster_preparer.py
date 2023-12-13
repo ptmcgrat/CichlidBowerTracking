@@ -30,6 +30,21 @@ class ClusterPreparer():
         print('Downloading video ' + self.fileManager.localVideoDir)
         self.fileManager.downloadData(self.fileManager.localVideoDir)
 
+    def uploadProjectData(self, delete = False):
+        self.fileManager.uploadData(self.fileManager.localTroubleshootingDir)
+        #self.uploadData(self.localPaceDir)
+
+        videos = list(range(len(self.fileManager.lp.movies)))
+        for videoIndex in videos:
+            videoObj = self.returnVideoObject(videoIndex)
+            self.fileManager.uploadData(videoObj.localAllClipsDir, tarred = True)
+            self.fileManager.uploadData(videoObj.localManualLabelClipsDir, tarred = True)
+            self.fileManager.uploadData(videoObj.localManualLabelFramesDir, tarred = True)
+            self.fileManager.uploadData(videoObj.localLogfile)
+        
+        if delete:
+            shutil.rmtree(self.fileManager.localProjectDir)
+
 
     def validateInputData(self):
         

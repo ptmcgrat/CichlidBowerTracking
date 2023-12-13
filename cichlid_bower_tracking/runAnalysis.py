@@ -46,13 +46,22 @@ for projectID,row in projects.iterrows():
 
 	elif args.AnalysisType == 'Cluster':
 		from data_preparers.cluster_preparer import ClusterPreparer as CP
-		cp_obj = CP(fm_obj,multiprocessing.cpu_count()
-)
+		cp_obj = CP(fm_obj,multiprocessing.cpu_count())
 		#cp_obj.downloadProjectData()
-		cp_obj.validateInputData()
-		videos = list(range(len(fm_obj.lp.movies)))
-		for videoIndex in videos:
-			cp_obj.runClusterAnalysis(videoIndex)
+		#cp_obj.validateInputData()
+		#videos = list(range(len(fm_obj.lp.movies)))
+		#for videoIndex in videos:
+		#	cp_obj.runClusterAnalysis(videoIndex)
+		cp_obj.uploadProjectData()
+
+	elif args.AnalysisType == 'ClusterClassification':
+		from data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP
+
+		tdcp_obj = TDCP(self.fileManager)
+		tdcp_obj.validateInputData()
+		tdcp_obj.predictLabels()
+		tdcp_obj.createSummaryFile()
+
 
 
 if args.AnalysisType == 'Depth':
