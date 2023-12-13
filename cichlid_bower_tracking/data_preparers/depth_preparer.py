@@ -255,7 +255,7 @@ class DepthPreparer:
                 current_axs[1].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time, cropped=True), vmin=-v, vmax=v)
                 if j!=0:
                     #current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
-                    current_axs[2].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time_old,  cropped=True), vmin=-v, vmax=v)
+                    current_axs[2].imshow(self.da_obj.returnHeightChange(video_stop_time, video_start_time_old,  cropped=True), vmin=-v, vmax=v)
                     bowerVolume2 = str(int(self.da_obj.returnVolumeSummary(video_stop_time, video_start_time_old).depthBowerVolume))
                 else:
                     bowerVolume2 = ''
@@ -279,8 +279,8 @@ class DepthPreparer:
                     stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
 
                     if k == 17 and j != 0:
-                        volume = self.da_obj.returnVolumeSummary(stop, previous_start).depthBowerVolume
-                        hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, stop, previous_start]
+                        volume = self.da_obj.returnVolumeSummary(stop, video_start_time_old).depthBowerVolume
+                        hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, stop, video_start_time_old]
                         
                     volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
                     if stop > start:
