@@ -204,7 +204,7 @@ class DepthPreparer:
         gridDaily = gridspec.GridSpec(num_trials + rows +1, 1)
 
         current_grid_idx = 0
-        hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
+        hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume','Start','Stop'])
         for i in range(1,num_trials + 1):
 
             start_index = project_info.loc['Trial_' + str(i)].first_index
@@ -274,22 +274,24 @@ class DepthPreparer:
                     if k == 8:
                         try:
                             volume = self.da_obj.returnVolumeSummary(previous_stop, start).depthBowerVolume
-                            hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume]
+                            hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, previous_stop, start]
                         except NameError:
                             pass
 
                     stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
                     volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
-                    hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume]
+                    hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume, start, stop]
 
                     previous_stop = stop
 
                 video_stop_time_old = video_stop_time
 
-
             cax = figDaily.add_subplot(midGrid[:, -1])
             plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
             current_grid_idx += 1
+
+        pdb.set_trace()
+
 
         hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
         bottomGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[-1], hspace=0.05)
