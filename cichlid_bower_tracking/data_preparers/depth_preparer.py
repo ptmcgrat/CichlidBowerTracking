@@ -182,7 +182,7 @@ class DepthPreparer:
         depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
         self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
-    def createDepthFigures(self, hourlyDelta=2):
+    def createDepthFigures(self):
 
         # Create all figures based on depth data. Adjust hourlyDelta to influence the resolution of the
         # HourlyDepthSummary.pdf figure
@@ -247,14 +247,18 @@ class DepthPreparer:
                     midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
 
                 pdb.set_trace()
-
+                video_start_time = max(self.lp.frames[day_start].time,self.lp.frames[day_start].time.replace(hour = 8, minute = 0, second = 0, microsecond = 0))
+                video_stop_time = min(self.lp.frames[day_stop].time,self.lp.frames[day_stop].time.replace(hour = 18, minute = 0, second = 0, microsecond = 0))
 
                 current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
-                current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
-                bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start].time,self.lp.frames[day_stop].time).depthBowerVolume
+                current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, video_stop_time, cropped=True), vmin=-v, vmax=v)
+                bowerVolume = self.da_obj.returnVolumeSummary(video_start_time, video_stop_time).depthBowerVolume
                 current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
-                current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
-                current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
+                current_axs[1].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time, cropped=True), vmin=-v, vmax=v)
+                if j!=0:
+                    #current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
+                    current_axs[2].imshow(self.da_obj.returnHeightChange(video_stop_time_old, video_start_time, cropped=True), vmin=-v, vmax=v)
+             
                 [ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
                 [ax.set_adjustable('box') for ax in current_axs]
 
@@ -266,9 +270,9 @@ class DepthPreparer:
                 day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
 
 
-                for k in range(7,18):
+                for k in range(8,18):
                     start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
-                    if k == 7:
+                    if k == 8:
                         try:
                             volume = self.da_obj.returnVolumeSummary(previous_stop, start).depthBowerVolume
                             hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), start - datetime.timedelta(hours = 12)/2,volume]
@@ -281,6 +285,7 @@ class DepthPreparer:
 
                     previous_stop = stop
 
+                video_stop_time_old = video_stop_time
 
 
             cax = figDaily.add_subplot(midGrid[:, -1])
