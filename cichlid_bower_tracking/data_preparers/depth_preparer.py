@@ -256,7 +256,7 @@ class DepthPreparer:
                 if j!=0:
                     #current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop].time, masked=True, cropped=True), vmin=-v, vmax=v)
                     current_axs[2].imshow(self.da_obj.returnHeightChange(video_start_time, video_stop_time_old,  cropped=True), vmin=-v, vmax=v)
-                    bowerVolume2 = str(int(self.da_obj.returnVolumeSummary(video_start_time, video_stop_time_old).depthBowerVolume))
+                    bowerVolume2 = str(int(self.da_obj.returnVolumeSummary(video_stop_time, video_start_time_old).depthBowerVolume))
                 else:
                     bowerVolume2 = ''
                 current_axs[0].set_title(str(int(bowerVolume)) + '_' + bowerVolume2, fontsize = 8)
@@ -276,8 +276,8 @@ class DepthPreparer:
                 hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),day_stamp.replace(hour = 5),volume, video_start_time, video_stop_time]
                 for k in range(8,18):
                     start = max(day_stamp + datetime.timedelta(hours=k), good_data_start)
-                    if k == 8 and j != 0:
-                        volume = self.da_obj.returnVolumeSummary(previous_stop, start).depthBowerVolume
+                    if k == 18 and j != 0:
+                        volume = self.da_obj.returnVolumeSummary(stop, previous_start).depthBowerVolume
                         hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i), day_stamp.replace(hour = 1),volume, previous_stop, start]
                         
                     stop = min(day_stamp + datetime.timedelta(hours=k+1), good_data_stop)
@@ -285,9 +285,9 @@ class DepthPreparer:
                     if stop > start:
                         hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume, start, stop]
 
-                    previous_stop = stop
+                    previous_start = start
 
-                video_stop_time_old = video_stop_time
+                video_start_time_old = video_start_time
 
             cax = figDaily.add_subplot(midGrid[:, -1])
             plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
