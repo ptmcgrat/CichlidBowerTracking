@@ -87,6 +87,7 @@ class CichlidTracker:
             # Get a JSON-ready representation of the Mail object
             # Send an HTTP POST request to /mail/send
             #response = self.sg.send(new_email)
+            self.send_email('UnknownExceptionExit. Pi is stopped.')
 
             current_temp = psutil.sensors_temperatures()['cpu_thermal'][0][1]
             harddrive_use = psutil.disk_usage(self.fileManager.localMasterDir)[3]
@@ -316,7 +317,7 @@ class CichlidTracker:
                     command = ['python3', 'unit_scripts/process_video.py', self.videoDirectory + str(self.videoCounter).zfill(4) + '_vid.h264']
                     command += [str(self.camera.framerate[0]), self.projectID, self.analysisID]
                     self._print(command)
-                    self.processes.append(subprocess.Popen(command))
+                    self.processes.append(subprocess.Popen(command),close_fds=True) #https://github.com/dropbox/pyannotate/issues/67
                     self.videoCounter += 1
 
             # Capture a frame and background if necessary
@@ -439,7 +440,7 @@ class CichlidTracker:
                 self._print('realsense error attempting reboot')
                 message = 'ReturnDepth Error'
                 self.reboot_rs(message)
-                self._returnDepth()
+                self.captureFrames()
                 
             frames = self.align.process(frames)
             depth_frame = frames.get_depth_frame().as_depth_frame()
@@ -498,7 +499,7 @@ class CichlidTracker:
              writer = csv.writer(f)
              writer.writerow(data)
 
-
+ 
     def _returnCommand(self):
 
         command, projectID, analysisID = self.googleController.getPiGS(['Command','ProjectID','AnalysisID'])
