@@ -365,6 +365,7 @@ class CichlidTracker:
             if command == 'TankResetStart':
                 self._print('TankResetStart: Time: ' + str(datetime.datetime.now()))
                 self.googleController.modifyPiGS('Command', 'None', ping = False)
+                self.googleController.modifyPiGS('Error','Resetting in Progress', ping= False)
 
             elif command == 'TankResetStop':
                 self._print('TankResetStop: Time: ' + str(datetime.datetime.now()))
