@@ -317,7 +317,7 @@ class CichlidTracker:
                     command = ['python3', 'unit_scripts/process_video.py', self.videoDirectory + str(self.videoCounter).zfill(4) + '_vid.h264']
                     command += [str(self.camera.framerate[0]), self.projectID, self.analysisID]
                     self._print(command)
-                    self.processes.append(subprocess.Popen(command),close_fds=True) #https://github.com/dropbox/pyannotate/issues/67
+                    self.processes.append(subprocess.Popen(command,close_fds=True)) #https://github.com/dropbox/pyannotate/issues/67
                     self.videoCounter += 1
 
             # Capture a frame and background if necessary
