@@ -370,6 +370,8 @@ class CichlidTracker:
             elif command == 'TankResetStop':
                 self._print('TankResetStop: Time: ' + str(datetime.datetime.now()))
                 self.googleController.modifyPiGS('Command', 'None', ping = False)
+                self.googleController.modifyPiGS('Error','Resuming after Reset', ping= False)
+
 
             elif command != 'None' and command is not None:
                 break
@@ -486,12 +488,14 @@ class CichlidTracker:
         from_email=Email("themcgrathlab@gmail.com")
         to_email=[To("bshi42@gatech.edu"),To("jtata6@gatech.edu")]
         subject= self.tankID + " encountered an error"
-        content=Content("text/plain","The error was "+reason)
-        new_email = Mail(from_email,to_email,subject,content)
-        response = self.sg.send(new_email)
-        self._print(response.status_code)
-        self._print(response.body)
-        self._print(response.headers)
+        #content=Content("text/plain","The error was "+reason)
+        #new_email = Mail(from_email,to_email,subject,content)
+        self._print(str(subject)+' '+str(reason))
+        
+       # response = self.sg.send(new_email)
+       # self._print(response.status_code)
+       # self._print(response.body)
+       # self._print(response.headers)
         
     def write_restart_to_logs(self,reason,isPiReboot):
         restart_time = datetime.datetime.now()
