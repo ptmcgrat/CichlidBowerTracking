@@ -336,6 +336,8 @@ class CichlidTracker:
                 if not self.is_rs_running:
                     try:
                         self._start_kinect()
+                        print('started rs from sleep') #this is to try and track the timing of the mystery segfault when the rs turns back on
+                        time.sleep(60)
                     except:
                         print('pipeline already running')
                     self.is_rs_running = True
