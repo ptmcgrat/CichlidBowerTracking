@@ -50,7 +50,10 @@ print('ProcessVideoInfo: Task: Uploading ' + args.VideoFile.replace('.h264', '.m
 for i in [1,2,3]:
 	try:
 		fileManager.uploadData(args.VideoFile.replace('.h264', '.mp4'))
+<<<<<<< HEAD
 		
+=======
+>>>>>>> 4aac12b6b61b97d698a7dfedf7e7080c4ce4e7be
 	except:
 		logPrinter('Upload try ' + str(i) + ' failed.')
 		if i == 3:
