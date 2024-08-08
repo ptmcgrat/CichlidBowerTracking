@@ -3,7 +3,7 @@ from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 import pandas as pd 
 
 class FileManager():
-	def __init__(self, analysisID, projectID = None, rcloneRemote = 'CichlidPiData:', masterDir = 'McGrath/Apps/CichlidPiData/', check = False):
+	def __init__(self, analysisID, projectID = None, rcloneRemote = 'CichlidPiData:/', masterDir = 'COS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
 		# Identify directory for temporary local files
 		if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
 			self._identifyPiDirectory()
@@ -29,7 +29,8 @@ class FileManager():
 		# Store analysis state information
 		self.analysisID = analysisID
 		self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
-		
+		self.localEuthData = self.localMasterDir + '__AnalysisStates/' + analysisID + '/euthanization_data.csv'
+
 		# Create file names and parameters
 		if projectID is not None:
 			self.setProjectID(projectID, check_exists = check)
@@ -160,7 +161,10 @@ class FileManager():
 		# Need information from AnalysisStates file to determine where project data is stored
 		self.downloadData(self.localSummaryFile)
 		a_dt = pd.read_csv(self.localSummaryFile)
-		self.localProjectDir = self.localMasterDir + '__ProjectData/' + a_dt[a_dt.projectID == projectID].Directory.values[0] + '/' + projectID + '/'
+		try:
+			self.localProjectDir = self.localMasterDir + '__ProjectData/' + a_dt[a_dt.projectID == projectID].Directory.values[0] + '/' + projectID + '/'
+		except AttributeError:
+			self.localProjectDir = self.localMasterDir + '__ProjectData/' + self.analysisID + '/' + projectID + '/'
 
 		# Create logfile
 		self.localLogfile = self.localProjectDir + 'Logfile.txt'
