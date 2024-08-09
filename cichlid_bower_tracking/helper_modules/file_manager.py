@@ -4,7 +4,7 @@ import pandas as pd
 
 class FileManager():
 <<<<<<< HEAD
-	def __init__(self, analysisID, projectID = None, rcloneRemote = 'CichlidPiData:/', masterDir = 'COS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
+	def __init__(self, analysisID, projectID = None, rcloneRemote = 'CichlidPiData:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
 		# Identify directory for temporary local files
 		if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
 			self._identifyPiDirectory()
