@@ -21,13 +21,9 @@ if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 	sys.exit()
 
 
-p_flag = False
 for subjectID, row in fm_obj.s_dt.iterrows():
 	for projectID in row.ProjectIDs.split(',,'):
 
-		if not p_flag and projectID != 'MC_s9_tr3_BowerBuilding':
-			continue
-		p_flag = True		
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
 		fm_obj.setProjectID(subjectID, projectID)
@@ -48,6 +44,15 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 			dp_obj.createDepthFigures()
 				#dp_obj.createRGBVideo()
 			dp_obj.uploadProjectData(delete = False)
+
+		elif args.AnalysisType == 'Cluster':
+			from data_preparers.cluster_preparer import ClusterPreparer as CP
+			for videoIndex in row.VideoIDs.split(': ')[1].split(','):
+				cp_obj = CP(fm_obj, videoIndex)
+				cp_obj.downloadProjectData()
+				cp_obj.validateInputData()
+				cp_obj.runClusterAnalysis()
+				cp_obj.uploadProjectData(delete = False)
 
 
 if args.AnalysisType == 'Depth':

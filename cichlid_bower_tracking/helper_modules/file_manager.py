@@ -28,7 +28,7 @@ class FileManager():
 
         # Store analysis state information
         self.analysisID = analysisID
-        self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
+        self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '_PM.csv'
         self.localAnalysisStatesDir = self.localMasterDir + '__AnalysisStates/' + analysisID + '/'
         self.downloadData(self.localSummaryFile)
         self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
