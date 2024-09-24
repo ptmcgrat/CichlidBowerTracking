@@ -3,6 +3,7 @@ import datetime
 import skvideo
 import numpy as np
 import scipy
+import shutil
 
 class ClusterPreparer():
 	# This class takes in directory information and a logfile containing depth information and performs the following:
