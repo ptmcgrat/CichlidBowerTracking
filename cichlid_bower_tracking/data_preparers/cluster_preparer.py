@@ -1,5 +1,8 @@
-import subprocess, os, pdb
-
+import subprocess, os, pdb, sys
+import datetime
+import skvideo
+import numpy as np
+import scipy
 
 class ClusterPreparer():
 	# This class takes in directory information and a logfile containing depth information and performs the following:
@@ -8,7 +11,7 @@ class ClusterPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, videoIndex):
+	def __init__(self, fileManager, videoIndex, workers):
 
 		self.__version__ = '1.0.0'
 
@@ -16,23 +19,25 @@ class ClusterPreparer():
 		self.videoObj = self.fileManager.returnVideoObject(videoIndex)
 		self.workers = workers # Fix this
 		self.videoIndex = videoIndex
-        self.createLogFile()
+		self.createLogFile()
 
 	def downloadProjectData(self):
-        self.fileManager.createDirectory(self.fileManager.localMasterDir)
-        self.fileManager.createDirectory(self.fileManager.localTroubleshootingDir)
-        self.fileManager.createDirectory(self.fileManager.localAnalysisDir)
-        self.fileManager.createDirectory(self.fileManager.localTempDir)
-        self.fileManager.createDirectory(self.fileManager.localAllClipsDir)
-        self.fileManager.createDirectory(self.fileManager.localManualLabelClipsDir)
-        self.fileManager.createDirectory(self.fileManager.localManualLabelFramesDir)
-        self.fileManager.createDirectory(self.fileManager.localLogfileDir)
+		self.fileManager.createDirectory(self.fileManager.localMasterDir)
+		self.fileManager.createDirectory(self.fileManager.localTroubleshootingDir)
+		self.fileManager.createDirectory(self.fileManager.localAnalysisDir)
+		self.fileManager.createDirectory(self.fileManager.localTempDir)
+		self.fileManager.createDirectory(self.fileManager.localAllClipsDir)
+		self.fileManager.createDirectory(self.fileManager.localManualLabelClipsDir)
+		self.fileManager.createDirectory(self.fileManager.localManualLabelFramesDir)
+		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
 
-        self.fileManager.downloadData(self.fileManager.localLogfile)
-        self.fileManager.downloadData(self.fileManager.localVideoFile)
+		self.fileManager.downloadData(self.fileManager.localLogfile)
+		# self.fileManager.downloadData(self.fileManager.localVideoFile)
+		self.fileManager.downloadData(self.videoObj.localVideoFile)
+
 
 	def validateInputData(self):
-		
+
 		assert os.path.exists(self.videoObj.localVideoFile)
 
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
@@ -43,19 +48,21 @@ class ClusterPreparer():
 		assert os.path.exists(self.fileManager.localManualLabelFramesDir)
 		assert os.path.exists(self.fileManager.localLogfileDir)
 
-    def createLogFile(self):
-        self.fileManager.createDirectory(self.fileManager.localLogfileDir)
-        with open(self.fileManager.localClusterLogfile,'w') as f:
-            print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
-            print('NumpyVersion: ' + np.__version__, file = f)
-            print('Scikit-VideoVersion: ' + skvideo.__version__, file = f)
-            print('ScipyVersion: ' + scipy.__version__, file = f)
-            print('Username: ' + os.getenv('USER'), file = f)
-            print('Nodename: ' + os.uname().nodename, file = f)
-            print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
+	def createLogFile(self):
+		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
+		# with open(self.fileManager.localClusterLogfile,'w') as f:
+		with open(self.videoObj.localLogfile,'w') as f:
+			print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
+			print('NumpyVersion: ' + np.__version__, file = f)
+			print('Scikit-VideoVersion: ' + skvideo.__version__, file = f)
+			print('ScipyVersion: ' + scipy.__version__, file = f)
+			print('Username: ' + os.getenv('USER'), file = f)
+			print('Nodename: ' + os.uname().nodename, file = f)
+			print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 
 
 	def runClusterAnalysis(self):
+
 		command = ['python3', 'VideoFocus.py']
 		command.extend(['--Movie_file', self.videoObj.localVideoFile])
 		command.extend(['--Video_framerate', str(self.videoObj.framerate)])
@@ -80,12 +87,12 @@ class ClusterPreparer():
 		subprocess.run(command)
 		os.chdir('..')
 
-   def uploadProjectData(self, delete = True):
-        self.uploadData(self.localTroubleshootingDir)
-        self.uploadData(self.videoObj.localAllClipsDir, tarred = True)
-        self.uploadData(self.videoObj.localManualLabelClipsDir, tarred = True)
-        self.uploadData(self.videoObj.localManualLabelFramesDir, tarred = True)
-        self.uploadData(self.videoObj.localLogfile)
+	def uploadProjectData(self, delete = True):
+		self.uploadData(self.localTroubleshootingDir)
+		self.uploadData(self.videoObj.localAllClipsDir, tarred = True)
+		self.uploadData(self.videoObj.localManualLabelClipsDir, tarred = True)
+		self.uploadData(self.videoObj.localManualLabelFramesDir, tarred = True)
+		self.uploadData(self.videoObj.localLogfile)
 
-        if delete:
-            shutil.rmtree(self.localProjectDir)
+		if delete:
+			shutil.rmtree(self.localProjectDir)

@@ -2,7 +2,14 @@ import argparse, subprocess, pdb, datetime, os, sys
 import pandas as pd
 sys.path = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))] + sys.path
 from helper_modules.file_manager import FileManager as FM
+import math
 
+def is_nan(value):
+    if isinstance(value, float):
+        return math.isnan(value)
+    elif isinstance(value, str):
+        return value.lower() == "nan"
+    return False
 
 # Create arguments for the script
 parser = argparse.ArgumentParser(description='This script is used to manually prepared projects for downstream analysis')
@@ -15,18 +22,64 @@ analysisID = 'MC_multi'
 # Identify projects to run analysis on
 fm_obj = FM()
 fm_obj.downloadData(fm_obj.localSummaryFile)
-
+# pdb.set_trace()
 if not fm_obj.checkFileExists(fm_obj.localSummaryFile):
 	print('Cant find ' + fm_obj.localSummaryFile)
 	sys.exit()
 
+if args.AnalysisType != 'Cluster':
+    args.AnalysisType = 'Cluster'
 
-for subjectID, row in fm_obj.s_dt.iterrows():
-	for projectID in row.ProjectIDs.split(',,'):
+fm_obj.s_dt.columns = [c.replace(' ', '_') for c in fm_obj.s_dt.columns]
+fm_obj.s_dt['StartTime'] = None
+fm_obj.s_dt['EndTime'] = None
+num_workers = args.Workers
+# fm_obj.s_dt.reset_index(inplace=True)
+
+# for subjectID, row in fm_obj.s_dt.iterrows():
+# 	# pdb.set_trace()
+# 	for projectID in row.ProjectIDs.split(',,'):
+
+# 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+
+# 		fm_obj.setProjectID(subjectID, projectID)
+# 		if args.AnalysisType == 'Prep':
+# 			from data_preparers.prep_preparer import PrepPreparer as PrP
+# 			prp_obj = PrP(fm_obj)
+# 			prp_obj.downloadProjectData()
+# 			prp_obj.validateInputData()
+# 			prp_obj.prepData()
+# 			prp_obj.uploadProjectData(delete = False)
+
+# 		elif args.AnalysisType == 'Depth':
+# 			from data_preparers.depth_preparer import DepthPreparer as DP
+# 			dp_obj = DP(fm_obj)
+# 			#dp_obj.downloadProjectData()
+# 			dp_obj.validateInputData()
+# 			dp_obj.createSmoothedArray()
+# 			dp_obj.createDepthFigures()
+# 				#dp_obj.createRGBVideo()
+# 			dp_obj.uploadProjectData(delete = False)
+
+# 		elif args.AnalysisType == 'Cluster':
+# 			from data_preparers.cluster_preparer import ClusterPreparer as CP
+# 			for videoIndex in row.VideoIDs.split(': ')[1].split(','):
+# 				FMObj = FM(projectID=projectID)
+# 				cp_obj = CP(FMObj, videoIndex)
+# 				cp_obj.downloadProjectData()
+# 				cp_obj.validateInputData()
+# 				cp_obj.runClusterAnalysis()
+# 				cp_obj.uploadProjectData(delete = False)
+
+for projectID, row in fm_obj.s_dt.iterrows():
+
+		if(is_nan(row.VideoIDs_new)):
+			continue
 
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+		pdb.set_trace()
+		fm_obj.setProjectID(row.SubjectID, projectID)
 
-		fm_obj.setProjectID(subjectID, projectID)
 		if args.AnalysisType == 'Prep':
 			from data_preparers.prep_preparer import PrepPreparer as PrP
 			prp_obj = PrP(fm_obj)
@@ -47,11 +100,15 @@ for subjectID, row in fm_obj.s_dt.iterrows():
 
 		elif args.AnalysisType == 'Cluster':
 			from data_preparers.cluster_preparer import ClusterPreparer as CP
-			for videoIndex in row.VideoIDs.split(': ')[1].split(','):
-				cp_obj = CP(fm_obj, videoIndex)
+			for videoIndex in row.VideoIDs_new.split(': ')[1].split(','):
+				cp_obj = CP(fm_obj, int(videoIndex),num_workers)
+				pdb.set_trace()
 				cp_obj.downloadProjectData()
+				pdb.set_trace()
 				cp_obj.validateInputData()
+				pdb.set_trace()
 				cp_obj.runClusterAnalysis()
+				pdb.set_trace()
 				cp_obj.uploadProjectData(delete = False)
 
 

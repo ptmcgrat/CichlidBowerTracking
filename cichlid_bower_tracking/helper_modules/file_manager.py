@@ -2,8 +2,10 @@ import os, subprocess, pdb, platform, shutil
 from helper_modules.log_parser import LogParser as LP
 import pandas as pd 
 
+config_file_path = '/Users/pkolipaka3/.config/rclone/rclone.conf'
+
 class FileManager():
-    def __init__(self, analysisID = 'MC_multi', projectID = None, rcloneRemote = 'CichlidPiData:', masterDir = 'McGrath/Apps/CichlidPiData/', check = False):
+    def __init__(self, analysisID = 'MC_multi', projectID = None, rcloneRemote = 'cichlidData:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
         # Identify directory for temporary local files
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
             self._identifyPiDirectory()
@@ -28,12 +30,19 @@ class FileManager():
 
         # Store analysis state information
         self.analysisID = analysisID
-        self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '_PM.csv'
+        # print(self.localMasterDir)
+        # print(self.cloudMasterDir)
+        # self.localSummaryFile = self.cloudMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '_PM.csv'
+        self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '_PM_new.csv'
         self.localAnalysisStatesDir = self.localMasterDir + '__AnalysisStates/' + analysisID + '/'
+        print("Local summary file: ",self.localSummaryFile)
+
+
         self.downloadData(self.localSummaryFile)
         self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
         self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
 
+        
         # Create file names and parameters
         if projectID is not None:
             self.setProjectID(projectID, check_exists = check)
@@ -54,7 +63,7 @@ class FileManager():
     def setProjectID(self, subjectID, projectID, check_exists = False):
         self.subjectID = subjectID
         self.projectID = projectID
-        self.dissectionTime = self.s_dt.loc[subjectID]['DissectionTime']
+        self.dissectionTime = self.s_dt.loc[projectID]['DissectionTime']
         self._createProjectData(projectID)
         if check_exists:
             assert self.checkFileExists(self.localLogfile)
@@ -138,6 +147,7 @@ class FileManager():
         self.localLogfileDir = self.localProjectDir + 'Logfiles/'
         self.localPrepLogfile = self.localLogfileDir + 'PrepLog.txt'
         self.localDepthLogfile = self.localLogfileDir + 'DepthLog.txt'
+        # self.localClusterLogfile = self.localLogfileDir + 'ClusterLog.txt'
         self.localClusterClassificationLogfile = self.localLogfileDir + 'ClassifyLog.txt'
         
         # Data directories created by tracker
@@ -575,13 +585,20 @@ class FileManager():
         relative_name = local_data.rstrip('/').split('/')[-1] + '.tar' if tarred else local_data.rstrip('/').split('/')[-1]
         local_path = local_data.split(local_data.rstrip('/').split('/')[-1])[0]
         cloud_path = local_path.replace(self.localMasterDir, self.cloudMasterDir)
+        
 
-        cloud_objects = subprocess.run(['rclone', 'lsf', cloud_path], capture_output = True, encoding = 'utf-8').stdout.split()
+        # print("Relative name:",relative_name)
+        # print("local_path:",local_path)
+        # print("cloud_path ",cloud_path)
+        cloud_objects = subprocess.run(['rclone', 'lsf', cloud_path, '--config', config_file_path], capture_output = True, encoding = 'utf-8').stdout.split()
+        # pdb.set_trace()
+
 
         if relative_name + '/' in cloud_objects: #directory
-            output = subprocess.run(['rclone', 'copy', cloud_path + relative_name, local_path + relative_name], capture_output = True, encoding = 'utf-8')
+            output = subprocess.run(['rclone', 'copy', cloud_path + relative_name, local_path + relative_name,'--config', config_file_path], capture_output = True, encoding = 'utf-8')
+            
         elif relative_name in cloud_objects: #file
-            output = subprocess.run(['rclone', 'copy', cloud_path + relative_name, local_path], capture_output = True, encoding = 'utf-8')
+            output = subprocess.run(['rclone', 'copy', cloud_path + relative_name, local_path,'--config', config_file_path], capture_output = True, encoding = 'utf-8')
         else:
             if allow_errors:
                 if not quiet:
@@ -590,7 +607,7 @@ class FileManager():
                     pass
             else:
                 raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
-
+        # pdb.set_trace()
         if not os.path.exists(local_path + relative_name):
             if allow_errors:
                 if not quiet:
@@ -679,9 +696,9 @@ class FileManager():
         local_path = local_data.split(relative_name)[0]
         cloud_path = local_path.replace(self.localMasterDir, self.cloudMasterDir)
 
-        output = subprocess.run(['rclone', 'lsf', cloud_path], capture_output = True, encoding = 'utf-8')
+        output = subprocess.run(['rclone', 'lsf', cloud_path, '--config', config_file_path], capture_output = True, encoding = 'utf-8')
         remotefiles = [x.rstrip('/') for x in output.stdout.split('\n')]
-
+        # pdb.set_t race()
         if relative_name in remotefiles:
             return True
         else:
