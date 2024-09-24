@@ -110,7 +110,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 				cp_obj.runClusterAnalysis()
 				pdb.set_trace()
 				cp_obj.uploadProjectData(delete = False)
-
+				pdb.set_trace()
 
 if args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf

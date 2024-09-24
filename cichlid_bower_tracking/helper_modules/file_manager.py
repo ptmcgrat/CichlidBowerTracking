@@ -646,10 +646,12 @@ class FileManager():
                 relative_name += '.tar'
 
             if os.path.isdir(local_path + relative_name):
+                pdb.set_trace()
                 output = subprocess.run(['rclone', 'copy', local_path + relative_name, cloud_path + relative_name], capture_output = True, encoding = 'utf-8')
                 #subprocess.run(['rclone', 'check', local_path + relative_name, cloud_path + relative_name], check = True) #Troubleshooting directory will have depth data in it when you upload the cluster data
 
             elif os.path.isfile(local_path + relative_name):
+                pdb.set_trace()
                 #print(['rclone', 'copy', local_path + relative_name, cloud_path])
                 output = subprocess.run(['rclone', 'copy', local_path + relative_name, cloud_path], capture_output = True, encoding = 'utf-8')
                 #output = subprocess.run(['rclone', 'check', local_path + relative_name, cloud_path], check = True, capture_output = True, encoding = 'utf-8')
