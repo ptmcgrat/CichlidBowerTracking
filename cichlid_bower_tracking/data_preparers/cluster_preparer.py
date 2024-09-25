@@ -89,11 +89,11 @@ class ClusterPreparer():
 		os.chdir('..')
 
 	def uploadProjectData(self, delete = True):
-		self.fileManager.uploadData(self.localTroubleshootingDir)
+		self.fileManager.uploadData(self.fileManager.localTroubleshootingDir)
 		self.fileManager.uploadData(self.videoObj.localAllClipsDir, tarred = True)
 		self.fileManager.uploadData(self.videoObj.localManualLabelClipsDir, tarred = True)
 		self.fileManager.uploadData(self.videoObj.localManualLabelFramesDir, tarred = True)
 		self.fileManager.uploadData(self.videoObj.localLogfile)
 
 		if delete:
-			shutil.rmtree(self.localProjectDir)
+			shutil.rmtree(self.fileManager.localProjectDir)
