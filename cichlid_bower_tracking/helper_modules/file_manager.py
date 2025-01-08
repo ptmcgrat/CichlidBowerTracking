@@ -4,14 +4,18 @@ sys.path.append('/data/home/bshi42/CichlidBowerTracking/')
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 
 class FileManager():
-    def __init__(self, projectID = None, modelID = None, analysisID=None, rcloneRemote = 'CichlidPiData:', masterDir = 'BioSci-McGrath/Apps/CichlidPiData/'):
+    def __init__(self, projectID = None, modelID = None, analysisID=None, rcloneRemote = 'p_dropbox:', masterDir = '/CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/'):
         # Identify directory for temporary local files
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
             self._identifyPiDirectory()
         elif platform.node() == 'ebb-utaka.biosci.gatech.edu':
-            self.localMasterDir = '/mnt/Storage/' + os.getenv('USER') + '/Temp/CichlidAnalyzer/'
+            self.localMasterDir = '/mnt/Storage/' + os.getenv('USER') + 'Temp/CichlidAnalyzer/'
         else:
-            self.localMasterDir = os.getenv('HOME').rstrip('/') + '/' + 'Temp/CichlidAnalyzer/'
+            self.localMasterDir = os.getenv('USERPROFILE').rstrip('/') + '/' + 'OneDrive/Desktop/McGrath Lab/Temp/CichlidAnalyzer/' #changed for windows
+            self.localMasterDir.replace('\\','/')
+            # pdb.set_trace()
+        
+
 
         # Identify cloud directory for rclone
         self.rcloneRemote = rcloneRemote
@@ -28,6 +32,8 @@ class FileManager():
                 #raise Exception('Cant find master directory (' + masterDir + ') in rclone remote (' + rcloneRemote + '')
 
         self.analysisID = analysisID
+        self.analysisID = 'MC_multi' #made this change to run it on the MC_multi folder for annotateData.py
+        
         if analysisID is not None:
             self.localAnalysisStatesDir = self.localMasterDir + '__AnalysisStates/' + analysisID + '/'
             self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
@@ -357,6 +363,7 @@ class FileManager():
             self.createDirectory(self.localNewLabeledClipsDir)
             self.downloadData(self.localManualLabelClipsDir, tarred_subdirs = True)
             self.downloadData(self.localLabeledClipsFile)
+            pdb.set_trace()
 
         elif dtype == 'ManualLabelFrames':
             self.createDirectory(self.localMasterDir)
@@ -491,6 +498,7 @@ class FileManager():
             if not no_upload:
                 self.uploadAndMerge(self.localNewLabeledVideosFile, self.localLabeledClipsFile, ID = 'LID')
                 self.uploadAndMerge(self.localNewLabeledClipsDir, self.localLabeledClipsProjectDir, tarred = True)
+                pdb.set_trace()
 
             if delete:
                 shutil.rmtree(self.localProjectDir)
@@ -708,6 +716,7 @@ class FileManager():
                 return
 
     def uploadAndMerge(self, local_data, master_file, tarred = False, ID = False):
+        pdb.set_trace()
         if os.path.isfile(local_data):
             #We are merging two crv files
             self.downloadData(master_file)
@@ -715,7 +724,8 @@ class FileManager():
             if ID:
                 old_dt = pd.read_csv(master_file, index_col = ID)
                 new_dt = pd.read_csv(local_data, index_col = ID)
-                old_dt = old_dt.append(new_dt)
+                # old_dt = old_dt.append(new_dt) (append no longer used)
+                old_dt = pd.concat([old_dt,new_dt])
                 old_dt.index.name = ID
             else:
                 old_dt = pd.read_csv(master_file)
@@ -726,12 +736,16 @@ class FileManager():
             self.uploadData(master_file)
         else:
             #We are merging two tarred directories
-            try:        
+            pdb.set_trace()
+            try:
+                pdb.set_trace()        
                 self.downloadData(master_file, tarred = True)
             except FileNotFoundError:
+                pdb.set_trace()
                 self.createDirectory(master_file)
             for nfile in os.listdir(local_data):
-                subprocess.run(['mv', local_data + nfile, master_file])
+                # subprocess.run(['mv', local_data + nfile, master_file])
+                shutil.move(local_data+nfile , master_file) #changed for windows
             self.uploadData(master_file, tarred = True)
 
     def checkFileExists(self, local_data):

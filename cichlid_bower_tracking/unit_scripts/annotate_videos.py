@@ -3,6 +3,7 @@ from cichlid_bower_tracking.data_preparers.project_preparer import ProjectPrepar
 
 import pdb, datetime, os, subprocess, argparse, random, cv2
 import pandas as pd
+import sys
 
 parser = argparse.ArgumentParser(description='This command runs HMM analysis on a single row of data.')
 parser.add_argument('ProjectID', type = str, help = 'ProjectID to analyze')

@@ -38,22 +38,22 @@ else:
 
 for projectID, number in numbers.items():
 	print('Downloading: ' + projectID + ' ' + str(datetime.datetime.now()))
-	subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.download_data', 'ManualLabel' + args.DataType, '--ProjectID', projectID])
+	subprocess.run(['python', '-m', 'cichlid_bower_tracking.unit_scripts.download_data', 'ManualLabel' + args.DataType, '--ProjectID', projectID])
 
 	print('Running: ' + projectID + ' ' + str(datetime.datetime.now()))
 
 	# Run appropriate analysis script
 	if args.DataType == 'Videos':
-		subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.annotate_videos', projectID, str(number), args.Initials])
+		subprocess.run(['python', '-m', 'cichlid_bower_tracking.unit_scripts.annotate_videos', projectID, str(number), args.Initials])
 	elif args.DataType == 'Frames':
-		subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.annotate_frames', projectID, str(number), args.Initials])
+		subprocess.run(['python', '-m', 'cichlid_bower_tracking.unit_scripts.annotate_frames', projectID, str(number), args.Initials])
 
 	#Upload data and keep track of it
 	if not args.Practice:
 		print('Uploading: ' + projectID + ' ' + str(datetime.datetime.now()))
-		subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', 'ManualLabel' + args.DataType, '--Delete', '--ProjectID', projectID])
+		subprocess.run(['python', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', 'ManualLabel' + args.DataType, '--Delete', '--ProjectID', projectID])
 		#uploadProcesses.append(subprocess.Popen(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', args.AnalysisType, projectID]))
 	else:
-		subprocess.run(['python3', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', 'ManualLabel' + args.DataType, '--Delete', '--NoUpload', '--ProjectID', projectID])
+		subprocess.run(['python', '-m', 'cichlid_bower_tracking.unit_scripts.upload_data', 'ManualLabel' + args.DataType, '--Delete', '--NoUpload', '--ProjectID', projectID])
 
 print('Finished analysis: ' + str(datetime.datetime.now()))

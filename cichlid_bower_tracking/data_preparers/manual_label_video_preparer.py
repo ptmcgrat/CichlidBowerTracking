@@ -1,7 +1,7 @@
 import subprocess, os
 import pdb, datetime, os, subprocess, argparse, random, cv2
 import pandas as pd
-
+import shutil
 
 class ManualLabelVideoPreparer():
 	# This class takes in directory information and a logfile containing depth information and performs the following:
@@ -87,8 +87,8 @@ class ManualLabelVideoPreparer():
 
 			newlyLabeled_dt.to_csv(self.fileManager.localNewLabeledVideosFile, sep = ',')
 
-			subprocess.run(['mv', self.fileManager.localManualLabelClipsDir + f.replace('_ManualLabel',''), self.fileManager.localNewLabeledClipsDir])
-
+			# subprocess.run(['mv', self.fileManager.localManualLabelClipsDir + f.replace('_ManualLabel',''), self.fileManager.localNewLabeledClipsDir])
+			shutil.move(self.fileManager.localManualLabelClipsDir + f.replace('_ManualLabel',''), self.fileManager.localNewLabeledClipsDir) #changed for windows
 			annotatedClips += 1
 			index += 1
 
