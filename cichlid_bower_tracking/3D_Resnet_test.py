@@ -62,7 +62,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
+from torch.cuda.amp import autocast, GradScaler
 
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
+torch.cuda.empty_cache()
 
 class VideoDataset(Dataset):
     r"""A Dataset for a folder of videos. Expects the directory structure to be
@@ -80,7 +84,7 @@ class VideoDataset(Dataset):
         folder = Path(directory)/mode  # get the directory of the specified split
 
         self.clip_len = clip_len
-
+   
         # the following three parameters are chosen as described in the paper section 4.1
         self.resize_height = 128  
         self.resize_width = 171
@@ -97,12 +101,14 @@ class VideoDataset(Dataset):
         # prepare a mapping between the label names (strings) and indices (ints)
         self.label2index = {label:index for index, label in enumerate(sorted(set(labels)))} 
         # convert the list of label names into an array of label indices
-        self.label_array = np.array([self.label2index[label] for label in labels], dtype=int)        
+        self.label_array = np.array([self.label2index[label] for label in labels], dtype=int)    
+          
 
     def __getitem__(self, index):
         # loading and preprocessing. TODO move them to transform classes
         buffer = self.loadvideo(self.fnames[index])
-        buffer = self.crop(buffer, self.clip_len, self.crop_size)
+        # pdb.set_trace()
+        # buffer = self.crop(buffer, self.clip_len, self.crop_size)
         buffer = self.normalize(buffer)
 
         return buffer, self.label_array[index]    
@@ -127,8 +133,9 @@ class VideoDataset(Dataset):
             # will resize frames if not already final size
             # NOTE: strongly recommended to resize them during the download process. This script
             # will process videos of any size, but will take longer the larger the video file.
-            if (frame_height != self.resize_height) or (frame_width != self.resize_width):
-                frame = cv2.resize(frame, (self.resize_width, self.resize_height))
+            # if (frame_height != self.resize_height) c
+            # or (frame_width != self.resize_width):
+            frame = cv2.resize(frame, (self.resize_width, self.resize_height))
             buffer[count] = frame
             count += 1
 
@@ -138,7 +145,11 @@ class VideoDataset(Dataset):
         # convert from [D, H, W, C] format to [C, D, H, W] (what PyTorch uses)
         # D = Depth (in this case, time), H = Height, W = Width, C = Channels
         buffer = buffer.transpose((3, 0, 1, 2))
+        if buffer.shape[1] < self.clip_len:
+            # If video is too short, repeat frames until the clip_len is met
+            buffer = np.tile(buffer, (1, self.clip_len // buffer.shape[1] + 1, 1, 1))[:, :self.clip_len]
 
+        # return buffer
         return buffer 
     
     def crop(self, buffer, clip_len, crop_size):
@@ -169,12 +180,17 @@ class VideoDataset(Dataset):
         return len(self.fnames)
     
 
-source_directory= "C:/Users/prera/OneDrive/Desktop/McGrath Lab/TrainTestData"
+scaler = GradScaler()
+source_directory= "/home/pkolipaka3@ad.gatech.edu/Desktop/Prerana/TrainTestData"
+pdb.set_trace()
 data = VideoDataset(source_directory,'train')
+pdb.set_trace()
 num_classes = 10
-device = torch.device('cpu')
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# device = torch.device('cpu')
 model = torchvision.models.video.r2plus1d_18()
 model.fc = nn.Linear(model.fc.in_features, num_classes) 
+model = torch.nn.DataParallel(model)
 model.to(device)
 num_epochs  = 10
 
@@ -182,8 +198,8 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.SGD(model.parameters(), lr = 0.01)
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
-train_dataloader = DataLoader(VideoDataset(source_directory), batch_size=10, shuffle=True, num_workers=0)
-val_dataloader = DataLoader(VideoDataset(source_directory, mode='val'), batch_size=14, num_workers=0)
+train_dataloader = DataLoader(VideoDataset(source_directory), batch_size=2, shuffle=True, num_workers=0)
+val_dataloader = DataLoader(VideoDataset(source_directory, mode='val'), batch_size=2, num_workers=0)
 dataloaders = {'train': train_dataloader, 'val': val_dataloader}
 
 dataset_sizes = {x: len(dataloaders[x].dataset) for x in ['train', 'val']}
@@ -192,7 +208,7 @@ dataset_sizes = {x: len(dataloaders[x].dataset) for x in ['train', 'val']}
 start = time.time()
 epoch_resume = 0
 save = True
-save_path = "C:/Users/prera/OneDrive/Desktop/McGrath Lab/models/model.pth"
+save_path = "/home/pkolipaka3@ad.gatech.edu/Desktop/Prerana/models/model.pth"
 pdb.set_trace()
 os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
@@ -210,8 +226,9 @@ def main():
                 # or being validated. Primarily affects layers such as BatchNorm or Dropout.
                 if phase == 'train':
                     # scheduler.step() is to be called once every epoch during training
-                    scheduler.step()
+                    
                     model.train()
+                    scheduler.step()
                 else:
                     model.eval()
 
@@ -226,7 +243,9 @@ def main():
                     # keep intermediate states iff backpropagation will be performed. If false, 
                     # then all intermediate states will be thrown away during evaluation, to use
                     # the least amount of memory possible.
-                    with torch.set_grad_enabled(phase=='train'):
+                    # with torch.set_grad_enabled(phase=='train'):
+                    # with torch.no_grad():
+                    with torch.amp.autocast('cuda'):
                         outputs = model(inputs)
                         # we're interested in the indices on the max values, not the values themselves
                         _, preds = torch.max(outputs, 1)  
@@ -235,8 +254,9 @@ def main():
                         # Backpropagate and optimize iff in training mode, else there's no intermediate
                         # values to backpropagate with and will throw an error.
                         if phase == 'train':
-                            loss.backward()
-                            optimizer.step()   
+                            scaler.scale(loss).backward()
+                            scaler.step(optimizer)
+                            scaler.update()  
 
                     running_loss += loss.item() * inputs.size(0)
                     running_corrects += torch.sum(preds == labels.data)
