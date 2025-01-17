@@ -117,7 +117,8 @@ class VideoDataset(Dataset):
     def loadvideo(self, fname):
         # initialize a VideoCapture object to read video data into a numpy array
         capture = cv2.VideoCapture(fname)
-        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        # frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_count = 100
         frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # create a buffer. Must have dtype float, so it gets converted to a FloatTensor by Pytorch later
