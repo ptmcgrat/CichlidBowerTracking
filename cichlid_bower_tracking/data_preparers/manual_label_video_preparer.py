@@ -19,8 +19,8 @@ class ManualLabelVideoPreparer():
 		self.number = number
 
 		# 10 categories of annotation plus quit and skip commands
-		self.commands = ['c','f','p','t','b','m','s','x','o','d','q','k','r']
-		self.commands_help = "Type 'c': build scoop; 'f': feed scoop; 'p': build spit; 't': feed spit; 'b': build multiple; 'm': feed multiple; 'd': drop sand; s': spawn; 'o': fish other; 'x': nofish other; 'q': quit; 'k': skip; 'r': redo"
+		self.commands = ['c','f','p','t','b','m','s','w','x','o','d','q','k','r']
+		self.commands_help = "Type 'c': build scoop; 'f': feed scoop; 'p': build spit; 't': feed spit; 'b': build multiple; 'm': feed multiple; 'd': drop sand; s': spawn; 'w': reflection; 'o': fish other; 'x': nofish other; 'q': quit; 'k': skip; 'r': redo"
 
 	def validateInputData(self):
 

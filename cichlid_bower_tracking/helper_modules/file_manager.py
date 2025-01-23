@@ -11,7 +11,7 @@ class FileManager():
         elif platform.node() == 'ebb-utaka.biosci.gatech.edu':
             self.localMasterDir = '/mnt/Storage/' + os.getenv('USER') + 'Temp/CichlidAnalyzer/'
         else:
-            self.localMasterDir = os.getenv('USERPROFILE').rstrip('/') + '/' + 'OneDrive/Desktop/McGrath Lab/Temp/CichlidAnalyzer/' #changed for windows
+            self.localMasterDir = os.getenv('USERPROFILE').rstrip('/') + '/' + 'Temp/CichlidAnalyzer/' #changed for windows
             self.localMasterDir.replace('\\','/')
             # pdb.set_trace()
         
@@ -363,7 +363,7 @@ class FileManager():
             self.createDirectory(self.localNewLabeledClipsDir)
             self.downloadData(self.localManualLabelClipsDir, tarred_subdirs = True)
             self.downloadData(self.localLabeledClipsFile)
-            pdb.set_trace()
+            # pdb.set_trace()
 
         elif dtype == 'ManualLabelFrames':
             self.createDirectory(self.localMasterDir)
@@ -498,7 +498,7 @@ class FileManager():
             if not no_upload:
                 self.uploadAndMerge(self.localNewLabeledVideosFile, self.localLabeledClipsFile, ID = 'LID')
                 self.uploadAndMerge(self.localNewLabeledClipsDir, self.localLabeledClipsProjectDir, tarred = True)
-                pdb.set_trace()
+                # pdb.set_trace()
 
             if delete:
                 shutil.rmtree(self.localProjectDir)
@@ -656,7 +656,7 @@ class FileManager():
                 else:
                     pass
             else:
-                pdb.set_trace()
+                # pdb.set_trace()
                 raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
 
         if not os.path.exists(local_path + relative_name):
@@ -716,7 +716,7 @@ class FileManager():
                 return
 
     def uploadAndMerge(self, local_data, master_file, tarred = False, ID = False):
-        pdb.set_trace()
+        # pdb.set_trace()
         if os.path.isfile(local_data):
             #We are merging two crv files
             self.downloadData(master_file)
@@ -736,12 +736,12 @@ class FileManager():
             self.uploadData(master_file)
         else:
             #We are merging two tarred directories
-            pdb.set_trace()
+            # pdb.set_trace()
             try:
-                pdb.set_trace()        
+                # pdb.set_trace()        
                 self.downloadData(master_file, tarred = True)
             except FileNotFoundError:
-                pdb.set_trace()
+                # pdb.set_trace()
                 self.createDirectory(master_file)
             for nfile in os.listdir(local_data):
                 # subprocess.run(['mv', local_data + nfile, master_file])
