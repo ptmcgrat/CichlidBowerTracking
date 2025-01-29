@@ -118,7 +118,7 @@ class VideoDataset(Dataset):
         # initialize a VideoCapture object to read video data into a numpy array
         capture = cv2.VideoCapture(fname)
         # frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_count = 100
+        frame_count = min(100,int(capture.get(cv2.CAP_PROP_FRAME_COUNT)))
         frame_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # create a buffer. Must have dtype float, so it gets converted to a FloatTensor by Pytorch later
@@ -146,7 +146,7 @@ class VideoDataset(Dataset):
         # convert from [D, H, W, C] format to [C, D, H, W] (what PyTorch uses)
         # D = Depth (in this case, time), H = Height, W = Width, C = Channels
         buffer = buffer.transpose((3, 0, 1, 2))
-        if buffer.shape[1] < self.clip_len:
+        if buffer.shape[1] < self.clip_len and buffer.shape[1]!=0:
             # If video is too short, repeat frames until the clip_len is met
             buffer = np.tile(buffer, (1, self.clip_len // buffer.shape[1] + 1, 1, 1))[:, :self.clip_len]
 
