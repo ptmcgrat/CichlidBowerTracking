@@ -53,28 +53,6 @@ class DriveUpdater:
                 median_height = np.nanmedian(dpth_3)
             """
             return pixels
-    
-    #added a function to calculate bower index
-    def _calculateBowerIndex(self, depthStop, depthStart, th):
-    
-        depthChange = depthStop - depthStart
-        thresholded_change = np.where((depthChange >= th) | (depthChange <= -th), True, False)
-        thresholded_change = morphology.remove_small_objects(thresholded_change,1000).astype(int)
-        num = 0
-        denom = 0
-        for i in range(len(depthStop)):
-            if(thresholded_change[i] == True):
-                temp = depthStop[i] - depthStart[i]
-                num += temp
-                denom += abs(temp)
-        
-        if denom != 0:
-            bower_index = num/denom
-        
-        else:
-            bower_index = -2
-
-        return bower_index
         
     def _calculateBower(self, depthChange, th):
         """
@@ -111,10 +89,8 @@ class DriveUpdater:
             # This way we only identify days that have frames during the daylight
 
         # Determine the size of the figure and create it
-        # num_rows = 3 + len(days) # First pic rows, 1 hour, 2 hour, then 1 row for each unique day
-        # axes = [0]*3*num_rows # Hold axes in lis
         num_rows = 3 + len(days) # First pic rows, 1 hour, 2 hour, then 1 row for each unique day
-        axes = [0]*4*num_rows # Hold axes in lis
+        axes = [0]*3*num_rows # Hold axes in lis
         
         fig = plt.figure(figsize=(14,4*num_rows + 1))
         fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime))
@@ -124,28 +100,27 @@ class DriveUpdater:
         # Create subplots
         for i in range(num_rows):
             #pdb.set_trace()
-            # axes[3*i + 0] = fig.add_subplot(num_rows, 3, 3*i + 1) # Filtered Absolute Depth
-            # axes[3*i + 1] = fig.add_subplot(num_rows, 3, 3*i + 2) # Relative Depth Change
-            # axes[3*i + 2] = fig.add_subplot(num_rows, 3, 3*i + 3) # Bower changes
-
-            axes[4*i + 0] = fig.add_subplot(num_rows, 4, 4*i + 1) # Filtered Absolute Depth
-            axes[4*i + 1] = fig.add_subplot(num_rows, 4, 4*i + 2) # Relative Depth Change
-            axes[4*i + 2] = fig.add_subplot(num_rows, 4, 4*i + 3) # Bower changes
+            axes[3*i + 0] = fig.add_subplot(num_rows, 3, 3*i + 1) # Filtered Absolute Depth
+            axes[3*i + 1] = fig.add_subplot(num_rows, 3, 3*i + 2) # Relative Depth Change
+            axes[3*i + 2] = fig.add_subplot(num_rows, 3, 3*i + 3) # Bower changes
        
-        
+        # Set titles of each plot, strating with the first three rows
+        axes[0].set_title('Kinect RGB Picture')
+        axes[1].set_title('PiCamera RGB Picture')
+        axes[2].set_title('Total Depth Change' )
+        axes[3].set_title('Hour ago Depth')
+        axes[4].set_title('Last hour change\n'+h_change)
+        axes[5].set_title('Last hour bower\n')
+        axes[6].set_title('2 Hour ago Depth')
+        axes[7].set_title('Last 2 hours change\n'+th_change)
+        axes[8].set_title('Last 2 hours bower\n')
         
         #pdb.set_trace()
         # Now set titles of the unknown number of days
-
-        # for i, day in enumerate([x for x in days.keys()][::-1]):
-        #     axes[3*i+9].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
-        #     axes[3*i+10].set_title(str(days[day]) + '/' + str(day) + ' Daytime Depth Change')
-        #     axes[3*i+11].set_title(str(days[day]) + '/' + str(day) + ' Identified Bower')
-        
         for i, day in enumerate([x for x in days.keys()][::-1]):
-            axes[4*i+12].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
-            axes[4*i+13].set_title(str(days[day]) + '/' + str(day) + ' Daytime Depth Change')
-            axes[4*i+14].set_title(str(days[day]) + '/' + str(day) + ' Identified Bower')
+            axes[3*i+9].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
+            axes[3*i+10].set_title(str(days[day]) + '/' + str(day) + ' Daytime Depth Change')
+            axes[3*i+11].set_title(str(days[day]) + '/' + str(day) + ' Identified Bower')
         
         # Plot data  for first two rows
         img_1 = img.imread(self.projectDirectory + self.lp.frames[-1].pic_file)
@@ -161,59 +136,15 @@ class DriveUpdater:
 
         median_height = np.nanmedian(depth_first)
 
-
-        # # Set titles of each plot, strating with the first three rows
-        # axes[0].set_title('Kinect RGB Picture')
-        # axes[1].set_title('PiCamera RGB Picture')
-        # axes[2].set_title('Total Depth Change' )
-        # axes[3].set_title('Hour ago Depth')
-        # axes[4].set_title('Last hour change\n'+h_change)
-        # axes[5].set_title('Last hour bower\n')
-        # axes[6].set_title('2 Hour ago Depth')
-        # axes[7].set_title('Last 2 hours change\n'+th_change)
-        # axes[8].set_title('Last 2 hours bower\n')
-
-         # Set titles of each plot, strating with the first three rows
-        axes[0].set_title('Kinect RGB Picture')
-        axes[1].set_title('PiCamera RGB Picture')
-        axes[2].set_title('Total Depth Change' )
-        bower_index = self._calculateBowerIndex(depth_last, depth_first, 0.2)
-        axes[3].set_title('Bower_Index:'+str(bower_index))
-        axes[4].set_title('Hour ago Depth')
-        axes[5].set_title('Last hour change\n'+h_change)
-        axes[6].set_title('Last hour bower\n')
-        bower_index = self._calculateBowerIndex(depth_last, depth_hour,0.2)
-        axes[7].set_title('Bower_Index'+str(bower_index))
-        axes[8].set_title('2 Hour ago Depth')
-        axes[9].set_title('Last 2 hours change\n'+th_change)
-        axes[10].set_title('Last 2 hours bower\n')
-        bower_index = self._calculateBowerIndex(depth_last, depth_twohours,0.2)
-        axes[11].set_title('Bower_Index'+str(bower_index))
-
-
-        # axes[0].imshow(img_1)
-        # axes[1].imshow(img_2)
-        # axes[2].imshow(depth_last - depth_first, vmin = -2, vmax = 2)
-        # axes[3].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
-        # axes[4].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
-        # axes[5].imshow(self._calculateBower(depth_last - depth_hour, 0.2), vmin = -1, vmax = 1)
-        # axes[6].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
-        # axes[7].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
-        # axes[8].imshow(self._calculateBower(depth_last - depth_twohours, 0.2), vmin = -0.5, vmax = 0.5)
-
         axes[0].imshow(img_1)
         axes[1].imshow(img_2)
         axes[2].imshow(depth_last - depth_first, vmin = -2, vmax = 2)
-        axes[3].imshow(depth_last - depth_first, vmin = -2, vmax = 2)
-        axes[4].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
-        axes[5].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
-        axes[6].imshow(self._calculateBower(depth_last - depth_hour, 0.2), vmin = -1, vmax = 1)
-        axes[7].imshow(self._calculateBower(depth_last - depth_hour, 0.2), vmin = -1, vmax = 1)
-        axes[8].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
-        axes[9].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
-        axes[10].imshow(self._calculateBower(depth_last - depth_twohours, 0.2), vmin = -0.5, vmax = 0.5)
-        axes[11].imshow(self._calculateBower(depth_last - depth_twohours, 0.2), vmin = -0.5, vmax = 0.5)
-
+        axes[3].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
+        axes[4].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
+        axes[5].imshow(self._calculateBower(depth_last - depth_hour, 0.2), vmin = -1, vmax = 1)
+        axes[6].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
+        axes[7].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
+        axes[8].imshow(self._calculateBower(depth_last - depth_twohours, 0.2), vmin = -0.5, vmax = 0.5)
 
         for i,date in enumerate([x for x in days.keys()][::-1]):
             day=date.split(' ')[0]
@@ -227,15 +158,9 @@ class DriveUpdater:
             depth_start = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0].npy_file))
             depth_stop = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[-1].npy_file))
 
-            axes[4*i+12].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
-            axes[4*i+13].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
-            axes[4*i+14].imshow(self._calculateBower(depth_stop - depth_start, 0.4), vmin = -1, vmax = 1)
-            axes[4*i+15].imshow(self._calculateBower(depth_stop - depth_start, 0.4), vmin = -1, vmax = 1)
-            axes[4*i+15].set_title(str(days[day]) + '/' + str(day) + 'Bower_Index' + str(self._calculateBowerIndex(depth_stop, depth_start, 0.4)))
-
-            # axes[3*i+9].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
-            # axes[3*i+10].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
-            # axes[3*i+11].imshow(self._calculateBower(depth_stop - depth_start, 0.4), vmin = -1, vmax = 1)
+            axes[3*i+9].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
+            axes[3*i+10].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
+            axes[3*i+11].imshow(self._calculateBower(depth_stop - depth_start, 0.4), vmin = -1, vmax = 1)
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         plt.savefig(self.projectDirectory + self.lp.tankID + '.jpg')
