@@ -154,8 +154,9 @@ class CichlidTracker:
         self.googleErrorFile = self.fileManager.localProjectDir + 'GoogleErrors.txt'
         self.frameDirectory = self.fileManager.localFrameDir
         self.videoDirectory = self.fileManager.localVideoDir
+        self.prepDirectory = self.fileManager.localPrepDir
         self.backupDirectory = self.fileManager.localBackupDir
-
+    
         if command not in self.commands:
             self._reinstructError(command + ' is not a valid command. Options are ' + str(self.commands))
 
@@ -232,7 +233,8 @@ class CichlidTracker:
             os.makedirs(self.frameDirectory)
             os.makedirs(self.videoDirectory)
             os.makedirs(self.backupDirectory)
-
+            os.makedirs(self.prepDirectory)
+            
             self.googleController.addProjectID(self.projectID, self.googleErrorFile)
             
             #self._createDropboxFolders()
@@ -549,6 +551,10 @@ class CichlidTracker:
         np.save(self.projectDirectory + 'Frames/Frame_' + str(self.frameCounter).zfill(6) + '.npy', med)
         np.save(self.projectDirectory + 'Frames/Frame_std_' + str(self.frameCounter).zfill(6) + '.npy', std)
         matplotlib.image.imsave(self.projectDirectory+'Frames/Frame_' + str(self.frameCounter).zfill(6) + '.jpg', color)
+
+        if self.frameCounter == 0:
+            subprocess.call(['cp', self.projectDirectory+'Frames/Frame_' + str(self.frameCounter).zfill(6) + '.jpg', self.prepDirectory + 'FirstDepthRGB.jpg'])
+            self.fileManager.uploadData(self.prepDirectory)
         
         if self.frameCounter % 1000000 == 0:
             self._print('AllDataCaptured: NpyFile: Frames/AllData_' + str(self.frameCounter).zfill(6) + '.npy,,PicFile: Frames/Frame_' + str(self.frameCounter).zfill(6) + '.jpg,,Time: ' + str(endtime)  + ',,NFrames: ' + str(i+1))
