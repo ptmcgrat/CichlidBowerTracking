@@ -552,7 +552,7 @@ class CichlidTracker:
         np.save(self.projectDirectory + 'Frames/Frame_std_' + str(self.frameCounter).zfill(6) + '.npy', std)
         matplotlib.image.imsave(self.projectDirectory+'Frames/Frame_' + str(self.frameCounter).zfill(6) + '.jpg', color)
 
-        if self.frameCounter == 0:
+        if self.frameCounter == 1:
             subprocess.call(['cp', self.projectDirectory+'Frames/Frame_' + str(self.frameCounter).zfill(6) + '.jpg', self.prepDirectory + 'FirstDepthRGB.jpg'])
             self.fileManager.uploadData(self.prepDirectory)
         
