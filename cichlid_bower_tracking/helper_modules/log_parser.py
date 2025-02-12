@@ -112,6 +112,14 @@ class LogParser:
                     except IndexError:
                         pass
                         pdb.set_trace()
+                
+                if info_type == 'TankResetStart':
+                    t_list = self._ret_data(line, ['Time'])
+                    self.tankresetstart.append(t_list[0])
+                
+                if info_type == 'TankResetStop':
+                    t_list = self._ret_data(line, ['Time'])
+                    self.tankresetstop.append(t_list[0])
 
         self.frames.sort(key = lambda x: x.time)
 
