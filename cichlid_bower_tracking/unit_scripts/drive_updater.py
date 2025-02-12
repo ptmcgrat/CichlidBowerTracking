@@ -106,7 +106,7 @@ class DriveUpdater:
         num_rows = 3 + len(days) # First pic rows, 1 hour, 2 hour, then 1 row for each unique day
         axes = [0]*3*num_rows # Hold axes in lis
         
-        fig = plt.figure(figsize=(14,4*num_rows + 1))
+        fig = plt.figure(figsize=(20,4*num_rows + 1))
         fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime))
         
         plt.rcParams.update({'font.size': 18})
