@@ -89,7 +89,7 @@ class DriveUpdater:
         lastHourFrames = [x for x in self.lp.frames if x.time > self.lastFrameTime - datetime.timedelta(hours = 1)] # frames from the last hour
         lastTwoHourFrames = [x for x in self.lp.frames if x.time > self.lastFrameTime - datetime.timedelta(hours = 2)] # frames from the last two hours
         daylightFrames = [x for x in self.lp.frames if x.time.hour >= 8 and x.time.hour <= 17] # frames during daylight
-        if self.lp.tankresetstart:
+        if self.lp.tankresetstop:
             lastTankResetFrame = [x for x in self.lp.frames if x.time > self.lastFrameTime - self.lp.frames.tankresetstop]
 
         th_change = str(self.lastFrameTime-lastTwoHourFrames[0].time)
