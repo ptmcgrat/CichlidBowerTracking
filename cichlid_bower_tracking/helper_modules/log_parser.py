@@ -26,6 +26,8 @@ class LogParser:
         self.alldata = []
         self.backgrounds = []
         self.movies = []
+        self.tankresetstart = []
+        self.tankresetstop = []
         
         with open(self.logfile) as f:
             for line in f:
