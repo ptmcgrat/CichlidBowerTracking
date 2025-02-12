@@ -14,6 +14,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import oauth2client
 from skimage import morphology
 import pdb
+from PIL import Image 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('Logfile', type = str, help = 'Name of logfile')
@@ -54,18 +55,29 @@ class DriveUpdater:
             """
             return pixels
         
-    def _calculateBower(self, depthChange, th):
+    def _calculateBower(self, depthChange, mask):
         """
         daily_bower = daily_change.copy()
         thresholded_change = np.where((daily_change >= 0.4) | (daily_change <= -0.4), True, False)
         thresholded_change = morphology.remove_small_objects(thresholded_change,1000).astype(int)
         daily_bower[(thresholded_change == 0) & (~np.isnan(daily_change))] = 0
         """
+        # daily_bower = depthChange.copy()
+        # thresholded_change = np.where((depthChange >= th) | (depthChange <= -th), True, False)
+        # thresholded_change = morphology.remove_small_objects(thresholded_change,1000).astype(int)
+        # daily_bower[(thresholded_change == 0) & (~np.isnan(depthChange))] = 0
+        # return daily_bower
+
         daily_bower = depthChange.copy()
-        thresholded_change = np.where((depthChange >= th) | (depthChange <= -th), True, False)
-        thresholded_change = morphology.remove_small_objects(thresholded_change,1000).astype(int)
-        daily_bower[(thresholded_change == 0) & (~np.isnan(depthChange))] = 0
-        return daily_bower
+        volume_pit = np.nansum(daily_bower[np.where(mask == 1)])* self.fileManager.pixelLength ** 2
+        volume_castle = np.nansum(daily_bower[np.where(mask == -1)])*-1* self.fileManager.pixelLength ** 2
+        # print("volume_castle", volume_castle)
+        # print("volume_pit",volume_pit)
+        # pdb.set_trace()
+        daily_bower [(mask == 0)] = 0
+        daily_bower[(self.depth_mask == 0)] = np.nan
+
+        return daily_bower, int(volume_pit), int(volume_castle)
     
     def _createImage(self, stdcutoff = 0.1):
         if len(self.lp.frames) > 1 and self.lp.frames[-1].std< 0.00001 and self.lp.frames[-1].gp==self.lp.frames[-2].gp:
@@ -77,6 +89,8 @@ class DriveUpdater:
         lastHourFrames = [x for x in self.lp.frames if x.time > self.lastFrameTime - datetime.timedelta(hours = 1)] # frames from the last hour
         lastTwoHourFrames = [x for x in self.lp.frames if x.time > self.lastFrameTime - datetime.timedelta(hours = 2)] # frames from the last two hours
         daylightFrames = [x for x in self.lp.frames if x.time.hour >= 8 and x.time.hour <= 17] # frames during daylight
+        if self.lp.tankresetstart:
+            lastTankResetFrame = [x for x in self.lp.frames if x.time > self.lastFrameTime - self.lp.frames.tankresetstop]
 
         th_change = str(self.lastFrameTime-lastTwoHourFrames[0].time)
         h_change = str(self.lastFrameTime - lastHourFrames[0].time)
@@ -97,6 +111,13 @@ class DriveUpdater:
         
         plt.rcParams.update({'font.size': 18})
         
+        local_path = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/MaskedImg.jpg"
+        self.fileManager.downloadData(local_path)
+        mask = Image.open(local_path)
+        mask = mask.convert("L")
+        mask = np.array(mask)
+        self.depth_mask = mask != 0
+
         # Create subplots
         for i in range(num_rows):
             #pdb.set_trace()
@@ -108,20 +129,34 @@ class DriveUpdater:
         axes[0].set_title('Kinect RGB Picture')
         axes[1].set_title('PiCamera RGB Picture')
         axes[2].set_title('Total Depth Change' )
-        axes[3].set_title('Hour ago Depth')
-        axes[4].set_title('Last hour change\n'+h_change)
-        axes[5].set_title('Last hour bower\n')
-        axes[6].set_title('2 Hour ago Depth')
-        axes[7].set_title('Last 2 hours change\n'+th_change)
-        axes[8].set_title('Last 2 hours bower\n')
+
+        axes[4].set_ylabel('Last hour change\n'+h_change,fontsize=10, rotation=90, labelpad=20) #, ha='left', va='center')
+        axes[5].set_ylabel('Last hour bower\n',fontsize=10, rotation=90, labelpad=20)
+
+        axes[7].set_ylabel('Last 2 hours change\n'+th_change,fontsize=10, rotation=90, labelpad=20) #, ha='left', va='center')
+        axes[8].set_ylabel('Last 2 hours bower\n',fontsize=10, rotation=90, labelpad=20)
+        # axes[3].set_title('Hour ago Depth')
+        # axes[4].set_title('Last hour change\n'+h_change)
+        # axes[5].set_title('Last hour bower\n')
+        # axes[6].set_title('2 Hour ago Depth')
+        # axes[7].set_title('Last 2 hours change\n'+th_change)
+        # axes[8].set_title('Last 2 hours bower\n')
         
         #pdb.set_trace()
         # Now set titles of the unknown number of days
         for i, day in enumerate([x for x in days.keys()][::-1]):
-            axes[3*i+9].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
+            # axes[3*i+9].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
             axes[3*i+10].set_title(str(days[day]) + '/' + str(day) + ' Daytime Depth Change')
             axes[3*i+11].set_title(str(days[day]) + '/' + str(day) + ' Identified Bower')
         
+
+        # Hide x and y axis ticks & labels for all subplots
+        for ax in axes:
+            ax.set_xticks([])  # Remove x-axis ticks
+            ax.set_yticks([])  # Remove y-axis ticks
+            ax.set_xticklabels([])  # Remove x-axis tick labels
+            ax.set_yticklabels([])  # Remove y-axis tick labels
+
         # Plot data  for first two rows
         img_1 = img.imread(self.projectDirectory + self.lp.frames[-1].pic_file)
         try:
@@ -129,11 +164,37 @@ class DriveUpdater:
         except:
             img_2 = img_1
         
+        # depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
+        # depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
+        # depth_hour = self._filterPixels(np.load(self.projectDirectory + lastHourFrames[0].npy_file))
+        # depth_twohours = self._filterPixels(np.load(self.projectDirectory + lastTwoHourFrames[0].npy_file))
+        if self.lp.tankresetstop:
+            depth_first = self._filterPixels(np.load(self.projectDirectory + lastTankResetFrame[0].npy_file))
+        else:
+            depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
+        
         depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
-        depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
-        depth_hour = self._filterPixels(np.load(self.projectDirectory + lastHourFrames[0].npy_file))
-        depth_twohours = self._filterPixels(np.load(self.projectDirectory + lastTwoHourFrames[0].npy_file))
+        depth_last[(self.depth_mask == 0)] = np.nan
 
+        # depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
+        depth_first[(self.depth_mask == 0)] = np.nan
+
+        depth_hour = self._filterPixels(np.load(self.projectDirectory + lastHourFrames[0].npy_file))
+        depth_hour[(self.depth_mask == 0)] = np.nan
+
+        depth_twohours = self._filterPixels(np.load(self.projectDirectory + lastTwoHourFrames[0].npy_file))
+        depth_twohours[(self.depth_mask == 0)] = np.nan
+
+        median_height = np.nanmedian(depth_first)
+
+        total_depth_change = np.array(depth_last - depth_first, dtype=np.float32)
+        bower_mask = np.where(total_depth_change < 0, -1, np.where(total_depth_change > 1,1,0))
+        bower_hour, hour_volume_pit, hour_volume_castle = self._calculateBower(depth_last - depth_hour,bower_mask)
+        
+        bower_twohours, twohours_volume_pit, twohours_volume_castle = self._calculateBower(depth_last - depth_twohours,bower_mask) 
+        axes[6].set_ylabel('2 Hour ago Depth\nPit volume change:'+str(twohours_volume_pit)+'\nCastle volume change:'+str(twohours_volume_castle),fontsize=10, rotation=90, labelpad=20)
+        axes[3].set_ylabel('Hour ago Depth\nPit volume change:'+str(hour_volume_pit)+'\nCastle volume change:'+str(hour_volume_castle),fontsize=10, rotation=90, labelpad=20)
+       
         median_height = np.nanmedian(depth_first)
 
         axes[0].imshow(img_1)
@@ -141,10 +202,10 @@ class DriveUpdater:
         axes[2].imshow(depth_last - depth_first, vmin = -2, vmax = 2)
         axes[3].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
         axes[4].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
-        axes[5].imshow(self._calculateBower(depth_last - depth_hour, 0.2), vmin = -1, vmax = 1)
+        axes[5].imshow(bower_hour, vmin = -1, vmax = 1)
         axes[6].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
         axes[7].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
-        axes[8].imshow(self._calculateBower(depth_last - depth_twohours, 0.2), vmin = -0.5, vmax = 0.5)
+        axes[8].imshow(bower_twohours, vmin = -0.5, vmax = 0.5)
 
         for i,date in enumerate([x for x in days.keys()][::-1]):
             day=date.split(' ')[0]
@@ -156,18 +217,25 @@ class DriveUpdater:
                 print(date)
                 # frames during daylight
             depth_start = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0].npy_file))
+            depth_start[(self.depth_mask == 0)] = np.nan
             depth_stop = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[-1].npy_file))
+            depth_stop[(self.depth_mask == 0)] = np.nan
+            bower, volume_pit, volume_castle = self._calculateBower(depth_stop - depth_start, bower_mask)
 
+            axes[3*i+9].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nPit volume change:'+str(volume_pit)+'\nCastle volume change:' + str(volume_castle),fontsize=10, rotation=90, labelpad=20)
+            
             axes[3*i+9].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
             axes[3*i+10].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
-            axes[3*i+11].imshow(self._calculateBower(depth_stop - depth_start, 0.4), vmin = -1, vmax = 1)
+            axes[3*i+11].imshow(bower, vmin = -1, vmax = 1)
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
+        fig.subplots_adjust(left=0.2, hspace=0.4)
         plt.savefig(self.projectDirectory + self.lp.tankID + '.jpg')
         #return self.graph_summary_fname
 
         fig = plt.figure(figsize=(6,3))
         fig.tight_layout()
+        fig.subplots_adjust(left=0.2, hspace=0.4)
         ax1 = fig.add_subplot(1, 2, 1) #Pic from Kinect
         ax2 = fig.add_subplot(1, 2, 2) #Pic from Camera
         ax1.imshow(depth_last - depth_twohours, vmin = -.75, vmax = .75)
@@ -177,6 +245,11 @@ class DriveUpdater:
         ax2.imshow(depth_last - depth_hour, vmin = -.75, vmax = .75) # +- 1 cms
         ax2.axes.get_xaxis().set_visible(False)
         ax2.axes.get_yaxis().set_visible(False)
+
+        ax1.set_xticklabels([])  # Hide x-axis labels
+        ax1.set_yticklabels([]) 
+        ax2.set_xticklabels([])  # Hide x-axis labels
+        ax2.set_yticklabels([]) 
 
         fig.tight_layout()
 
