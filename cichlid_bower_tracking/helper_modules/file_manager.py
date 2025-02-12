@@ -87,12 +87,12 @@ class FileManager():
 		return projectIDs
 
 	def updateSummaryFile(self, projectID, analysis_type):
-	    self.downloadData(self.localSummaryFile)
-	    dt = pd.read_csv(self.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str,'LabeledVideos':str,'LabeledFrames': str})
+		self.downloadData(self.localSummaryFile)
+		dt = pd.read_csv(self.localSummaryFile, index_col = False, dtype = {'StartingFiles':str, 'Prep':str, 'Depth':str, 'Cluster':str, 'ClusterClassification':str,'LabeledVideos':str,'LabeledFrames': str})
 
-	    dt.loc[dt.projectID == projectID, analysis_type] = 'TRUE'
-	    dt.to_csv(self.localSummaryFile, index = False)
-	    self.uploadData(self.localSummaryFile)
+		dt.loc[dt.projectID == projectID, analysis_type] = 'TRUE'
+		dt.to_csv(self.localSummaryFile, index = False)
+		self.uploadData(self.localSummaryFile)
 
 	def getProjectStates(self):
 
@@ -120,6 +120,28 @@ class FileManager():
 			return row_data
 
 		self.lp = LP(self.localLogfile)
+
+
+		tar_file_path = self.cloudMasterDir +"__ProjectData/"+self.analysisID+"/"+self.projectID+"/Frames.tar"
+
+		# List files inside the .tar archive without downloading
+		cmd = f"rclone cat {tar_file_path} | tar -tvf -"
+
+		# Run the command and capture the output
+		process = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+		frame_filenames_cloud = [line.split()[-1] for line in process.stdout.split("\n") if line.strip()]
+		
+		frame_filenames_log = []
+		for frame in self.lp.frames:
+			frame_filenames_log.append(frame.npy_file)
+			frame_filenames_log.append(frame.pic_file)
+			frame_filenames_log.append(frame.std_file)
+
+		diff = [item for item in frame_filenames_log if item not in frame_filenames_cloud]
+		print("Files not uploaded in projectID: {self.projectID} are: \n"+diff)
+		# pdb.set_trace()
+
 		if self.lp.malformed_file:
 			row_data['StartingFiles'] = False
 			print('Malformed Log File. Continuing...')
