@@ -146,8 +146,8 @@ class DriveUpdater:
         # Now set titles of the unknown number of days
         for i, day in enumerate([x for x in days.keys()][::-1]):
             # axes[3*i+9].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
-            axes[3*i+10].set_title(str(days[day]) + '/' + str(day) + ' Daytime Depth Change')
-            axes[3*i+11].set_title(str(days[day]) + '/' + str(day) + ' Identified Bower')
+            axes[3*i+10].set_ylabel(str(days[day]) + '/' + str(day) + ' Daytime Depth Change',fontsize=10, rotation=90, labelpad=20)
+            axes[3*i+11].set_ylabel(str(days[day]) + '/' + str(day) + ' Identified Bower',fontsize=10, rotation=90, labelpad=20)
         
 
         # Hide x and y axis ticks & labels for all subplots
