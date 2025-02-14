@@ -55,7 +55,7 @@ class DriveUpdater:
             """
             return pixels
         
-    def _calculateBower(self, depthChange, mask):
+    def _calculateBower(self, depthChange, total_depth_change, thresholds):
         """
         daily_bower = daily_change.copy()
         thresholded_change = np.where((daily_change >= 0.4) | (daily_change <= -0.4), True, False)
@@ -67,17 +67,28 @@ class DriveUpdater:
         # thresholded_change = morphology.remove_small_objects(thresholded_change,1000).astype(int)
         # daily_bower[(thresholded_change == 0) & (~np.isnan(depthChange))] = 0
         # return daily_bower
-
+        # thresholds = [0.2,0.3,0.5,0.7,0.9, 1.2, 1.3, 1.5, 1.7, 2]
+        volume_pits = []
+        volume_castles =[]
         daily_bower = depthChange.copy()
-        volume_pit = np.nansum(daily_bower[np.where(mask == 1)])* self.fileManager.pixelLength ** 2
-        volume_castle = np.nansum(daily_bower[np.where(mask == -1)])*-1* self.fileManager.pixelLength ** 2
-        # print("volume_castle", volume_castle)
-        # print("volume_pit",volume_pit)
-        # pdb.set_trace()
-        daily_bower [(mask == 0)] = 0
+        for i in thresholds:
+
+            bower_mask = np.where(total_depth_change < (-1*i), -1, np.where(total_depth_change > i,1,0))
+            volume_pit = np.nansum(daily_bower[np.where(bower_mask == 1)])* self.fileManager.pixelLength ** 2
+            volume_castle = np.nansum(daily_bower[np.where(bower_mask == -1)])*-1* self.fileManager.pixelLength ** 2
+            volume_pits.append(volume_pit)
+            volume_castles.append(volume_castle)
+            # print("volume_castle", volume_castle)
+            # print("volume_pit",volume_pit)
+            # pdb.set_trace()
+            # daily_bower [(mask == 0)] = 0
+            # daily_bower[(self.depth_mask == 0)] = np.nan
+
+        bower_mask = np.where(total_depth_change < 0.3, -1, np.where(total_depth_change > 0.3,1,0))
+        daily_bower [(bower_mask == 0)] = 0
         daily_bower[(self.depth_mask == 0)] = np.nan
 
-        return daily_bower, int(volume_pit), int(volume_castle)
+        return daily_bower, volume_pits, volume_castles
     
     def _createImage(self, stdcutoff = 0.1):
         if len(self.lp.frames) > 1 and self.lp.frames[-1].std< 0.00001 and self.lp.frames[-1].gp==self.lp.frames[-2].gp:
@@ -105,7 +116,7 @@ class DriveUpdater:
 
         # Determine the size of the figure and create it
         num_rows = 3 + len(days) # First pic rows, 1 hour, 2 hour, then 1 row for each unique day
-        axes = [0]*3*num_rows # Hold axes in lis
+        axes = [0]*4*num_rows # Hold axes in lis
         
         fig = plt.figure(figsize=(20,4*num_rows + 1))
         fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime))
@@ -122,20 +133,24 @@ class DriveUpdater:
         # Create subplots
         for i in range(num_rows):
             #pdb.set_trace()
-            axes[3*i + 0] = fig.add_subplot(num_rows, 3, 3*i + 1) # Filtered Absolute Depth
-            axes[3*i + 1] = fig.add_subplot(num_rows, 3, 3*i + 2) # Relative Depth Change
-            axes[3*i + 2] = fig.add_subplot(num_rows, 3, 3*i + 3) # Bower changes
+            axes[4*i + 0] = fig.add_subplot(num_rows, 4, 4*i + 1) # Filtered Absolute Depth
+            axes[4*i + 1] = fig.add_subplot(num_rows, 4, 4*i + 2) # Relative Depth Change
+            axes[4*i + 2] = fig.add_subplot(num_rows, 4, 4*i + 3) # Bower changes
+            axes[4*i + 3] = fig.add_subplot(num_rows, 4, 4*i + 4) # Scatterplot
+
        
         # Set titles of each plot, strating with the first three rows
         axes[0].set_title('Kinect RGB Picture')
         axes[1].set_title('PiCamera RGB Picture')
         axes[2].set_title('Total Depth Change' )
+        
+        axes[5].set_ylabel('Last hour change\n'+h_change,fontsize=10, rotation=90, labelpad=20) #, ha='left', va='center')
+        axes[6].set_ylabel('Last hour bower\n',fontsize=10, rotation=90, labelpad=20)
+        axes[7].set_ylabel('Bower volumes for different thresholds\n',fontsize=10, rotation=90, labelpad=20)
 
-        axes[4].set_ylabel('Last hour change\n'+h_change,fontsize=10, rotation=90, labelpad=20) #, ha='left', va='center')
-        axes[5].set_ylabel('Last hour bower\n',fontsize=10, rotation=90, labelpad=20)
-
-        axes[7].set_ylabel('Last 2 hours change\n'+th_change,fontsize=10, rotation=90, labelpad=20) #, ha='left', va='center')
-        axes[8].set_ylabel('Last 2 hours bower\n',fontsize=10, rotation=90, labelpad=20)
+        axes[9].set_ylabel('Last 2 hours change\n'+th_change,fontsize=10, rotation=90, labelpad=20) #, ha='left', va='center')
+        axes[10].set_ylabel('Last 2 hours bower\n',fontsize=10, rotation=90, labelpad=20)
+        axes[11].set_ylabel('Bower volumes for different thresholds\n',fontsize=10, rotation=90, labelpad=20)
         # axes[3].set_title('Hour ago Depth')
         # axes[4].set_title('Last hour change\n'+h_change)
         # axes[5].set_title('Last hour bower\n')
@@ -147,8 +162,9 @@ class DriveUpdater:
         # Now set titles of the unknown number of days
         for i, day in enumerate([x for x in days.keys()][::-1]):
             # axes[3*i+9].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
-            axes[3*i+10].set_ylabel(str(days[day]) + '/' + str(day) + ' Daytime Depth Change',fontsize=10, rotation=90, labelpad=20)
-            axes[3*i+11].set_ylabel(str(days[day]) + '/' + str(day) + ' Identified Bower',fontsize=10, rotation=90, labelpad=20)
+            axes[4*i+13].set_ylabel(str(days[day]) + '/' + str(day) + ' Daytime Depth Change',fontsize=10, rotation=90, labelpad=20)
+            axes[4*i+14].set_ylabel(str(days[day]) + '/' + str(day) + ' Identified Bower',fontsize=10, rotation=90, labelpad=20)
+            axes[4*i+15].set_ylabel(str(days[day]) + '/' + str(day) + ' Bower volumes for different thresholds',fontsize=10, rotation=90, labelpad=20)
         
 
         # Hide x and y axis ticks & labels for all subplots
@@ -189,24 +205,42 @@ class DriveUpdater:
         median_height = np.nanmedian(depth_first)
 
         total_depth_change = np.array(depth_last - depth_first, dtype=np.float32)
-        bower_mask = np.where(total_depth_change < 0, -1, np.where(total_depth_change > 1,1,0))
-        bower_hour, hour_volume_pit, hour_volume_castle = self._calculateBower(depth_last - depth_hour,bower_mask)
+
+        # bower_mask = np.where(total_depth_change < 0, -1, np.where(total_depth_change > 1,1,0))
+        thresholds = [0.2,0.3,0.5,0.7,0.9, 1.2, 1.3, 1.5, 1.7, 2]
+
+        bower_hour, hour_volume_pits, hour_volume_castles = self._calculateBower(depth_last - depth_hour,total_depth_change, thresholds)
         
-        bower_twohours, twohours_volume_pit, twohours_volume_castle = self._calculateBower(depth_last - depth_twohours,bower_mask) 
-        axes[6].set_ylabel('2 Hour ago Depth\nPit volume change:'+str(twohours_volume_pit)+'\nCastle volume change:'+str(twohours_volume_castle),fontsize=10, rotation=90, labelpad=20)
-        axes[3].set_ylabel('Hour ago Depth\nPit volume change:'+str(hour_volume_pit)+'\nCastle volume change:'+str(hour_volume_castle),fontsize=10, rotation=90, labelpad=20)
+        bower_twohours, twohours_volume_pits, twohours_volume_castles = self._calculateBower(depth_last - depth_twohours,total_depth_change, thresholds) 
+
+        axes[8].set_ylabel('2 Hour ago Depth\nPit volume change:'+str(twohours_volume_pits[1])+'\nCastle volume change:'+str(twohours_volume_castles[1]),fontsize=10, rotation=90, labelpad=20)
+        axes[4].set_ylabel('Hour ago Depth\nPit volume change:'+str(hour_volume_pits[1])+'\nCastle volume change:'+str(hour_volume_castles[1]),fontsize=10, rotation=90, labelpad=20)
        
         median_height = np.nanmedian(depth_first)
 
         axes[0].imshow(img_1)
         axes[1].imshow(img_2)
         axes[2].imshow(depth_last - depth_first, vmin = -2, vmax = 2)
-        axes[3].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
-        axes[4].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
-        axes[5].imshow(bower_hour, vmin = -1, vmax = 1)
-        axes[6].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
-        axes[7].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
-        axes[8].imshow(bower_twohours, vmin = -0.5, vmax = 0.5)
+        axes[4].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
+        axes[5].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
+        axes[6].imshow(bower_hour, vmin = -1, vmax = 1)
+        axes[7].scatter(thresholds, hour_volume_pits, color='blue', label='Pit volume', s=50, alpha=0.7)
+        axes[7].scatter(thresholds, hour_volume_castles, color='blue', label='Castle volume', s=50, alpha=0.7)
+
+        axes[7].set_xlabel('Thresholds')  # Label for X-axis
+        axes[7].set_ylabel('Volumes')  # Label for Y-axis
+        axes[7].legend()  # Add a legend to differentiate the datasets
+        axes[7].grid(True)
+
+        axes[8].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
+        axes[9].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
+        axes[10].imshow(bower_twohours, vmin = -0.5, vmax = 0.5)
+        axes[11].scatter(thresholds, twohours_volume_pits, color='blue', label='Pit volume', s=50, alpha=0.7)
+        axes[11].scatter(thresholds, twohours_volume_castles, color='blue', label='Castle volume', s=50, alpha=0.7)
+        axes[11].set_xlabel('Thresholds')  # Label for X-axis
+        axes[11].set_ylabel('Volumes')  # Label for Y-axis
+        axes[11].legend()  # Add a legend to differentiate the datasets
+        axes[11].grid(True)
 
         for i,date in enumerate([x for x in days.keys()][::-1]):
             day=date.split(' ')[0]
@@ -221,14 +255,19 @@ class DriveUpdater:
             depth_start[(self.depth_mask == 0)] = np.nan
             depth_stop = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[-1].npy_file))
             depth_stop[(self.depth_mask == 0)] = np.nan
-            bower, volume_pit, volume_castle = self._calculateBower(depth_stop - depth_start, bower_mask)
+            bower, volume_pits, volume_castles = self._calculateBower(depth_stop - depth_start, total_depth_change, thresholds)
 
-            axes[3*i+9].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nPit volume change:'+str(volume_pit)+'\nCastle volume change:' + str(volume_castle),fontsize=10, rotation=90, labelpad=20)
+            axes[4*i+12].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nPit volume change:'+str(volume_pits[1])+'\nCastle volume change:' + str(volume_castles[1]),fontsize=10, rotation=90, labelpad=20)
             
-            axes[3*i+9].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
-            axes[3*i+10].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
-            axes[3*i+11].imshow(bower, vmin = -1, vmax = 1)
-
+            axes[4*i+12].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
+            axes[4*i+13].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
+            axes[4*i+14].imshow(bower, vmin = -1, vmax = 1)
+            axes[4*i+15].scatter(thresholds, volume_pits, color='blue', label='Pit volume', s=50, alpha=0.7)
+            axes[4*i+15].scatter(thresholds, volume_castles, color='blue', label='Castle volume', s=50, alpha=0.7)
+            axes[4*i+15].set_xlabel('Thresholds')  # Label for X-axis
+            axes[4*i+15].set_ylabel('Volumes')  # Label for Y-axis
+            axes[4*i+15].legend()  # Add a legend to differentiate the datasets
+            axes[4*i+15].grid(True)
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         fig.subplots_adjust(left=0.2, hspace=0.4)
         plt.savefig(self.projectDirectory + self.lp.tankID + '.jpg')
