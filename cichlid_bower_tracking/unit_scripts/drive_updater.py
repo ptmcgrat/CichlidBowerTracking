@@ -229,7 +229,7 @@ class DriveUpdater:
 
         axes[7].set_xlabel('Thresholds', fontsize = 8)  # Label for X-axis
         axes[7].set_ylabel('Volumes', fontsize = 8, ha = 'right')  # Label for Y-axis
-        axes[7].legend()  # Add a legend to differentiate the datasets
+        axes[7].legend(fontsize = 6)  # Add a legend to differentiate the datasets
         # axes[7].grid(True)
         axes[7].set_xticks(thresholds)
         axes[7].set_xticklabels(thresholds, fontsize=5, rotation=45)
