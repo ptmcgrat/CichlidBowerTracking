@@ -207,14 +207,14 @@ class DriveUpdater:
         total_depth_change = np.array(depth_last - depth_first, dtype=np.float32)
 
         # bower_mask = np.where(total_depth_change < 0, -1, np.where(total_depth_change > 1,1,0))
-        thresholds = [0.2,0.3,0.5,0.7,0.9, 1.2, 1.3, 1.5, 1.7, 2]
+        thresholds = [0.125, 0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.0]
 
         bower_hour, hour_volume_pits, hour_volume_castles = self._calculateBower(depth_last - depth_hour,total_depth_change, thresholds)
         
         bower_twohours, twohours_volume_pits, twohours_volume_castles = self._calculateBower(depth_last - depth_twohours,total_depth_change, thresholds) 
 
-        axes[8].set_ylabel('2 Hour ago Depth\nPit volume change:'+str(twohours_volume_pits[1])+'\nCastle volume change:'+str(twohours_volume_castles[1]),fontsize=10, rotation=90, labelpad=20)
-        axes[4].set_ylabel('Hour ago Depth\nPit volume change:'+str(hour_volume_pits[1])+'\nCastle volume change:'+str(hour_volume_castles[1]),fontsize=10, rotation=90, labelpad=20)
+        axes[8].set_ylabel('2 Hour ago Depth\nThreshold:'+str(thresholds[1])+'\nPit volume change:'+str(int(twohours_volume_pits[1]))+'\nCastle volume change:'+str(int(twohours_volume_castles[1])),fontsize=10, rotation=90, labelpad=20)
+        axes[4].set_ylabel('Hour ago Depth\nThreshold:'+str(thresholds[1])+'\nPit volume change:'+str(int(hour_volume_pits[1]))+'\nCastle volume change:'+str(int(hour_volume_castles[1])),fontsize=10, rotation=90, labelpad=20)
        
         median_height = np.nanmedian(depth_first)
 
@@ -224,23 +224,27 @@ class DriveUpdater:
         axes[4].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
         axes[5].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
         axes[6].imshow(bower_hour, vmin = -1, vmax = 1)
-        axes[7].scatter(thresholds, hour_volume_pits, color='blue', label='Pit volume', s=50, alpha=0.7)
-        axes[7].scatter(thresholds, hour_volume_castles, color='blue', label='Castle volume', s=50, alpha=0.7)
+        axes[7].scatter(thresholds, hour_volume_pits, color='blue', label='Pit volume', s=25, alpha=0.7)
+        axes[7].scatter(thresholds, hour_volume_castles, color='red', label='Castle volume', s=25, alpha=0.7)
 
-        axes[7].set_xlabel('Thresholds')  # Label for X-axis
-        axes[7].set_ylabel('Volumes')  # Label for Y-axis
+        axes[7].set_xlabel('Thresholds', fontsize = 8)  # Label for X-axis
+        axes[7].set_ylabel('Volumes', fontsize = 8, ha = 'right')  # Label for Y-axis
         axes[7].legend()  # Add a legend to differentiate the datasets
-        axes[7].grid(True)
+        # axes[7].grid(True)
+        axes[7].set_xticks(thresholds)
+        axes[7].set_xticklabels(thresholds, fontsize=5)
 
         axes[8].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
         axes[9].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
         axes[10].imshow(bower_twohours, vmin = -0.5, vmax = 0.5)
-        axes[11].scatter(thresholds, twohours_volume_pits, color='blue', label='Pit volume', s=50, alpha=0.7)
-        axes[11].scatter(thresholds, twohours_volume_castles, color='blue', label='Castle volume', s=50, alpha=0.7)
-        axes[11].set_xlabel('Thresholds')  # Label for X-axis
-        axes[11].set_ylabel('Volumes')  # Label for Y-axis
-        axes[11].legend()  # Add a legend to differentiate the datasets
-        axes[11].grid(True)
+        axes[11].scatter(thresholds, twohours_volume_pits, color='blue', label='Pit volume', s=25, alpha=0.7)
+        axes[11].scatter(thresholds, twohours_volume_castles, color='red', label='Castle volume', s=25, alpha=0.7)
+        axes[11].set_xlabel('Thresholds', fontsize = 8)  # Label for X-axis
+        axes[11].set_ylabel('Volumes', fontsize = 8, ha = 'right')  # Label for Y-axis
+        axes[11].legend(fontsize = 6)  # Add a legend to differentiate the datasets
+        # axes[11].grid(True)
+        axes[11].set_xticks(thresholds)
+        axes[11].set_xticklabels(thresholds, fontsize=5)
 
         for i,date in enumerate([x for x in days.keys()][::-1]):
             day=date.split(' ')[0]
@@ -257,17 +261,19 @@ class DriveUpdater:
             depth_stop[(self.depth_mask == 0)] = np.nan
             bower, volume_pits, volume_castles = self._calculateBower(depth_stop - depth_start, total_depth_change, thresholds)
 
-            axes[4*i+12].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nPit volume change:'+str(volume_pits[1])+'\nCastle volume change:' + str(volume_castles[1]),fontsize=10, rotation=90, labelpad=20)
+            axes[4*i+12].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nThreshold:'+str(thresholds[1])+'\nPit volume change:'+str(int(volume_pits[1]))+'\nCastle volume change:' + str(int(volume_castles[1])),fontsize=10, rotation=90, labelpad=20)
             
             axes[4*i+12].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
             axes[4*i+13].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
             axes[4*i+14].imshow(bower, vmin = -1, vmax = 1)
-            axes[4*i+15].scatter(thresholds, volume_pits, color='blue', label='Pit volume', s=50, alpha=0.7)
-            axes[4*i+15].scatter(thresholds, volume_castles, color='blue', label='Castle volume', s=50, alpha=0.7)
-            axes[4*i+15].set_xlabel('Thresholds')  # Label for X-axis
-            axes[4*i+15].set_ylabel('Volumes')  # Label for Y-axis
-            axes[4*i+15].legend()  # Add a legend to differentiate the datasets
-            axes[4*i+15].grid(True)
+            axes[4*i+15].scatter(thresholds, volume_pits, color='blue', label='Pit volume', s=25, alpha=0.7)
+            axes[4*i+15].scatter(thresholds, volume_castles, color='red', label='Castle volume', s=25, alpha=0.7)
+            axes[4*i+15].set_xlabel('Thresholds', fontsize = 8)  # Label for X-axis
+            axes[4*i+15].set_ylabel('Volumes', fontsize = 8, ha = 'right')  # Label for Y-axis
+            axes[4*i+15].legend(fontsize = 6)  # Add a legend to differentiate the datasets
+            # axes[4*i+15].grid(True)
+            axes[4*i+15].set_xticks(thresholds)
+            axes[4*i+15].set_xticklabels(thresholds, fontsize=5)
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         fig.subplots_adjust(left=0.2, hspace=0.4)
         plt.savefig(self.projectDirectory + self.lp.tankID + '.jpg')
