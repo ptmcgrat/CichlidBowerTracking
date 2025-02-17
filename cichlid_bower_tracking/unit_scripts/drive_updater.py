@@ -233,6 +233,10 @@ class DriveUpdater:
         # axes[7].grid(True)
         axes[7].set_xticks(thresholds)
         axes[7].set_xticklabels(thresholds, fontsize=5, rotation=45)
+        axes[7].set_ylim(-250, 250)
+        y_ticks = [-200,-150, -100, -50,  0, 50, 100, 150, 200]
+        axes[7].set_yticks(y_ticks)
+        axes[7].set_yticklabels(y_ticks, fontsize = 5)
 
         axes[8].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
         axes[9].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
@@ -245,6 +249,9 @@ class DriveUpdater:
         # axes[11].grid(True)
         axes[11].set_xticks(thresholds)
         axes[11].set_xticklabels(thresholds, fontsize=5, rotation=45)
+        axes[11].set_ylim(-250, 250)
+        axes[11].set_yticks(y_ticks)
+        axes[11].set_yticklabels(y_ticks, fontsize = 5)
 
         for i,date in enumerate([x for x in days.keys()][::-1]):
             day=date.split(' ')[0]
@@ -274,6 +281,9 @@ class DriveUpdater:
             # axes[4*i+15].grid(True)
             axes[4*i+15].set_xticks(thresholds)
             axes[4*i+15].set_xticklabels(thresholds, fontsize=5,rotation=45)
+            axes[4*i + 15].set_ylim(-250, 250)
+            axes[4*i+15].set_yticks(y_ticks)
+            axes[4*i+15].set_yticklabels(y_ticks, fontsize = 5)
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         fig.subplots_adjust(left=0.2, hspace=0.4)
         plt.savefig(self.projectDirectory + self.lp.tankID + '.jpg')
