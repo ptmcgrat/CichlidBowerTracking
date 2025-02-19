@@ -84,7 +84,7 @@ class DriveUpdater:
             # daily_bower [(mask == 0)] = 0
             # daily_bower[(self.depth_mask == 0)] = np.nan
 
-        bower_mask = np.where(total_depth_change < 0.3, -1, np.where(total_depth_change > 0.3,1,0))
+        bower_mask = np.where(total_depth_change < -1.0, -1, np.where(total_depth_change > 1.0,1,0))
         daily_bower [(bower_mask == 0)] = 0
         daily_bower[(self.depth_mask == 0)] = np.nan
 
@@ -217,8 +217,8 @@ class DriveUpdater:
         
         bower_twohours, twohours_volume_pits, twohours_volume_castles = self._calculateBower(depth_last - depth_twohours,total_depth_change, thresholds) 
 
-        axes[8].set_ylabel('2 Hour ago Depth\nThreshold:'+str(thresholds[1])+'\nPit volume change:'+str(int(twohours_volume_pits[1]))+'\nCastle volume change:'+str(int(twohours_volume_castles[1])),fontsize=10, rotation=90, labelpad=20)
-        axes[4].set_ylabel('Hour ago Depth\nThreshold:'+str(thresholds[1])+'\nPit volume change:'+str(int(hour_volume_pits[1]))+'\nCastle volume change:'+str(int(hour_volume_castles[1])),fontsize=10, rotation=90, labelpad=20)
+        axes[8].set_ylabel('2 Hour ago Depth\nThreshold:'+str(thresholds[4])+'\nPit volume change:'+str(int(twohours_volume_pits[4]))+'\nCastle volume change:'+str(int(twohours_volume_castles[4])),fontsize=10, rotation=90, labelpad=20)
+        axes[4].set_ylabel('Hour ago Depth\nThreshold:'+str(thresholds[4])+'\nPit volume change:'+str(int(hour_volume_pits[4]))+'\nCastle volume change:'+str(int(hour_volume_castles[4])),fontsize=10, rotation=90, labelpad=20)
        
         median_height = np.nanmedian(depth_first)
 
@@ -274,7 +274,7 @@ class DriveUpdater:
             depth_stop[(self.depth_mask == 0)] = np.nan
             bower, volume_pits, volume_castles = self._calculateBower(depth_stop - depth_start, total_depth_change, thresholds)
 
-            axes[4*i+12].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nThreshold:'+str(thresholds[1])+'\nPit volume change:'+str(int(volume_pits[1]))+'\nCastle volume change:' + str(int(volume_castles[1])),fontsize=10, rotation=90, labelpad=20)
+            axes[4*i+12].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nThreshold:'+str(thresholds[4])+'\nPit volume change:'+str(int(volume_pits[4]))+'\nCastle volume change:' + str(int(volume_castles[4])),fontsize=10, rotation=90, labelpad=20)
             
             axes[4*i+12].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
             axes[4*i+13].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)

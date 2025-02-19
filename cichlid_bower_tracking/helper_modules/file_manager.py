@@ -139,7 +139,7 @@ class FileManager():
 			frame_filenames_log.append(frame.std_file)
 
 		diff = [item for item in frame_filenames_log if item not in frame_filenames_cloud]
-		print("Files not uploaded in projectID: {self.projectID} are: \n"+diff)
+		print('Files not uploaded in projectID: '+ self.projectID+ ' are:'+' '.join(diff))
 		# pdb.set_trace()
 
 		if self.lp.malformed_file:
