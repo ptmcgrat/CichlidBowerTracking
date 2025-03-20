@@ -7,6 +7,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('AnalysisType', type = str, choices=['Prep','Depth','Cluster','ClusterClassification', 'TrackFish','AddFishSex','Summary','All'], help = 'What type of analysis to perform')
 parser.add_argument('SubjectID', type = str, help = 'Identify the projects you want to analyze.')
 parser.add_argument('ProjectID', type = str, help = 'Identify the projects you want to analyze.')
+parser.add_argument('--ModelID', type = str, help = 'Identify the model you want to use for inference.')
 parser.add_argument('--Workers', type = int, help = 'Number of workers to use to analyze data')
 parser.add_argument('--VideoIndex', nargs = '+', help = 'Restrict which videos to run the analysis on')
 parser.add_argument('--DownloadOnly', action = 'store_true', help = 'Use this flag to predownload the data')
@@ -14,7 +15,7 @@ parser.add_argument('--AnalysisOnly', action = 'store_true', help = 'Use this fl
 
 args = parser.parse_args()
 
-fm_obj = FM()
+fm_obj = FM(modelID=args.ModelID)
 fm_obj.setProjectID(args.SubjectID,args.ProjectID)
 
 # Run appropriate analysis script
@@ -55,7 +56,9 @@ elif args.AnalysisType == 'Cluster':
 elif args.AnalysisType == 'ClusterClassification':
 	from cichlid_bower_tracking.data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP
 
-	tdcp_obj = TDCP(self.fileManager)
+	# tdcp_obj = TDCP(self.fileManager)
+	tdcp_obj = TDCP(fm_obj)
+	tdcp_obj.fileManager.downloadProjectData(args.AnalysisType)
 	tdcp_obj.validateInputData()
 	tdcp_obj.predictLabels()
 	tdcp_obj.createSummaryFile()

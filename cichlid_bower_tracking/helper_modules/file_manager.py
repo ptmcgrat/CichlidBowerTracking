@@ -5,7 +5,7 @@ import pandas as pd
 # config_file_path = '/Users/pkolipaka3/.config/rclone/rclone.conf'
 
 class FileManager():
-    def __init__(self, analysisID = 'MC_multi', projectID = None, rcloneRemote = 'ptm_dropbox:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
+    def __init__(self, analysisID = 'MC_multi', modelID = None, projectID = None, rcloneRemote = 'p_dropbox:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
         # Identify directory for temporary local files
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
             self._identifyPiDirectory()
@@ -47,7 +47,10 @@ class FileManager():
         if projectID is not None:
             self.setProjectID(projectID, check_exists = check)
         
-        self._createMLData()
+        if modelID is not None:
+            
+            self.modelID = modelID
+            self._createMLData()
 
         # Create file names and parameters
         self._createPiData()
@@ -228,18 +231,19 @@ class FileManager():
 
     def _createMLData(self):
 
-        self.localMLDir = self.localMasterDir + '__MachineLearningModels/' + self.analysisID + '/'
+        self.localMLDir = self.localMasterDir + '__MachineLearningModels/' + self.modelID+'/'+self.analysisID + '/'
 
         self.localYolov5WeightsFile = self.localMLDir + 'YOLOV5/best.pt'
         self.localYolov5InfoDir = self.localMLDir + 'YOLOV5/ModelInfo'
 
         self.localSexClassificationModelFile = self.localMLDir + 'SexClassification/' + self.analysisID + '/best.h5'
 
-        self.local3DModelDir = self.localMLDir + 'VideoModels/' + self.analysisID + '/'
+        self.local3DModelDir = self.localMLDir +'/'+self.modelID+'/' + self.analysisID + '/'
         self.local3DModelTempDir = self.local3DModelDir + 'Temp/'
 
         self.localVideoModelFile = self.local3DModelDir + 'model.pth'
-        self.localVideoClassesFile = self.local3DModelDir + 'classInd.txt'
+        # self.localVideoClassesFile = self.local3DModelDir + 'classInd.txt'
+        self.localVideoClassesFile = self.local3DModelDir + 'source.json'
         self.localModelCommandsFile = self.local3DModelDir + 'commands.log'
         self.localVideoProjectsFile = self.local3DModelDir + 'videoToProject.csv'
         self.localVideoLabels = self.local3DModelDir + 'confusionMatrix.csv'
@@ -316,6 +320,7 @@ class FileManager():
             self.downloadData(self.localAnalysisDir)
             self.downloadData(self.localTroubleshootingDir)
             if self.modelID is not None:
+                # pdb.set_trace()
                 self.downloadData(self.local3DModelDir)
             #self.createDirectory(self.localPaceDir)
 
