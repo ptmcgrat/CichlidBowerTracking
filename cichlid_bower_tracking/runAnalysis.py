@@ -4,7 +4,7 @@ from helper_modules.file_manager import FileManager as FM
 
 # Create arguments for the script
 parser = argparse.ArgumentParser(description='This script is used to analyze bower building data taken using PiCameras and Realsense Depth Sensors') 
-subparser = parser.add_subparsers(required = True, title='Analysis Commands',
+subparser = parser.add_subparsers(required = True, title='Analysis Commands', dest='AnalysisType',
 								   description='These are the valid commands that you can run')
 
 a_st = subparser.add_parser('AnalyzeStates', description = 'This is used to update the AnalysisStates.csv with the current state of analysis for each projectID')
@@ -43,20 +43,15 @@ summary.add_argument('AnalysisID', type=str, help='The AnalysisID you want to an
 args = parser.parse_args()
 analysisID = args.AnalysisID
 
-
-
 # Identify projects to run analysis on
 fm_obj = FM(analysisID)
 s_dt = fm_obj.s_dt
-
-projectIDs = args.ProjectIDs if args.ProjectIDs is not None else fm_obj.s_dt['ProjectIDs']
-pdb.set_trace()
-
 if args.AnalysisType == 'AnalyzeStates':
-	for projectID, row in fm_obj.s_dt.iterrows():
+	projectIDs = s_dt.index.to_list()
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
 			continue
-		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+		print('Determining state for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 		if 'RunAnalysis' not in fm_obj.s_dt:
 			fm_obj.s_dt[k] = True
 
@@ -66,17 +61,17 @@ if args.AnalysisType == 'AnalyzeStates':
 		for k, v in out_data.items():
 			if k not in fm_obj.s_dt:
 				fm_obj.s_dt[k] = False
-			fm_obj.s_dt.loc[dt.projectID == projectID, k] = v
+			s_dt.loc[projectID, k] = v
 
-	fm_obj.s_dt.to_csv(fm_obj.s_dt.localSummaryFile, index = True)
-	fm_obj.uploadData(fm_obj.s_dt.localSummaryFile)
 
 elif args.AnalysisType == 'Prep':
 	from data_preparers.prep_preparer import PrepPreparer as PrP
-	for projectID, row in fm_obj.s_dt.iterrows():
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.StartingFiles == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
 			continue
-		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+		print('Running prep for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
 		fm_obj.setProjectID(projectID)
 		prp_obj = PrP(fm_obj)
@@ -84,10 +79,16 @@ elif args.AnalysisType == 'Prep':
 		prp_obj.validateInputData()
 		prp_obj.prepData()
 		prp_obj.uploadProjectData(delete = False)
+		s_dt.loc[projectID,'Prep'] = True
 
 elif args.AnalysisType == 'Depth':
 	from data_preparers.depth_preparer import DepthPreparer as DP
-	for projectID, row in fm_obj.s_dt.iterrows():
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
+		if 's7' in projectID or 's6' in projectID:
+			continue
 		if projectID not in projectIDs:
 			continue
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
@@ -100,10 +101,11 @@ elif args.AnalysisType == 'Depth':
 		dp_obj.createDepthFigures()
 			#dp_obj.createRGBVideo()
 		dp_obj.uploadProjectData(delete = False)
+		s_dt.loc[projectID,'Depth'] = True
 
 	writer = pypdf.PdfFileWriter()
 	for subjectID, row in fm_obj.s_dt.iterrows():
-		for projectID in row.ProjectIDs.split(',,'):
+		for projectID in s_dt.loc[projectIDs].split(',,'):
 			fm_obj.setProjectID(subjectID, projectID)
 			f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
 			reader = pypdf.PdfFileReader(f)
@@ -118,7 +120,10 @@ elif args.AnalysisType == 'Depth':
 
 elif args.AnalysisType == 'Cluster':
 	from data_preparers.cluster_preparer import ClusterPreparer as CP
-	for projectID, row in fm_obj.s_dt.iterrows():
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
 			continue
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
@@ -137,9 +142,13 @@ elif args.AnalysisType == 'Cluster':
 			cp_obj.validateInputData()
 			cp_obj.runClusterAnalysis()
 			cp_obj.uploadProjectData(delete = False)
+		s_dt.loc[projectID,'Cluster'] = True
 
 elif args.AnalysisType == 'AnnotateVideos':
 	from cichlid_bower_tracking.data_preparers.manual_label_video_preparer import ManualLabelVideoPreparer as MLVP
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+
 	for projectID, row in fm_obj.s_dt.iterrows():
 		if projectID not in projectIDs:
 			continue
@@ -147,12 +156,28 @@ elif args.AnalysisType == 'AnnotateVideos':
 		mlv_obj = MLVP(fm_obj, args.Initials, args.Number)
 		mlv_obj.validateInputData()
 		mlv_obj.labelVideos()
+	s_dt.loc[projectID,'AnnotateVideos'] = True
 
 elif args.AnalysisType == 'TrainModel':
 	from cichlid_bower_tracking.data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
+	if (s_dt.AnnotateVideos == False).sum() != 0:
+		print('Warning: You are training a model even though all projects have not been annotated')
+
+	tdm_obj = TDMP(fm_obj, modelID)
+	tdm_obj.validateInputData()
+	tdm_obj.create3DModel()
+
+elif args.AnalysisType == 'ClassifyClusters':
+	from cichlid_bower_tracking.data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+
 	for projectID, row in fm_obj.s_dt.iterrows():
 
-		fm_obj.setProjectID(projectID)
-		tdm_obj = TDMP(fm_obj, modelID)
-		tdm_obj.validateInputData()
-		tdm_obj.create3DModel()
+		tdcp_obj = TDCP(self.fileManager, modelID)
+		tdcp_obj.validateInputData()
+		tdcp_obj.predictLabels()
+		tdcp_obj.createSummaryFile()
+
+s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+fm_obj.uploadData(fm_obj.localSummaryFile)

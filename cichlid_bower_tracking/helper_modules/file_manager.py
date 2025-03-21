@@ -23,12 +23,12 @@ class FileManager():
         self.localAnalysisStatesDir = self.localMasterAnalysisDir + analysisID + '/'
         self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
         if not self.checkFileExists(self.localSummaryFile):
-            outtext = subprocess.run(['rclone', 'lsf', self.localMasterAnalysisDir], capture_output = True).stdout.decode().split('/\n')
+            outtext = subprocess.run(['rclone', 'lsf', self.localMasterAnalysisDir.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('/\n')
             raise FileNotFoundError('Cant find '+ analysisID + '.csv.\nValid analysisIDs are: ' + ','.join(outtext))
         self.analysisID = analysisID
 
         # Store branch you are running
-        self.branch_name = git.Repo().head.ref.name
+        self.branch_name = git.Repo('..').head.ref.name
 
         # Read in analysis state information
         self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
@@ -57,20 +57,29 @@ class FileManager():
 
     def setProjectID(self, projectID):
         self.projectID = projectID
+        self._createProjectData(projectID)
         if 'DissectionTime' in self.s_dt:
             self.dissectionTime = self.s_dt.loc[projectID]['DissectionTime']
-        self._createProjectData(projectID)
+        else:
+            self.dissectionTime = self.lp.frames[-1].time
+
 
     def getProjectStates(self):
         # Dictionary to hold row of data
-        row_data = {'tankID':'', 'videoIDs':'','StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':False, 'ClusterClassification':False, 'Summary': False, 'Notes': ''}
+        row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':False, 'ManualAnnotation': False, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
 
-        print('Checking project ' + self.projectID + ': ', end = '')
+        #print('Checking project ' + self.projectID + ': ', end = '')
         try:
             self.downloadData(self.localLogfile)
         except FileNotFoundError:
             return row_data
         self.lp = LP(self.localLogfile)
+        row_data['videoIDs'] = 'VideoIndices: ' + ','.join([str(x) for x in range(len(self.lp.movies))])
+        # Get all files on Dropbox
+        allfiles = []
+        for directory in [self.localProjectDir,self.localPrepDir,self.localVideoDir,self.localTroubleshootingDir,self.localAnalysisDir]:
+            outfiles = subprocess.run(['rclone','lsf',directory.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('\n')
+            allfiles += [directory + x for x in outfiles]
 
         # List the files needed for each analysis
         necessaryFiles = {}
@@ -78,6 +87,7 @@ class FileManager():
         necessaryFiles['Prep'] = [self.localDepthCropFile,self.localTransMFile,self.localVideoCropFile]
         necessaryFiles['Depth'] = [self.localSmoothDepthFile]
         necessaryFiles['Cluster'] = [self.localAllClipsDir, self.localManualLabelClipsDir, self.localManualLabelFramesDir]
+        necessaryFiles['ManualAnnotation'] = [self.localManualClipsFile]
         necessaryFiles['ClusterClassification'] = [self.localAllLabeledClustersFile]
         necessaryFiles['Summary'] = [self.localSummaryDir]
 
@@ -98,9 +108,12 @@ class FileManager():
         for analysis_type, analysis_files in necessaryFiles.items():
             row_data[analysis_type] = True
             for af in analysis_files:
-                if not self.checkFileExists(af):
+                if af not in allfiles:
+                    if '.mp4' in af:
+                        continue
+                    if analysis_type == 'StartingFiles':
+                        print('Missing file: ' + af)
                     row_data[analysis_type] = False
-                    break
 
         return row_data
     
@@ -161,6 +174,8 @@ class FileManager():
         self.localDepthSummaryFile = self.localSummaryDir + 'DataSummary.xlsx'
         self.localDailyDepthSummaryFigure = self.localSummaryDir + 'DailyDepthSummary.pdf'
         self.localHourlyDepthSummaryFigure = self.localSummaryDir + 'HourlyDepthSummary.pdf'
+
+        self.localManualClipsFile = self.localAnalysisDir + 'ClustersManualLabels.csv'
 
         # Files created by cluster classifier preparer
         self.localTempClassifierDir = self.localProjectDir + 'TempClassifier/'

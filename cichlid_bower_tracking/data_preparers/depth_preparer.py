@@ -72,6 +72,7 @@ class DepthPreparer:
     def createLogFile(self):
         self.fileManager.createDirectory(self.fileManager.localLogfileDir)
         with open(self.fileManager.localDepthLogfile,'w') as f:
+            print('GitBranch: ' + self.fileManager.branch_name, file = f)
             print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
             print('NumpyVersion: ' + np.__version__, file = f)
             print('Scikit-VideoVersion: ' + skvideo.__version__, file = f)
@@ -149,11 +150,13 @@ class DepthPreparer:
             assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
         except:
             print('Fix logfile for tankreset start and stop')
-
-        previous_start = 0
-        for i,(start_time,stop_time) in enumerate(zip(self.lp.tankresetstart,self.lp.tankresetstop)):
-            depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time < start_time),'Trial'] = 'Trial_' + str(i+1)
-            depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time > start_time) & (depth_dt.Time <= stop_time),'Trial'] = 'Trial_' + str(i+1) + '_Reset'
+        if len(self.lp.tankresetstart) == 0:
+            depth_dt['Trial'] = 'Trial_1'
+        else:
+            previous_start = 0
+            for i,(start_time,stop_time) in enumerate(zip(self.lp.tankresetstart,self.lp.tankresetstop)):
+                depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time < start_time),'Trial'] = 'Trial_' + str(i+1)
+                depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time > start_time) & (depth_dt.Time <= stop_time),'Trial'] = 'Trial_' + str(i+1) + '_Reset'
 
         # Save interpolated data
         

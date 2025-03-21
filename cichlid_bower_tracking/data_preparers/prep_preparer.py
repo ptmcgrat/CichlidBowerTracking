@@ -46,6 +46,7 @@ class PrepPreparer:
 
     def _createLogFile(self):
         with open(self.fileManager.localPrepLogfile,'w') as f:
+            print('GitBranch: ' + fm_obj.branch_name)
             print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
             print('NumpyVersion: ' + np.__version__, file = f)
             print('MatplotlibVersion: ' + matplotlib.__version__, file = f)
@@ -236,5 +237,5 @@ class PrepPreparer:
         ax4.set_title("Registered Pi RGB image with video and depth crop")
 
         fig.savefig(self.fileManager.localPrepSummaryFigure, dpi=300)
-
+        fig.clf()
         #plt.show()
