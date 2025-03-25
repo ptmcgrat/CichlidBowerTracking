@@ -31,12 +31,13 @@ class FileManager():
         self.branch_name = subprocess.run(['git','rev-parse','--abbrev-ref','HEAD'], capture_output = True).stdout.decode()
 
         # Read in analysis state information
-        self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
-        self.localAnalysisStatesDir = self.localMasterAnalysisDir + analysisID + '/'
-        self.downloadData(self.localSummaryFile)
-        self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
-        if 'DissectionTime' in self.s_dt:
-            self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
+        if analysisID is not None:
+            self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
+            self.localAnalysisStatesDir = self.localMasterAnalysisDir + analysisID + '/'
+            self.downloadData(self.localSummaryFile)
+            self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
+            if 'DissectionTime' in self.s_dt:
+                self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
 
         # Create filenames and parameters
         self.createFiles(projectID, modelID)
