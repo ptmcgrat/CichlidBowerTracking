@@ -612,7 +612,7 @@ class FileManager():
                 else:
                     pass
             else:
-                raise FileNotFoundError('Error downloading: ' + local_path + relative_name)
+                raise FileNotFoundError('Error downloading: ' + cloud_path + relative_name)
 
         if tarred:
             # Untar directory
