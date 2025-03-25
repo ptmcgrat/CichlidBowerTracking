@@ -40,16 +40,17 @@ class FileManager():
                 self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
 
         # Create filenames and parameters
-        self.createFiles(projectID, modelID)
+        self.createFiles(projectID, modelID, analysisID)
 
-    def createFiles(self, projectID, modelID):
+    def createFiles(self, projectID, modelID, analysisID):
         if projectID is not None:
             self.setProjectID(projectID)
         if modelID is not None:
             self._createMLData(modelID)
         if self.system == 'pi':
             self._createPiData()
-        self._createAnnotationData()
+        if analysisID is not None:
+            self._createAnnotationData()
         self._createParameters()
 
     def setSubjectID(self, subjectID, dissection_time):
