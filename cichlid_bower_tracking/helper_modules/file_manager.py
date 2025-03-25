@@ -593,7 +593,7 @@ class FileManager():
 
         if relative_name + '/' in cloud_objects: #directory
             output = subprocess.run(['rclone', 'copy', cloud_path + relative_name, local_path + relative_name], capture_output = True, encoding = 'utf-8')
-            
+            pdb.set_trace()
         elif relative_name in cloud_objects: #file
             output = subprocess.run(['rclone', 'copy', cloud_path + relative_name, local_path], capture_output = True, encoding = 'utf-8')
         else:
