@@ -19,21 +19,21 @@ class FileManager():
         else:
             raise Exception('Cant find master directory (' + masterDir + ') in rclone remote (' + rcloneRemote + '')
         # Store analysis state information
-        self.localMasterAnalysisDir = self.localMasterDir + '__AnalysisStates/'
-        self.localAnalysisStatesDir = self.localMasterAnalysisDir + analysisID + '/'
-        self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
-        if not self.checkFileExists(self.localSummaryFile):
-            outtext = subprocess.run(['rclone', 'lsf', self.localMasterAnalysisDir.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('/\n')
-            raise FileNotFoundError('Cant find '+ analysisID + '.csv.\nValid analysisIDs are: ' + ','.join(outtext))
-        self.analysisID = analysisID
-
+        
         # Store branch you are running
         self.branch_name = subprocess.run(['git','rev-parse','--abbrev-ref','HEAD'], capture_output = True).stdout.decode()
 
         # Read in analysis state information
         if analysisID is not None:
-            self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
+            self.localMasterAnalysisDir = self.localMasterDir + '__AnalysisStates/'
             self.localAnalysisStatesDir = self.localMasterAnalysisDir + analysisID + '/'
+            self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
+            
+            if not self.checkFileExists(self.localSummaryFile):
+                outtext = subprocess.run(['rclone', 'lsf', self.localMasterAnalysisDir.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('/\n')
+                raise FileNotFoundError('Cant find '+ analysisID + '.csv.\nValid analysisIDs are: ' + ','.join(outtext))
+            self.analysisID = analysisID
+
             self.downloadData(self.localSummaryFile)
             self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
             if 'DissectionTime' in self.s_dt:
