@@ -394,8 +394,11 @@ class CichlidTracker:
         try:
             print(str(text), file = self.lf, flush = True)
         except Exception as e:
-            self.lf = open(self.loggerFile, 'a', buffering = 1) # line buffered
-            print(str(text), file = self.lf, flush = True)
+            try:
+                self.lf = open(self.loggerFile, 'a', buffering = 1) # line buffered
+                print(str(text), file = self.lf, flush = True)
+            except Exception as e:
+                pass
         print(str(text), file = sys.stderr, flush = True)
 
     def _returnRegColor(self, crop = True):
