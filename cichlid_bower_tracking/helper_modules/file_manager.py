@@ -1,4 +1,4 @@
-import os, subprocess, pdb, platform, shutil, git
+import os, subprocess, pdb, platform, shutil
 from helper_modules.log_parser import LogParser as LP
 import pandas as pd 
 
@@ -28,7 +28,7 @@ class FileManager():
         self.analysisID = analysisID
 
         # Store branch you are running
-        self.branch_name = git.Repo('..').head.ref.name
+        self.branch_name = subprocess.run(['git','rev-parse','--abbrev-ref','HEAD'], capture_output = True).stdout.decode()
 
         # Read in analysis state information
         self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
