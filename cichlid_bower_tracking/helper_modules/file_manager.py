@@ -63,8 +63,10 @@ class FileManager():
         if 'DissectionTime' in self.s_dt:
             self.dissectionTime = self.s_dt.loc[projectID]['DissectionTime']
         else:
-            self.dissectionTime = self.lp.frames[-1].time
-
+            try:
+                self.dissectionTime = self.lp.frames[-1].time
+            except:
+                continue
     def getProjectStates(self):
         # Dictionary to hold row of data
         row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':False, 'ManualAnnotation': False, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
@@ -600,7 +602,7 @@ class FileManager():
                 else:
                     pass
             else:
-                pdb.set_trace()
+                #pdb.set_trace()
                 raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
         # pdb.set_trace()
         if not os.path.exists(local_path + relative_name):
