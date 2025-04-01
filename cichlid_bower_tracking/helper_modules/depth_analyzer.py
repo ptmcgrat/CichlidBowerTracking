@@ -3,12 +3,12 @@ import numpy as np
 import datetime, sys, pdb
 from skimage import morphology
 from types import SimpleNamespace
+from PIL import Image,ImageDraw
 
 class DepthAnalyzer:
     # Contains code process depth data for figure creation
 
-    def __init__(self, fileManager, smooth_depth=True):
-        self.smooth_depth = smooth_depth
+    def __init__(self, fileManager):
         self.fileManager = fileManager
         self.lp = self.fileManager.lp
         self.first_good_index = self.lp.frames
@@ -18,19 +18,10 @@ class DepthAnalyzer:
     def _loadData(self):
         # Loads depth tray information and smoothedDepthData from files that have already been downloaded
 
-        if self.smooth_depth:
-            try:
-                self.depth_data
-            except AttributeError:
-                self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
-        else:
-            try:
-                self.depth_data
-            except AttributeError:
-                self.depth_data = np.load(self.fileManager.localInterpDepthFile)
-            except FileNotFoundError:
-                self.depth_data = None
-
+        try:
+            self.depth_data
+        except AttributeError:
+            self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
 
     def t_to_index(self, t):
         try:
@@ -40,6 +31,7 @@ class DepthAnalyzer:
                 index = len(self.lp.frames) - 1
             else:
                 index = 0
+        print(index)
         return index
 
     def clip_data(self, t0, t1):
@@ -132,6 +124,7 @@ class DepthAnalyzer:
         except ValueError:
             last_index = len(self.lp.frames) - 1
 
+        #print(str(first_index) + ': ' + str(last_index))
         change = self.depth_data[first_index] - self.depth_data[last_index]
 
         if masked:

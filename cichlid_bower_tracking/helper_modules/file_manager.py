@@ -65,7 +65,6 @@ class FileManager():
         else:
             self.dissectionTime = self.lp.frames[-1].time
 
-
     def getProjectStates(self):
         # Dictionary to hold row of data
         row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':False, 'ManualAnnotation': False, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
@@ -83,7 +82,7 @@ class FileManager():
             outfiles = subprocess.run(['rclone','lsf',directory.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('\n')
             allfiles += [directory + x for x in outfiles]
 
-        # List the files needed for each analysis
+        # List the files created by each analysis
         necessaryFiles = {}
         necessaryFiles['StartingFiles'] = [self.localLogfile, self.localPrepDir, self.localFrameTarredDir, self.localVideoDir, self.localFirstFrame, self.localLastFrame, self.localPiRGB, self.localFirstDepthRGB, self.localLastDepthRGB]
         necessaryFiles['Prep'] = [self.localDepthCropFile,self.localTransMFile,self.localVideoCropFile]
@@ -240,13 +239,8 @@ class FileManager():
         self.localEmailCredentialFile = self.localCredentialDir + 'iof_credentials/sendgrid_key.secret'
 
     def _createAnnotationData(self):
-        self.localAnnotationDir = self.localMasterDir + '__AnnotatedData/' + self.analysisID + '/'
-        self.localObjectDetectionDir = self.localAnnotationDir + 'ObjectDetection/'
+        self.localAnnotationDir = self.localMasterDir + '__AnnotatedData/'
         self.local3DVideosDir = self.localAnnotationDir + 'LabeledVideos/'
-
-        self.localYolov5AnnotationsDir = self.localObjectDetectionDir + 'YOLOV5_Annotations/'
-
-        self.localMaleFemalesVideosDir = self.localAnnotationDir + 'MaleFemale/'
 
 
         self.localLabeledClipsFile = self.local3DVideosDir + 'ManualLabels.csv'
@@ -597,6 +591,8 @@ class FileManager():
                 pdb.set_trace()
         elif relative_name in cloud_objects: #file
             output = subprocess.run(['rclone', 'copy', cloud_path + relative_name, local_path], capture_output = True, encoding = 'utf-8')
+            if output.returncode != 0:
+                pdb.set_trace()
         else:
             if allow_errors:
                 if not quiet:
@@ -604,6 +600,7 @@ class FileManager():
                 else:
                     pass
             else:
+                pdb.set_trace()
                 raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
         # pdb.set_trace()
         if not os.path.exists(local_path + relative_name):

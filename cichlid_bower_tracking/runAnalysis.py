@@ -1,4 +1,4 @@
-import argparse, datetime, pdb
+import argparse, datetime, pdb, multiprocessing
 import PyPDF2 as pypdf
 from helper_modules.file_manager import FileManager as FM
 
@@ -95,22 +95,24 @@ elif args.AnalysisType == 'Depth':
 
 		fm_obj.setProjectID(projectID)
 		dp_obj = DP(fm_obj)
-		dp_obj.downloadProjectData()
+		#dp_obj.downloadProjectData()
 		dp_obj.validateInputData()
 		dp_obj.createSmoothedArray()
 		dp_obj.createDepthFigures()
 			#dp_obj.createRGBVideo()
 		dp_obj.uploadProjectData(delete = False)
 		s_dt.loc[projectID,'Depth'] = True
-
-	writer = pypdf.PdfFileWriter()
-	for subjectID, row in fm_obj.s_dt.iterrows():
-		for projectID in s_dt.loc[projectIDs].split(',,'):
-			fm_obj.setProjectID(subjectID, projectID)
-			f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
-			reader = pypdf.PdfFileReader(f)
-			for page_number in range(reader.numPages):
-				writer.addPage(reader.getPage(page_number))
+	
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
+	writer = pypdf.PdfWriter()
+	for projectID in s_dt[(s_dt.Depth == True)].index.sort_values().to_list():
+		fm_obj.setProjectID(projectID)
+		fm_obj.downloadData(fm_obj.localDailyDepthSummaryFigure)
+		f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
+		reader = pypdf.PdfReader(f)
+		for page_number in range(len(reader.pages)):
+			writer.add_page(reader.pages[page_number])
 	with open(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf', 'wb') as f:
 		writer.write(f)
 	print('Finished analysis: ' + str(datetime.datetime.now()), flush = True)
@@ -123,6 +125,11 @@ elif args.AnalysisType == 'Cluster':
 	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
 
+	if args.Workers is None:
+		workers = multiprocessing.cpu_count()
+	else:
+		workers = args.Workers
+
 	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
 			continue
@@ -130,14 +137,14 @@ elif args.AnalysisType == 'Cluster':
 
 		fm_obj.setProjectID(projectID)
 
-		if ':' in row.VideoIDs:
-			videoIndices = row.VideoIDs_new.split(': ')[1].split(',')
+		if ':' in row.videoIDs:
+			videoIndices = row.videoIDs.split(': ')[1].split(',')
 		else:
 			videoIndices = range(range(len(fm_obj.lp.movies)))
 
 		for videoIndex in videoIndices:
-	
-			cp_obj = CP(fm_obj, int(videoIndex),num_workers)
+			
+			cp_obj = CP(fm_obj, int(videoIndex), workers)
 			cp_obj.downloadProjectData()
 			cp_obj.validateInputData()
 			cp_obj.runClusterAnalysis()

@@ -1,6 +1,5 @@
 import subprocess, os, pdb, sys
 import datetime
-import skvideo
 import numpy as np
 import scipy
 import shutil
@@ -53,9 +52,9 @@ class ClusterPreparer():
 		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
 		# with open(self.fileManager.localClusterLogfile,'w') as f:
 		with open(self.videoObj.localLogfile,'w') as f:
+			print('GitBranch: ' + self.fileManager.branch_name, file = f)
 			print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
 			print('NumpyVersion: ' + np.__version__, file = f)
-			print('Scikit-VideoVersion: ' + skvideo.__version__, file = f)
 			print('ScipyVersion: ' + scipy.__version__, file = f)
 			print('Username: ' + os.getenv('USER'), file = f)
 			print('Nodename: ' + os.uname().nodename, file = f)

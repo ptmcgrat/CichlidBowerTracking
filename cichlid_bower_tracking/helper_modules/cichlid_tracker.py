@@ -108,7 +108,7 @@ class CichlidTracker:
 
         self._closeFiles()
 
-    def monitorCommands(self, delta = 20):
+    def monitorCommands(self, delta = 60):
         # This function checks the master Controller Google Spreadsheet to determine if a command was issued (delta = seconds to recheck)
         self.googleController.modifyPiGS('Status', 'AwaitingCommand')
         #self.googleController.modifyPiGS('Error', '', ping = False)
@@ -126,9 +126,14 @@ class CichlidTracker:
                 continue
 
             if command not in ['None',None]:
+
                 self.googleController.modifyPiGS('Error', '', ping = False)
 
                 print(command + '\t' + projectID + '\t' + analysisID)
+                if command not in self.commands:
+                    self._reinstructError(command + ' is not a valid command. Options are ' + str(self.commands))
+                    continue
+
                 self.fileManager = FM(analysisID = analysisID, projectID = projectID)
                 self.projectID = projectID
                 
@@ -136,11 +141,15 @@ class CichlidTracker:
 
                 if not self.fileManager.checkFileExists(self.fileManager.localSummaryFile):
                     self._reinstructError('Must create Analysis States csv file before running: ' + self.fileManager.localSummaryFile.split('Elements')[1])
+                    continue
+
                 self.fileManager.downloadData(self.fileManager.localSummaryFile)
                 s_dt = pd.read_csv(self.fileManager.localSummaryFile)
                 if 'projectID' not in s_dt.columns:
                     self._reinstructError('projectID column most be in analysis states csv file')
+                    continue
 
+                    
                 self.analysisID = analysisID
                 self.runCommand(command)
 
@@ -158,9 +167,7 @@ class CichlidTracker:
         self.prepDirectory = self.fileManager.localPrepDir
         self.backupDirectory = self.fileManager.localBackupDir
     
-        if command not in self.commands:
-            self._reinstructError(command + ' is not a valid command. Options are ' + str(self.commands))
-
+ 
         if command == 'Stop':
             
             self.running = False
