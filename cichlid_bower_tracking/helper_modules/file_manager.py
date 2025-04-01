@@ -66,7 +66,7 @@ class FileManager():
             try:
                 self.dissectionTime = self.lp.frames[-1].time
             except:
-                continue
+                pass
     def getProjectStates(self):
         # Dictionary to hold row of data
         row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':False, 'ManualAnnotation': False, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
