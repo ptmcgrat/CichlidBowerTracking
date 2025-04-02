@@ -125,11 +125,15 @@ class DriveUpdater:
         plt.rcParams.update({'font.size': 18})
         
         local_path = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/MaskedImg.jpg"
-        self.fileManager.downloadData(local_path)
-        mask = Image.open(local_path)
-        mask = mask.convert("L")
-        mask = np.array(mask)
-        self.depth_mask = mask != 0
+        
+        try:
+            self.fileManager.downloadData(local_path)
+            mask = Image.open(local_path)
+            mask = mask.convert("L")
+            mask = np.array(mask)
+            self.depth_mask = mask != 0
+        except:
+            self.depth_max = np.ones(shape = (480,640))
 
         # Create subplots
         for i in range(num_rows):
