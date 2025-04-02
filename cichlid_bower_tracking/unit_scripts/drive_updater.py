@@ -133,7 +133,7 @@ class DriveUpdater:
             mask = np.array(mask)
             self.depth_mask = mask != 0
         except:
-            self.depth_max = np.ones(shape = (480,640))
+            self.depth_mask = np.ones(shape = (480,640))
 
         # Create subplots
         for i in range(num_rows):
