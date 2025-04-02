@@ -552,6 +552,8 @@ class FileManager():
                     os.remove(mounted_dir + d + '/temp.txt')
                 except FileNotFoundError:
                     continue
+                except OSError:
+                    continue
             
             if len(writableDirs) == 1:
                 self.localMasterDir = mounted_dir + d + '/CichlidAnalyzer/'
