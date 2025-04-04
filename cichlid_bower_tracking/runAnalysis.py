@@ -1,5 +1,4 @@
 import argparse, datetime, pdb, multiprocessing
-import PyPDF2 as pypdf
 from helper_modules.file_manager import FileManager as FM
 
 # Create arguments for the script
@@ -82,6 +81,7 @@ elif args.AnalysisType == 'Prep':
 		s_dt.loc[projectID,'Prep'] = True
 
 elif args.AnalysisType == 'Depth':
+	import PyPDF2 as pypdf
 	from data_preparers.depth_preparer import DepthPreparer as DP
 	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
