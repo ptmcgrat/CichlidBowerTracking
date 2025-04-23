@@ -73,7 +73,7 @@ num_workers = args.Workers
 
 for projectID, row in fm_obj.s_dt.iterrows():
 
-		if(is_nan(row.VideoIDs_new)):
+		if(is_nan(row.VideoIDs_new_added)):
 			continue
 
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
@@ -100,7 +100,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 
 		elif args.AnalysisType == 'Cluster':
 			from data_preparers.cluster_preparer import ClusterPreparer as CP
-			for videoIndex in row.VideoIDs_new.split(': ')[1].split(','):
+			for videoIndex in row.VideoIDs_new_added.split(': ')[1].split(','):
 				# if projectID == 'MC_s15_tr2_BowerBuilding' or projectID == 'MC_s34_tr1_BowerBuilding' or projectID == 'MC_s10_tr2_BowerBuilding' or projectID == 'MC_s12_tr1_BowerBuilding' or projectID == 'MC_s28_tr2_BowerBuilding' or projectID == 'MC_s25_tr1_BowerBuilding' or projectID == 'MC_s29_tr4_BowerBuilding' or projectID == 'MC_s7_tr2_BowerBuilding' or projectID == 'MC_s9_tr6_BowerBuilding' or projectID == 'MC_s17_tr1_BowerBuilding' :
 				# 	continue
 				# # if projectID == 'MC_s28_tr2_BowerBuilding' and (videoIndex == '0' or videoIndex == '1' or videoIndex == '2' or videoIndex == '3' or videoIndex == '4' or videoIndex == '5' or videoIndex == '6' or videoIndex == '7' or videoIndex == '8'):
