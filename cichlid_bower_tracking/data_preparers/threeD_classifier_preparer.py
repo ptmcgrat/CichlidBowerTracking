@@ -30,13 +30,17 @@ class ThreeDClassifierPreparer:
 		self.fileManager.s_dt.columns = [c.replace(' ', '_') for c in self.fileManager.s_dt.columns]
 		# pdb.set_trace()
 		row =self.fileManager.s_dt.loc[self.fileManager.projectID]
+		# pdb.set_trace()
 		videos = row['VideoIDs_new'].split(': ')[1].split(',')
-		self.videos = list(map(int, videos))
+		# videos_new = row['VideoIDs_new_added'].split(': ')[1].split(',')
+		# pdb.set_tr/ace()
+		self.videos =  list(map(int, videos))
+		# self.videos_new = list(map(int, videos_new))
 		# videos = self.fileManager.s_dt['Video']
 		
 		for videoIndex in self.videos:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			# pdb.set_trace()
+			pdb.set_trace()
 			assert os.path.exists(videoObj.localLabeledClustersFile)
 
 

@@ -2,6 +2,8 @@ import numpy as np
 import datetime, sys, pdb
 from skimage import morphology
 from types import SimpleNamespace
+import pandas as pd
+import math 
 
 class DepthAnalyzer:
     # Contains code process depth data for figure creation
@@ -177,8 +179,11 @@ class DepthAnalyzer:
         outData.thresholdCastleVolume = np.nansum(heightChangeAbs[(bowerLocations == 1) & (heightChangeAbs > threshold)])
         outData.thresholdPitVolume = np.nansum(heightChangeAbs[(bowerLocations == -1) & (heightChangeAbs > threshold)])
 
-        outData.depthBowerIndex = (outData.thresholdCastleVolume - outData.thresholdPitVolume) / (outData.thresholdCastleVolume + outData.thresholdPitVolume)
-
+        if (outData.thresholdCastleVolume + outData.thresholdPitVolume) != 0:
+            outData.depthBowerIndex = (outData.thresholdCastleVolume - outData.thresholdPitVolume) / (outData.thresholdCastleVolume + outData.thresholdPitVolume)
+        else:
+            outData.depthBowerIndex = 0
+            
         return outData
 
     def _checkTimes(self, t0, t1=None):
@@ -220,17 +225,51 @@ class ClusterAnalyzer:
         self.clusterData = pd.read_csv(self.fileManager.localAllLabeledClustersFile, index_col='TimeStamp',
                                        parse_dates=True, infer_datetime_format=True)
         self._appendDepthCoordinates()
-        with open(self.fileManager.localTrayFile) as f:
-            line = next(f)
-            tray = line.rstrip().split(',')
-            self.tray_r = [int(x) for x in tray]
-            if self.tray_r[0] > self.tray_r[2]:
-                self.tray_r = [self.tray_r[2], self.tray_r[1], self.tray_r[0], self.tray_r[3]]
-            if self.tray_r[1] > self.tray_r[3]:
-                self.tray_r = [self.tray_r[0], self.tray_r[3], self.tray_r[2], self.tray_r[1]]
+        self.x_max,self.x_min,self.y_max,self.y_min=0,0,0,0
 
-        self.cropped_dims = [self.tray_r[2] - self.tray_r[0], self.tray_r[3] - self.tray_r[1]]
-        self.goodPixels = (self.tray_r[2] - self.tray_r[0]) * (self.tray_r[3] - self.tray_r[1])
+        with open(self.fileManager.localDepthCropFile) as f:
+            line = next(f)  # Read the first line
+            line = line.replace("(", "").replace(")", "")
+            # Parse the coordinates, stripping whitespace and splitting by commas
+            tray = line.rstrip().split(',')
+
+            # Convert the string values into integer coordinates and assign them to tray_r
+            self.tray_r = [int(x) for x in tray]
+
+            # Ensure that tray_r contains exactly 8 values (4 coordinate pairs)
+            if len(self.tray_r) != 8:
+                raise ValueError("Expected 8 values representing 4 coordinates.")
+
+            # Parse the 4 points from the tray_r list
+            coordinates = [
+                (self.tray_r[0], self.tray_r[1]),  # (x1, y1)
+                (self.tray_r[2], self.tray_r[3]),  # (x2, y2)
+                (self.tray_r[4], self.tray_r[5]),  # (x3, y3)
+                (self.tray_r[6], self.tray_r[7])   # (x4, y4)
+            ]
+
+            # Find the min and max x and y values to define the bounding box
+            self.x_min = min([coord[0] for coord in coordinates])
+            self.y_min = min([coord[1] for coord in coordinates])
+            self.x_max = max([coord[0] for coord in coordinates])
+            self.y_max = max([coord[1] for coord in coordinates])
+
+            # Calculate the cropped dimensions (width and height)
+        self.cropped_dims = [self.x_max - self.x_min, self.y_max - self.y_min]
+
+            # Calculate the area in pixels (good pixels)
+        self.goodPixels = self.cropped_dims[0] * self.cropped_dims[1]
+        # with open(self.fileManager.localDepthCropFile) as f:
+        #     line = next(f)
+        #     tray = line.rstrip().split(',')
+        #     self.tray_r = [int(x) for x in tray]
+        #     if self.tray_r[0] > self.tray_r[2]:
+        #         self.tray_r = [self.tray_r[2], self.tray_r[1], self.tray_r[0], self.tray_r[3]]
+        #     if self.tray_r[1] > self.tray_r[3]:
+        #         self.tray_r = [self.tray_r[0], self.tray_r[3], self.tray_r[2], self.tray_r[1]]
+
+        # self.cropped_dims = [self.tray_r[2] - self.tray_r[0], self.tray_r[3] - self.tray_r[1]]
+        # self.goodPixels = (self.tray_r[2] - self.tray_r[0]) * (self.tray_r[3] - self.tray_r[1])
 
     def _appendDepthCoordinates(self):
         # adds columns containing X and Y in depth coordinates to all cluster csv
@@ -240,13 +279,13 @@ class ClusterAnalyzer:
         self.clusterData['X_depth'] = self.clusterData.apply(
             lambda row: (self.transM[1][0] * row.Y + self.transM[1][1] * row.X + self.transM[1][2]) / (
                     self.transM[2][0] * row.Y + self.transM[2][1] * row.X + self.transM[2][2]), axis=1)
-        scaling_factor = sqrt(np.linalg.det(self.transM))
+        scaling_factor = math.sqrt(np.linalg.det(self.transM))
         self.clusterData['approx_radius'] = self.clusterData.apply(
             lambda row: (np.mean(row.X_span + row.Y_span) * scaling_factor)/2, axis=1)
         # self.clusterData.round({'X_Depth': 0, 'Y_Depth': 0})
 
         self.clusterData.to_csv(self.fileManager.localAllLabeledClustersFile)
-
+        # pdb.set_trace()
     def sliceDataframe(self, t0=None, t1=None, bid=None, columns=None, input_frame=None, cropped=True):
         # utility function to access specific slices of the Dataframe based on the AllClusterData csv.
         #
@@ -259,17 +298,19 @@ class ClusterAnalyzer:
         # cropped: If True, return only rows corresponding to events that occur within the area defined by tray_r
 
         df_slice = self.clusterData if input_frame is None else input_frame
-        df_slice = df_slice.dropna(subset=['Prediction']).sort_index()
+        # pdb.set_trace()
+
+        df_slice = df_slice.dropna(subset=['predicted_label']).sort_index()
         if t0 is not None:
             self._checkTimes(t0, t1)
             df_slice = df_slice[t0:t1]
         if bid is not None:
-            df_slice = df_slice[df_slice.Prediction.isin(bid if type(bid) is list else [bid])]
+            df_slice = df_slice[df_slice.predicted_label.isin(bid if type(bid) is list else [bid])]
         if cropped:
-            df_slice = df_slice[(df_slice.X_depth > self.tray_r[0]) & (df_slice.X_depth < self.tray_r[2]) &
-                                (df_slice.Y_depth > self.tray_r[1]) & (df_slice.Y_depth < self.tray_r[3])]
-            df_slice.X_depth = df_slice.X_depth - self.tray_r[0]
-            df_slice.Y_depth = df_slice.Y_depth - self.tray_r[1]
+            df_slice = df_slice[(df_slice.X_depth > self.x_min) & (df_slice.X_depth < self.x_max) &
+                                (df_slice.Y_depth > self.y_min) & (df_slice.Y_depth < self.y_max)]
+            df_slice.X_depth = df_slice.X_depth - self.x_min
+            df_slice.Y_depth = df_slice.Y_depth - self.y_min
         if columns is not None:
             df_slice = df_slice[columns]
         return df_slice
@@ -306,8 +347,8 @@ class ClusterAnalyzer:
             bandwidth = self.sliceDataframe(t0, t1, bid, 'approx_radius').mean()/2
         df_slice = self.sliceDataframe(t0=t0, t1=t1, bid=bid, cropped=cropped, columns=['X_depth', 'Y_depth'])
         n_events = len(df_slice.index)
-        x_bins = int(self.tray_r[2] - self.tray_r[0])
-        y_bins = int(self.tray_r[3] - self.tray_r[1])
+        x_bins = int(self.x_max - self.x_min)
+        y_bins = int(self.y_max - self.y_min)
         xx, yy = np.mgrid[0:x_bins, 0:y_bins]
         if n_events == 0:
             z = np.zeros_like(xx)
@@ -317,6 +358,7 @@ class ClusterAnalyzer:
             kde = KernelDensity(bandwidth=bandwidth, kernel='gaussian').fit(xy_train)
             z = np.exp(kde.score_samples(xy_sample)).reshape(xx.shape)
             z = (z * n_events) / (z.sum() * (self.fileManager.pixelLength ** 2))
+        pdb.set_trace()
         return z
 
     def returnBowerLocations(self, t0, t1, cropped=True, bandwidth=None):

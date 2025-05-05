@@ -101,7 +101,7 @@ class DepthPreparer:
             depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
 
         daytime_data = depth_dt[depth_dt.DaytimeData == True].groupby('RelativeDay').agg(first_index = ('Index','first'), last_index = ('Index','last'))
-
+        pdb.set_trace()
         # Loop through each day and interpolate missing data, setting night time data to average of first and last frame
         night_start = 0
         for day, (start_index,stop_index) in daytime_data.iterrows():
@@ -153,7 +153,7 @@ class DepthPreparer:
         for i,(start_time,stop_time) in enumerate(zip(self.lp.tankresetstart,self.lp.tankresetstop)):
             depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time < start_time),'Trial'] = 'Trial_' + str(i+1)
             depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time > start_time) & (depth_dt.Time <= stop_time),'Trial'] = 'Trial_' + str(i+1) + '_Reset'
-
+        pdb.set_trace()
         # Save interpolated data
         
         # Read in manual crop and mask out data outside of crop
@@ -169,6 +169,7 @@ class DepthPreparer:
         np.save(self.fileManager.localSmoothDepthFile, depthData)
         self.depth_dt = depth_dt
         depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
+        pdb.set_trace()
 
     def createDepthFigures(self, hourlyDelta=2):
 

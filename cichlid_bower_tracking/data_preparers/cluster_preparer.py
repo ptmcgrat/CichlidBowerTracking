@@ -73,6 +73,7 @@ class ClusterPreparer():
 		command.extend(['--HMM_filename', self.videoObj.localHMMFile])
 		command.extend(['--HMM_transition_filename', self.videoObj.localRawCoordsFile])
 		command.extend(['--Cl_labeled_transition_filename', self.videoObj.localLabeledCoordsFile])
+		# pdb.set_trace()
 		command.extend(['--Cl_labeled_cluster_filename', self.videoObj.localLabeledClustersFile])
 		command.extend(['--Cl_videos_directory', self.videoObj.localAllClipsDir])
 		command.extend(['--ML_frames_directory', self.videoObj.localManualLabelFramesDir])
@@ -82,7 +83,7 @@ class ClusterPreparer():
 
 		if not os.path.isdir('CichlidActionDetection'):
 			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionDetection'])
-
+		# pdb.set_trace()
 		os.chdir('CichlidActionDetection')
 		subprocess.run(['git', 'pull'])
 		subprocess.run(command)

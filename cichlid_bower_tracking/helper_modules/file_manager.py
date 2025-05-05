@@ -7,6 +7,7 @@ import pandas as pd
 class FileManager():
     def __init__(self, analysisID = 'MC_multi', modelID = None, projectID = None, rcloneRemote = 'p_dropbox:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
         # Identify directory for temporary local files
+        
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
             self._identifyPiDirectory()
         elif platform.node() == 'ebb-utaka.biosci.gatech.edu':
@@ -32,7 +33,7 @@ class FileManager():
         self.analysisID = analysisID
         # print(self.localMasterDir)
         # print(self.cloudMasterDir)
-        # self.localSummaryFile = self.cloudMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '_PM.csv'
+        # self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '.csv'
         self.localSummaryFile = self.localMasterDir + '__AnalysisStates/' + analysisID + '/' + analysisID + '_PM_new.csv'
         self.localAnalysisStatesDir = self.localMasterDir + '__AnalysisStates/' + analysisID + '/'
         print("Local summary file: ",self.localSummaryFile)
@@ -45,6 +46,7 @@ class FileManager():
         
         # Create file names and parameters
         if projectID is not None:
+            # pdb.set_trace()
             self.setProjectID(projectID, check_exists = check)
         
         if modelID is not None:
@@ -63,14 +65,14 @@ class FileManager():
         self.subjectID = subjectID
         self.dissectionTime = dissection_time
 
-    def setProjectID(self, subjectID, projectID, check_exists = False):
-        self.subjectID = subjectID
+    def setProjectID(self, projectID, check_exists = False):
+        # self.subjectID = subjectID
         self.projectID = projectID
         self.dissectionTime = self.s_dt.loc[projectID]['DissectionTime']
         self._createProjectData(projectID)
         if check_exists:
             assert self.checkFileExists(self.localLogfile)
-        self._createSubjectData()
+        # self._createSubjectData()
 
 
     def getProjectStates(self):
@@ -178,6 +180,7 @@ class FileManager():
 
         # Files created by prep preparer
         self.localDepthCropFile = self.localAnalysisDir + 'DepthCrop.txt'
+        
         self.localTransMFile = self.localAnalysisDir + 'TransMFile.npy'
         self.localVideoCropFile = self.localAnalysisDir + 'VideoCrop.txt'
         
@@ -213,7 +216,8 @@ class FileManager():
         self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
         self.localNewLabeledVideosFile = self.localTempDir + 'NewLabeledVideos.csv'
         self.localNewLabeledClipsDir = self.localTempDir + 'NewLabeledClips/'
-
+        
+        self.localCombinedSummaryFigure = self.localSummaryDir+'CombinedSummary.pdf'
 
         #self.localLabeledClipsProjectDir = self.localLabeledClipsDir + projectID + '/'
         #self.localLabeledFramesProjectDir = self.localBoxedFishDir + projectID + '/'
@@ -228,6 +232,24 @@ class FileManager():
         except FileNotFoundError:
             #print('No logfile created yet for ' + projectID)
             pass 
+
+        if self.analysisID == 'HybridMulti':
+            self.localDepthCropFile = self.localMasterDir+'__TankData/'+self.lp.tankID + '/DepthCrop.txt'
+
+    def _createFigureData(self):
+                #files created by FigurePreparer
+        # self.figureDir = 'Figures/'
+        self.cloudFiguresDir = self.localProjectDir + 'Figures/'
+        self.localFiguresDir = self.localProjectDir + 'Figures/'
+        # self.allClipsDir = 'AllClips/'
+        self.localAllClipsDir = self.localProjectDir + 'AllClips/'
+        # self.processedClipDir = 'ProcessedClips/'
+        self.localProcessedClipsDir = self.localProjectDir + 'ProcessedClips/'
+        self.manualLabelClipsDir = 'MLClips/'
+        self.localManualLabelClipsDir = self.localProjectDir + 'MLClips/'
+        self.manualLabelFramesDir = 'MLFrames/'
+        self.localManualLabelFramesDir = self.localProjectDir + 'MLFrames/'
+        self.localPrepSummaryFigure = self.localFiguresDir + 'PrepSummary.pdf' 
 
     def _createMLData(self):
 
@@ -391,6 +413,12 @@ class FileManager():
             self.downloadData(self.localEuthData, allow_errors=True, quiet=True)
             self.downloadData(self.localSummaryDir, allow_errors=True, quiet=True)
 
+        elif dtype == 'Figures':
+            self.createDirectory(self.localMasterDir)
+            self.createDirectory(self.localTroubleshootingDir)
+            self.createDirectory(self.localFiguresDir)
+            self.downloadData(self.localLogfile)
+            self.downloadData(self.localAnalysisDir)
         else:
             raise KeyError('Unknown key: ' + dtype)
 
@@ -611,6 +639,7 @@ class FileManager():
                 else:
                     pass
             else:
+                pdb.set_trace()
                 raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
         # pdb.set_trace()
         if not os.path.exists(local_path + relative_name):

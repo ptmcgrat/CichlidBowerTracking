@@ -5,7 +5,7 @@ from helper_modules.file_manager import FileManager as FM
 
 parser = argparse.ArgumentParser()
 parser.add_argument('AnalysisType', type = str, choices=['Prep','Depth','Cluster','ClusterClassification', 'TrackFish','AddFishSex','Summary','All'], help = 'What type of analysis to perform')
-parser.add_argument('SubjectID', type = str, help = 'Identify the projects you want to analyze.')
+parser.add_argument('AnalysisID', type = str, help = 'Identify the analysisID you want to analyze.')
 parser.add_argument('ProjectID', type = str, help = 'Identify the projects you want to analyze.')
 parser.add_argument('--ModelID', type = str, help = 'Identify the model you want to use for inference.')
 parser.add_argument('--Workers', type = int, help = 'Number of workers to use to analyze data')
@@ -15,8 +15,8 @@ parser.add_argument('--AnalysisOnly', action = 'store_true', help = 'Use this fl
 
 args = parser.parse_args()
 
-fm_obj = FM(modelID=args.ModelID)
-fm_obj.setProjectID(args.SubjectID,args.ProjectID)
+fm_obj = FM(analysisID=args.AnalysisID,projectID=args.ProjectID,modelID=args.ModelID)
+fm_obj.setProjectID(args.ProjectID)
 
 # Run appropriate analysis script
 if args.AnalysisType == 'Prep':
