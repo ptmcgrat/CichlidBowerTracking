@@ -5,7 +5,7 @@ import pandas as pd
 # config_file_path = '/Users/pkolipaka3/.config/rclone/rclone.conf'
 
 class FileManager():
-    def __init__(self, analysisID = 'MC_multi', modelID = None, projectID = None, rcloneRemote = 'p_dropbox:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
+    def __init__(self, analysisID = 'MC_multi', modelID = None, projectID = None, rcloneRemote = 'ptm_dropbox:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
         # Identify directory for temporary local files
         
         if platform.node() == 'raspberrypi' or 'Pi' in platform.node() or 'bt-' in platform.node() or 'sv-' in platform.node():
