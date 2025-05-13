@@ -65,8 +65,10 @@ if args.AnalysisType == 'AnalyzeStates':
 
 elif args.AnalysisType == 'Prep':
 	from data_preparers.prep_preparer import PrepPreparer as PrP
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.StartingFiles == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	# projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.StartingFiles == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.StartingFiles == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+	pdb.set_trace()
 	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
 			continue
@@ -83,28 +85,40 @@ elif args.AnalysisType == 'Prep':
 elif args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
 	from data_preparers.depth_preparer import DepthPreparer as DP
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	# projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	pdb.set_trace()
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.Prep == True) & (s_dt.toBeAnalyzed == True)].index.to_list()
+	# projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.Prep == True)].index.to_list()
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
 
 	for projectID, row in s_dt.loc[projectIDs].iterrows():
-		if 's7' in projectID or 's6' in projectID:
+		# if 's7' in projectID or 's6' in projectID:
+		# 	continue
+		if projectID in ('cvmc_s3_tr1_hybridbuilding','cvmc_s6_tr1_hybridbuilding','cvmc_s2_tr1_hybridbuilding','cvmc_s10_tr1_hybridbuilding','cvmc_s1_tr1_hybridbuilding','cvmc_s7_tr4_hybridbuilding','cvmc_s12_tr1_hybridbuilding','cvmc_s4_tr1_hybridbuilding','cvmc_s9_tr3_hybridbuilding','cvmc_s15_tr1_hybridbuilding') :
 			continue
 		if projectID not in projectIDs:
 			continue
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
 		fm_obj.setProjectID(projectID)
+		# pdb.set_trace()
 		dp_obj = DP(fm_obj)
-		#dp_obj.downloadProjectData()
+		# dp_obj.downloadProjectData()
 		dp_obj.validateInputData()
+		# pdb.set_trace()
 		dp_obj.createSmoothedArray()
+		# pdb.set_trace()
 		dp_obj.createDepthFigures()
-			#dp_obj.createRGBVideo()
-		dp_obj.uploadProjectData(delete = False)
+		# pdb.set_trace()
+		dp_obj.createRGBVideo()
+		# dp_obj.uploadProjectData(delete = False)
+		dp_obj.fileManager.uploadProjectData(dtype='Depth', delete=False)
 		s_dt.loc[projectID,'Depth'] = True
 	
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
+		pdb.set_trace()
+
 	writer = pypdf.PdfWriter()
 	for projectID in s_dt[(s_dt.Depth == True)].index.sort_values().to_list():
 		fm_obj.setProjectID(projectID)
@@ -187,4 +201,5 @@ elif args.AnalysisType == 'ClassifyClusters':
 		tdcp_obj.createSummaryFile()
 
 s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+pdb.set_trace()
 fm_obj.uploadData(fm_obj.localSummaryFile)

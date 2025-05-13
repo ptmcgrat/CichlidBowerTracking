@@ -28,6 +28,10 @@ class DepthPreparer:
 		self.__version__ = '1.0.0'
 		self.fileManager = fileManager
 		self.device = self.fileManager.lp.device
+		# self.device = self.fileManager.lp.device
+		self.lp = self.fileManager.lp
+		self.fileManager.downloadProjectData(dtype= 'Depth')
+		# pdb.set_trace()
 		self.createLogFile()
 
 	def downloadProjectData(self):
@@ -81,60 +85,68 @@ class DepthPreparer:
 			print('Nodename: ' + os.uname().nodename, file = f)
 			print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 
-	def createSmoothedArray(self, goodDataCutoff = 0.65, minimumGoodData = 0.9, std_cutoff = 0.25, max_depth = 6, max_height = 10):
+
+	def createSmoothedArray(self, goodDataCutoff = 0.8, minimumGoodData = 0.95, tunits = 71, order = 4, max_depth = 4, max_height = 8):
 		
+
+		#To be deleted
+		day_ad_count = 0
+		for ad in self.lp.alldata:
+			if [x for x in self.lp.frames if x.time == ad.time][0].lof:
+				day_ad_count += 1
+
+		ad_stds = np.zeros(shape = (day_ad_count, self.lp.height, self.lp.width))
+		ad_counts = np.zeros(shape = (day_ad_count, self.lp.height, self.lp.width))
+
 		# Create arrays to store raw depth data and data in the daytime
-		depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
-		depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay'])
+		rawDepthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
+		daytimeData = np.empty(shape = (sum([x.lof for x in self.lp.frames]), self.lp.height, self.lp.width))
 
 		# Read in each frame and store it. Also keep track of the indeces that are in the daytime
+		day_idx = 0
+		day_start_stop = OrderedDict() # Dictionary to hold first and last frame indeces for good and bad data for each day
+		
+		ad_idx = 0
 		for i, frame in enumerate(self.lp.frames):
 			try:
 				data = np.load(self.fileManager.localProjectDir + frame.npy_file)
-				std = np.load(self.fileManager.localProjectDir + frame.std_file)
-				data[std > std_cutoff] = np.nan
+				day = frame.time.day
 
-			except FileNotFoundError:
+			except (FileNotFoundError,EOFError):
 				print('Bad frame: ' + str(i) + ', ' + frame.npy_file)
-				depthData[i] = depthData[i-1]
+				rawDepthData[i] = rawDepthData[i-1]
 			else:
-				depthData[i] = data
-			depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
-		#originalData = depthData.copy()
-		#nan_values_raw = np.isnan(depthData).sum(axis = (1,2))
-		# Divide into trials based on
-		depth_dt['Trial'] = ''
-		try:
-			assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
-		except:
-			print('Fix logfile for tankreset start and stop')
-		if len(self.lp.tankresetstart) == 0:
-			depth_dt['Trial'] = 'Trial_1'
-		else:
-			previous_start = 0
-			for i,(start_time,stop_time) in enumerate(zip(self.lp.tankresetstart,self.lp.tankresetstop)):
-				depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time < start_time),'Trial'] = 'Trial_' + str(i+1)
-				depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time > start_time) & (depth_dt.Time <= stop_time),'Trial'] = 'Trial_' + str(i+1) + '_Reset'
+				rawDepthData[i] = data
 
-		daytime_data = depth_dt[(depth_dt.DaytimeData == True) & (~depth_dt.Trial.str.contains('Reset'))].groupby(['Trial','RelativeDay']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
-		# Loop through each day and interpolate missing data, setting night time data to average of first and last frame
-		night_start = 0
-		for (trial,day), (start_index,stop_index) in daytime_data.iterrows():
-			
-			dailyData = depthData[start_index:stop_index+1] # Create view of numpy array just creating a single day during the daytime
-			
-			with open(self.fileManager.localDepthCropFile) as f:
-				for line in f:
-					depth_crop_points = eval(line.rstrip())
+			if frame.lof:
+				alldata_files = [x for x in self.lp.alldata if x.time == frame.time]
+				if len(alldata_files) == 1:
+					alldata = np.load(self.fileManager.localProjectDir + alldata_files[0].npy_file)
+					ad_stds[ad_idx] = np.nanstd(alldata, axis = 0)
+					ad_counts[ad_idx] = np.count_nonzero(~np.isnan(alldata), axis = 0)
+					ad_idx+=1
+				# Daytime frame
+				daytimeData[day_idx] = rawDepthData[i]
+				day_idx += 1
 
-			img = Image.new('L', (self.lp.width, self.lp.height), 0)
-			ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
-			manual_crop_mask = np.array(img)
-			dailyData[:,manual_crop_mask == 0] = np.nan
-			lastDepthRGB = Image.open(self.fileManager.localProjectDir + self.fileManager.lp.frames[6269].pic_file)
+				# Store first and last frame for each day
+				if day not in day_start_stop:
+					day_start_stop[day] = [i,i]
+				else:
+					day_start_stop[day][1] = i
+
+		# Save raw data file
+		np.save(self.fileManager.localRawDepthFile, rawDepthData)
+
+		# Interpolate missing data
+		# Make copy of raw data
+		interpDepthData = rawDepthData.copy()
+
+		# Loop through each day and interpolate missing data
+		for day,(start_index,stop_index) in day_start_stop.items():
+			dailyData = interpDepthData[start_index:stop_index] # Create view of numpy array just creating a single day during the daytime
 			goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
-			
-			pdb.set_trace()
+
 			# Process each pixel
 			for i in range(dailyData.shape[1]):
 				for j in range(dailyData.shape[2]):
@@ -146,34 +158,13 @@ class DepthPreparer:
 						if len(x_interp) != 0: # Only interpolate if there is missing data
 							interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
 							dailyData[x_interp, i, j] = interp_data
-
-			# Mask out data with too many nans
-			non_nans = np.count_nonzero(~np.isnan(dailyData), axis = 0)
-			dailyData[:,non_nans < minimumGoodData*dailyData.shape[0]] = np.nan
-
-			# Filter out data that is too close or too far from the sensor
-			#average_depth = np.nanmean(dailyData, axis = 0)
-			#median_height = np.nanmedian(dailyData)
-			#dailyData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
-
-			# Smooth with savgol filter
-			smoothDepthData = scipy.signal.savgol_filter(dailyData, 71, 4, axis = 0, mode = 'nearest')
-
-		daytime_data = depth_dt[(depth_dt.DaytimeData == True)].groupby('RelativeDay').agg(first_index = ('Index','first'), last_index = ('Index','last'))
-
-		# Set nighttime data as mean of before and after
-		for day, (start_index,stop_index) in daytime_data.iterrows():
-			if start_index != 0: #no previous night data
-				if night_start == 0:
-					depthData[night_start:start_index] = depthData[start_index]
-				else:
-					depthData[night_start:start_index] = (depthData[start_index] + depthData[night_start - 1])/2
-			night_start = stop_index + 1
-		depthData[night_start:] = depthData[night_start-1]
 		
-
 		# Save interpolated data
-		#nan_values_pre_mask = np.isnan(depthData).sum(axis = (1,2))
+		np.save(self.fileManager.localInterpDepthFile, interpDepthData)
+
+		# Smooth and filter out bad data 
+		smoothDepthData = interpDepthData.copy()
+		
 		# Read in manual crop and mask out data outside of crop
 		with open(self.fileManager.localDepthCropFile) as f:
 			for line in f:
@@ -182,126 +173,393 @@ class DepthPreparer:
 		img = Image.new('L', (self.lp.width, self.lp.height), 0)
 		ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
 		manual_crop_mask = np.array(img)
-		depthData[:,manual_crop_mask == 0] = np.nan
-		#nan_values_smooth = np.isnan(depthData).sum(axis = (1,2))
-		np.save(self.fileManager.localSmoothDepthFile, depthData)
-		self.depth_dt = depth_dt
-		depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
+		smoothDepthData[:,manual_crop_mask == 0] = np.nan
 
+
+		# Mask out data with too many nans
+		non_nans = np.count_nonzero(~np.isnan(daytimeData), axis = 0)
+		smoothDepthData[:,non_nans < minimumGoodData*daytimeData.shape[0]] = np.nan
+
+		# Filter out data with bad standard deviations
+		stds = np.nanstd(daytimeData, axis = 0)
+		smoothDepthData[:,stds > 1.5] = np.nan # Filter out data with std > 1.5 cm
+
+		# Filter out data that is too close or too far from the sensor
+		average_depth = np.nanmean(daytimeData, axis = 0)
+		median_height = np.nanmedian(average_depth)
+		smoothDepthData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
+
+
+		# Nighttime data is bad. Set it to average of data before and after.
+		boundaries = np.array(list(day_start_stop.values())).flatten()
+		for i, frame in enumerate(self.lp.frames):
+			if not frame.lof:
+				closest_idx = min(range(len(boundaries)), key=lambda j: abs(boundaries[j]-i))
+				closest_value = boundaries[closest_idx]
+				if closest_idx == 0:
+					smoothDepthData[i] = smoothDepthData[boundaries[0]]
+				elif closest_idx == len(boundaries) - 1:
+					smoothDepthData[i] = smoothDepthData[boundaries[-1]]
+				else:
+					if i - closest_value > 0:
+						smoothDepthData[i] = np.nanmean((smoothDepthData[boundaries[closest_idx]],smoothDepthData[boundaries[closest_idx+1]]), axis = 0)
+					else:
+						smoothDepthData[i] = np.nanmean((smoothDepthData[boundaries[closest_idx]],smoothDepthData[boundaries[closest_idx-1]]), axis = 0)
+
+		# Smooth data with savgol_filter
+		smoothDepthData = scipy.signal.savgol_filter(smoothDepthData, tunits, order, axis = 0, mode = 'mirror')
+		np.save(self.fileManager.localSmoothDepthFile, smoothDepthData)
+
+	# def createSmoothedArray(self, goodDataCutoff = 0.65, minimumGoodData = 0.9, std_cutoff = 0.25, max_depth = 6, max_height = 10):
+		
+	# 	# Create arrays to store raw depth data and data in the daytime
+	# 	depthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
+	# 	depth_dt = pd.DataFrame(columns = ['Index','Time','DaytimeData','RelativeDay'])
+
+	# 	# Read in each frame and store it. Also keep track of the indeces that are in the daytime
+	# 	for i, frame in enumerate(self.lp.frames):
+	# 		try:
+	# 			data = np.load(self.fileManager.localProjectDir + frame.npy_file)
+	# 			std = np.load(self.fileManager.localProjectDir + frame.std_file)
+	# 			data[std > std_cutoff] = np.nan
+
+	# 		except FileNotFoundError:
+	# 			print('Bad frame: ' + str(i) + ', ' + frame.npy_file)
+	# 			depthData[i] = depthData[i-1]
+	# 		else:
+	# 			depthData[i] = data
+	# 		depth_dt.loc[len(depth_dt.index)] = [i,frame.time, frame.lof, (frame.time.date() - self.fileManager.dissectionTime.date()).days]
+	# 	#originalData = depthData.copy()
+	# 	#nan_values_raw = np.isnan(depthData).sum(axis = (1,2))
+	# 	# Divide into trials based on
+	# 	depth_dt['Trial'] = ''
+	# 	try:
+	# 		assert len(self.lp.tankresetstart) == len(self.lp.tankresetstop)
+	# 	except:
+	# 		print('Fix logfile for tankreset start and stop')
+	# 	if len(self.lp.tankresetstart) == 0:
+	# 		depth_dt['Trial'] = 'Trial_1'
+	# 	else:
+	# 		previous_start = 0
+	# 		for i,(start_time,stop_time) in enumerate(zip(self.lp.tankresetstart,self.lp.tankresetstop)):
+	# 			depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time < start_time),'Trial'] = 'Trial_' + str(i+1)
+	# 			depth_dt.loc[(depth_dt.Trial == '') & (depth_dt.Time > start_time) & (depth_dt.Time <= stop_time),'Trial'] = 'Trial_' + str(i+1) + '_Reset'
+
+	# 	daytime_data = depth_dt[(depth_dt.DaytimeData == True) & (~depth_dt.Trial.str.contains('Reset'))].groupby(['Trial','RelativeDay']).agg(first_index = ('Index','first'), last_index = ('Index','last'))
+	# 	# Loop through each day and interpolate missing data, setting night time data to average of first and last frame
+	# 	night_start = 0
+	# 	for (trial,day), (start_index,stop_index) in daytime_data.iterrows():
+			
+	# 		dailyData = depthData[start_index:stop_index+1] # Create view of numpy array just creating a single day during the daytime
+			
+	# 		with open(self.fileManager.localDepthCropFile) as f:
+	# 			for line in f:
+	# 				depth_crop_points = eval(line.rstrip())
+
+	# 		img = Image.new('L', (self.lp.width, self.lp.height), 0)
+	# 		ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
+	# 		manual_crop_mask = np.array(img)
+	# 		dailyData[:,manual_crop_mask == 0] = np.nan
+	# 		lastDepthRGB = Image.open(self.fileManager.localProjectDir + self.fileManager.lp.frames[6269].pic_file)
+	# 		goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
+			
+	# 		pdb.set_trace()
+	# 		# Process each pixel
+	# 		for i in range(dailyData.shape[1]):
+	# 			for j in range(dailyData.shape[2]):
+	# 				if goodDataAll[i,j] > goodDataCutoff: # If enough data is present in the pixel then interpolate
+				
+	# 					x_interp, = np.where(np.isnan(dailyData[:,i,j])) # Indices with missing data
+	# 					x_good, = np.where(~np.isnan(dailyData[:,i,j])) # Indices with good data
+
+	# 					if len(x_interp) != 0: # Only interpolate if there is missing data
+	# 						interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
+	# 						dailyData[x_interp, i, j] = interp_data
+
+	# 		# Mask out data with too many nans
+	# 		non_nans = np.count_nonzero(~np.isnan(dailyData), axis = 0)
+	# 		dailyData[:,non_nans < minimumGoodData*dailyData.shape[0]] = np.nan
+
+	# 		# Filter out data that is too close or too far from the sensor
+	# 		#average_depth = np.nanmean(dailyData, axis = 0)
+	# 		#median_height = np.nanmedian(dailyData)
+	# 		#dailyData[:,(average_depth > median_height + max_depth) | (average_depth < median_height - max_height)] = np.nan # Filter out data 4cm lower and 8cm higher than tray
+
+	# 		# Smooth with savgol filter
+	# 		smoothDepthData = scipy.signal.savgol_filter(dailyData, 71, 4, axis = 0, mode = 'nearest')
+
+	# 	daytime_data = depth_dt[(depth_dt.DaytimeData == True)].groupby('RelativeDay').agg(first_index = ('Index','first'), last_index = ('Index','last'))
+
+	# 	# Set nighttime data as mean of before and after
+	# 	for day, (start_index,stop_index) in daytime_data.iterrows():
+	# 		if start_index != 0: #no previous night data
+	# 			if night_start == 0:
+	# 				depthData[night_start:start_index] = depthData[start_index]
+	# 			else:
+	# 				depthData[night_start:start_index] = (depthData[start_index] + depthData[night_start - 1])/2
+	# 		night_start = stop_index + 1
+	# 	depthData[night_start:] = depthData[night_start-1]
+		
+
+	# 	# Save interpolated data
+	# 	#nan_values_pre_mask = np.isnan(depthData).sum(axis = (1,2))
+	# 	# Read in manual crop and mask out data outside of crop
+	# 	with open(self.fileManager.localDepthCropFile) as f:
+	# 		for line in f:
+	# 			depth_crop_points = eval(line.rstrip())
+
+	# 	img = Image.new('L', (self.lp.width, self.lp.height), 0)
+	# 	ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
+	# 	manual_crop_mask = np.array(img)
+	# 	depthData[:,manual_crop_mask == 0] = np.nan
+	# 	#nan_values_smooth = np.isnan(depthData).sum(axis = (1,2))
+	# 	np.save(self.fileManager.localSmoothDepthFile, depthData)
+	# 	self.depth_dt = depth_dt
+	# 	depth_dt.to_csv(self.fileManager.localSmoothDepthDT)
+
+	# def createDepthFigures(self, hourlyDelta=2):
+
+	# 	# Create all figures based on depth data. Adjust hourlyDelta to influence the resolution of the
+	# 	# HourlyDepthSummary.pdf figure
+
+	# 	# Check that the DepthAnalzer object has been created, indicating that the required files are present.
+	# 	# Otherwise, skip creation of Depth Figures
+	# 	self.da_obj = DA(self.fileManager)
+	# 	self.depth_dt = pd.read_csv(self.fileManager.localSmoothDepthDT, index_col = 0)
+	# 	self.depth_dt = self.depth_dt[~self.depth_dt.Trial.isna()]
+
+	# 	project_info = self.depth_dt[self.depth_dt.DaytimeData == True].groupby('Trial').agg(first_index = ('Index','first'), last_index = ('Index','last'))
+	# 	num_trials = len(self.lp.tankresetstart)
+	# 	rows = int(np.ceil((self.depth_dt[~(self.depth_dt.Trial.str.contains('Reset')) & ~(self.depth_dt.Trial == '')].groupby(['Trial']).nunique()['RelativeDay']/10)).sum())
+
+	# 	# figures based on the depth data
+	# 	# Create summary figure of daily values
+	# 	figDaily = plt.figure(num=1, figsize=(11, rows*3 + 6))
+	# 	figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
+	# 	gridDaily = gridspec.GridSpec(num_trials + rows +1, 1)
+	# 	current_grid_idx = 0
+	# 	hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
+	# 	for i in range(1,num_trials + 1):
+	# 		start_index = project_info.loc['Trial_' + str(i)].first_index
+	# 		last_index = project_info.loc['Trial_' + str(i)].last_index
+	# 		reset_index = project_info.loc['Trial_' + str(i) + '_Reset'].last_index + 1
+	# 		#totalChangeData = vars(self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time, self.lp.frames[last_index].time))
+
+	# 		topGrid = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gridDaily[current_grid_idx])
+
+	# 		# Show picture of total depth change
+	# 		topAx1 = figDaily.add_subplot(topGrid[0])
+	# 		topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
+	# 			self.lp.frames[start_index].time, self.lp.frames[last_index].time, masked = False), vmin=-3, vmax=3)
+	# 		bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time,self.lp.frames[last_index].time).depthBowerVolume
+	# 		topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
+	# 		topAx1.tick_params(colors=[0, 0, 0, 0])
+	# 		plt.colorbar(topAx1_ax, ax=topAx1)
+
+	# 		# Show picture of pit and castle mask
+	# 		topAx2 = figDaily.add_subplot(topGrid[1])
+	# 		topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(self.lp.frames[reset_index].time, self.lp.frames[last_index].time, masked = False), vmin = -3, vmax = 3)
+	# 		bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[reset_index].time,self.lp.frames[last_index].time).depthBowerVolume
+	# 		topAx2.set_title('Reset Depth Change ('+ str(int(bowerVolume)) + 'cm3)')
+	# 		topAx2.tick_params(colors=[0, 0, 0, 0])
+	# 		plt.colorbar(topAx2_ax, ax=topAx2)
+
+	# 		day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last')).sort_index(ascending = False)
+
+	# 		num_days = min(len(day_info),10)
+
+	# 		v = 2.0
+	# 		for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
+	# 			if j % num_days == 0:
+	# 				if j!=0:
+	# 					cax = figDaily.add_subplot(midGrid[:, -1])
+	# 					plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
+
+	# 				current_grid_idx += 1
+	# 				midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
+
+	# 			current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
+	# 			if j == 0:
+	# 				current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
+	# 				bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start-1].time,self.lp.frames[day_stop].time).depthBowerVolume
+	# 				current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
+	# 				current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop].time, masked=False), vmin=-v, vmax=v)
+	# 				current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop].time, masked=True), vmin=-v, vmax=v)
+	# 			elif j==num_days - 1:
+	# 				current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
+	# 				bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start].time,self.lp.frames[day_stop+1].time).depthBowerVolume
+	# 				current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
+	# 				current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop+1].time, masked=False), vmin=-v, vmax=v)
+	# 				current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop+1].time, masked=True, ), vmin=-v, vmax=v)
+	# 			else:
+	# 				current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
+	# 				bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start-1].time,self.lp.frames[day_stop+1].time).depthBowerVolume
+	# 				current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
+	# 				current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=False), vmin=-v, vmax=v)
+	# 				current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=True), vmin=-v, vmax=v)
+		
+	# 			[ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
+	# 			[ax.set_adjustable('box') for ax in current_axs]
+
+	# 			good_data_start = self.lp.frames[day_start].time
+	# 			good_data_stop = self.lp.frames[day_stop].time
+	# 			day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
+	# 			for k in range(8,20):
+	# 				start = day_stamp + datetime.timedelta(hours=k)
+	# 				stop = day_stamp + datetime.timedelta(hours=k+1)
+	# 				if stop < good_data_start or start > good_data_stop:
+	# 					continue
+	# 				volume = self.da_obj.returnVolumeSummary(max(start,good_data_start),min(stop,good_data_stop)).depthBowerVolume
+	# 				hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume]
+
+
+	# 		cax = figDaily.add_subplot(midGrid[:, -1])
+	# 		plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
+	# 		current_grid_idx += 1
+
+	# 	hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
+	# 	bottomGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[-1], hspace=0.05)
+	# 	bIAx = figDaily.add_subplot(bottomGrid[0])
+	# 	bIAx.axhline(linewidth=1, alpha=0.5, y=0)
+	# 	bIAx.scatter(hourly_dt['NewTime'], hourly_dt['Volume'])
+	# 	bIAx.set_xlabel('Hour')
+	# 	bIAx.set_ylabel('Volume (cm3)')
+	# 	figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
+
+
+	# 	"""
+	# 	# Create summary figure of hourly values
+	# 	figHourly = plt.figure(figsize=(11, 8.5))
+	# 	gridHourly = plt.GridSpec(self.lp.numDays, int(11 / hourlyDelta) + 2, wspace=0.05, hspace=0.05)
+	# 	bounding_ax = figHourly.add_subplot(gridHourly[:, :])
+	# 	bounding_ax.xaxis.set_visible(False)
+	# 	bounding_ax.set_ylabel('Day')
+	# 	bounding_ax.set_ylim(self.lp.numDays + 0.5, 0.5)
+	# 	bounding_ax.yaxis.set_major_locator(ticker.MultipleLocator(base=1.0))
+	# 	bounding_ax.set_yticklabels(range(self.lp.numDays + 1))
+	# 	sns.despine(ax=bounding_ax, left=True, bottom=True)
+	# 	start_day = self.lp.frames[0].time.replace(hour=0, minute=0, second=0, microsecond=0)
+
+	# 	hourlyChangeData = []
+	# 	v = 1
+	# 	for i in range(0, self.lp.numDays):
+	# 		current_j = 0
+	# 		for j in range(int(24 / hourlyDelta)):
+	# 			start = start_day + datetime.timedelta(hours=24 * i + j * hourlyDelta)
+	# 			stop = start_day + datetime.timedelta(hours=24 * i + (j + 1) * hourlyDelta)
+
+	# 			if start.hour < 8 or start.hour > 18:
+	# 				continue
+
+	# 			hourlyChangeData.append(vars(self.da_obj.returnVolumeSummary(start, stop)))
+	# 			hourlyChangeData[-1]['Day'] = i + 1
+	# 			hourlyChangeData[-1]['Midpoint'] = i + 1 + ((j + 0.5) * hourlyDelta) / 24
+	# 			hourlyChangeData[-1]['StartTime'] = str(start)
+
+	# 			current_ax = figHourly.add_subplot(gridHourly[i, current_j])
+
+	# 			current_ax.imshow(self.da_obj.returnHeightChange(start, stop, cropped=True), vmin=-v, vmax=v)
+	# 			current_ax.set_adjustable('box')
+	# 			current_ax.tick_params(colors=[0, 0, 0, 0])
+	# 			if i == 0:
+	# 				current_ax.set_title(str(j * hourlyDelta) + '-' + str((j + 1) * hourlyDelta))
+	# 			current_j += 1
+
+	# 		current_ax = figHourly.add_subplot(gridHourly[i, -2])
+	# 		current_ax.imshow(self.da_obj.returnBowerLocations(stop - datetime.timedelta(hours=24), stop, cropped=True),
+	# 						  vmin=-v, vmax=v)
+	# 		current_ax.set_adjustable('box')
+	# 		current_ax.tick_params(colors=[0, 0, 0, 0])
+	# 		if i == 0:
+	# 			current_ax.set_title('Daily\nMask')
+
+	# 		current_ax = figHourly.add_subplot(gridHourly[i, -1])
+	# 		current_ax.imshow(self.da_obj.returnHeightChange(stop - datetime.timedelta(hours=24), stop, cropped=True),
+	# 						  vmin=-v, vmax=v)
+	# 		current_ax.set_adjustable('box')
+	# 		current_ax.tick_params(colors=[0, 0, 0, 0])
+	# 		if i == 0:
+	# 			current_ax.set_title('Daily\nChange')
+
+	# 	figHourly.savefig(self.fileManager.localHourlyDepthSummaryFigure)
+	# 	"""
+	# 	plt.close('all')
 	def createDepthFigures(self, hourlyDelta=2):
 
+		print('Creating Depth Figure')
 		# Create all figures based on depth data. Adjust hourlyDelta to influence the resolution of the
 		# HourlyDepthSummary.pdf figure
 
 		# Check that the DepthAnalzer object has been created, indicating that the required files are present.
 		# Otherwise, skip creation of Depth Figures
 		self.da_obj = DA(self.fileManager)
-		self.depth_dt = pd.read_csv(self.fileManager.localSmoothDepthDT, index_col = 0)
-		self.depth_dt = self.depth_dt[~self.depth_dt.Trial.isna()]
-
-		project_info = self.depth_dt[self.depth_dt.DaytimeData == True].groupby('Trial').agg(first_index = ('Index','first'), last_index = ('Index','last'))
-		num_trials = len(self.lp.tankresetstart)
-		rows = int(np.ceil((self.depth_dt[~(self.depth_dt.Trial.str.contains('Reset')) & ~(self.depth_dt.Trial == '')].groupby(['Trial']).nunique()['RelativeDay']/10)).sum())
 
 		# figures based on the depth data
+
 		# Create summary figure of daily values
-		figDaily = plt.figure(num=1, figsize=(11, rows*3 + 6))
+		figDaily = plt.figure(num=1, figsize=(11, 8.5))
 		figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
-		gridDaily = gridspec.GridSpec(num_trials + rows +1, 1)
-		current_grid_idx = 0
-		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
-		for i in range(1,num_trials + 1):
-			start_index = project_info.loc['Trial_' + str(i)].first_index
-			last_index = project_info.loc['Trial_' + str(i)].last_index
-			reset_index = project_info.loc['Trial_' + str(i) + '_Reset'].last_index + 1
-			#totalChangeData = vars(self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time, self.lp.frames[last_index].time))
+		gridDaily = gridspec.GridSpec(3, 1)
 
-			topGrid = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gridDaily[current_grid_idx])
-
-			# Show picture of total depth change
-			topAx1 = figDaily.add_subplot(topGrid[0])
-			topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
-				self.lp.frames[start_index].time, self.lp.frames[last_index].time, masked = False), vmin=-3, vmax=3)
-			bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time,self.lp.frames[last_index].time).depthBowerVolume
-			topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
-			topAx1.tick_params(colors=[0, 0, 0, 0])
-			plt.colorbar(topAx1_ax, ax=topAx1)
-
-			# Show picture of pit and castle mask
-			topAx2 = figDaily.add_subplot(topGrid[1])
-			topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(self.lp.frames[reset_index].time, self.lp.frames[last_index].time, masked = False), vmin = -3, vmax = 3)
-			bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[reset_index].time,self.lp.frames[last_index].time).depthBowerVolume
-			topAx2.set_title('Reset Depth Change ('+ str(int(bowerVolume)) + 'cm3)')
-			topAx2.tick_params(colors=[0, 0, 0, 0])
-			plt.colorbar(topAx2_ax, ax=topAx2)
-
-			day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last')).sort_index(ascending = False)
-
-			num_days = min(len(day_info),10)
-
-			v = 2.0
-			for j, (day,(day_start,day_stop)) in enumerate(day_info.iterrows()):
-				if j % num_days == 0:
-					if j!=0:
-						cax = figDaily.add_subplot(midGrid[:, -1])
-						plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
-
-					current_grid_idx += 1
-					midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
-
-				current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
-				if j == 0:
-					current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop].time, cropped=True), vmin=-v, vmax=v)
-					bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start-1].time,self.lp.frames[day_stop].time).depthBowerVolume
-					current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
-					current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop].time, masked=False), vmin=-v, vmax=v)
-					current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop].time, masked=True), vmin=-v, vmax=v)
-				elif j==num_days - 1:
-					current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
-					bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start].time,self.lp.frames[day_stop+1].time).depthBowerVolume
-					current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
-					current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop+1].time, masked=False), vmin=-v, vmax=v)
-					current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start].time, self.lp.frames[day_stop+1].time, masked=True, ), vmin=-v, vmax=v)
-				else:
-					current_axs[0].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_info.iloc[-1].day_start].time, self.lp.frames[day_stop + 1].time, cropped=True), vmin=-v, vmax=v)
-					bowerVolume = self.da_obj.returnVolumeSummary(self.lp.frames[day_start-1].time,self.lp.frames[day_stop+1].time).depthBowerVolume
-					current_axs[0].set_title(str(day) + ': ' + str(int(bowerVolume)))
-					current_axs[1].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=False), vmin=-v, vmax=v)
-					current_axs[2].imshow(self.da_obj.returnHeightChange(self.lp.frames[day_start-1].time, self.lp.frames[day_stop+1].time, masked=True), vmin=-v, vmax=v)
-		
-				[ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
-				[ax.set_adjustable('box') for ax in current_axs]
-
-				good_data_start = self.lp.frames[day_start].time
-				good_data_stop = self.lp.frames[day_stop].time
-				day_stamp = self.lp.frames[day_start].time.replace(hour = 0, minute=0, second=0, microsecond=0)
-				for k in range(8,20):
-					start = day_stamp + datetime.timedelta(hours=k)
-					stop = day_stamp + datetime.timedelta(hours=k+1)
-					if stop < good_data_start or start > good_data_stop:
-						continue
-					volume = self.da_obj.returnVolumeSummary(max(start,good_data_start),min(stop,good_data_stop)).depthBowerVolume
-					hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(i),start.replace(minute = 30),volume]
-
-
-			cax = figDaily.add_subplot(midGrid[:, -1])
-			plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
-			current_grid_idx += 1
-
-		hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
-		bottomGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[-1], hspace=0.05)
-		bIAx = figDaily.add_subplot(bottomGrid[0])
-		bIAx.axhline(linewidth=1, alpha=0.5, y=0)
-		bIAx.scatter(hourly_dt['NewTime'], hourly_dt['Volume'])
-		bIAx.set_xlabel('Hour')
-		bIAx.set_ylabel('Volume (cm3)')
-		figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
-
-
-		"""
 		# Create summary figure of hourly values
+		figHourly = plt.figure(num=2, figsize=(11, 8.5))
+		figHourly.suptitle(self.lp.projectID + ' Hourly Depth Summary')
+
+		start_day = self.lp.frames[0].time.replace(hour=0, minute=0, second=0, microsecond=0)
+		totalChangeData = vars(self.da_obj.returnVolumeSummary(self.lp.frames[0].time, self.lp.frames[-1].time))
+
+		# Show picture of final depth
+		topGrid = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gridDaily[0])
+		topAx1 = figDaily.add_subplot(topGrid[0])
+		topAx1_ax = topAx1.imshow(self.da_obj.returnHeight(self.lp.frames[-1].time, cropped=True), vmin=50, vmax=70)
+		topAx1.set_title('Final Depth (cm)')
+		topAx1.tick_params(colors=[0, 0, 0, 0])
+		plt.colorbar(topAx1_ax, ax=topAx1)
+
+		# Show picture of total depth change
+		topAx2 = figDaily.add_subplot(topGrid[1])
+		topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(
+			self.lp.frames[0].time, self.lp.frames[-1].time, cropped=True), vmin=-5, vmax=5)
+		topAx2.set_title('Total Depth Change (cm)')
+		topAx2.tick_params(colors=[0, 0, 0, 0])
+		plt.colorbar(topAx2_ax, ax=topAx2)
+
+		# Show picture of pit and castle mask
+		topAx3 = figDaily.add_subplot(topGrid[2])
+		topAx3_ax = topAx3.imshow(self.da_obj.returnHeightChange(self.lp.frames[0].time, self.lp.frames[-1].time, cropped = True, masked = True), vmin = -5, vmax = 5)
+		topAx3.set_title('Masked Depth Change (cm)')
+		topAx3.tick_params(colors=[0, 0, 0, 0])
+		plt.colorbar(topAx3_ax, ax=topAx3)
+
+		# Create figures and get data for daily Changes
+		dailyChangeData = []
+		w_ratios = ([1.0] * self.lp.numDays) + [0.25]
+		midGrid = gridspec.GridSpecFromSubplotSpec(3, self.lp.numDays + 1, subplot_spec=gridDaily[1], width_ratios=w_ratios)
+		v = 4
+		for i in range(self.lp.numDays):
+			start = start_day + datetime.timedelta(hours=24 * i)
+			stop = start_day + datetime.timedelta(hours=24 * (i + 1))
+			dailyChangeData.append(vars(self.da_obj.returnVolumeSummary(start, stop)))
+			dailyChangeData[i]['Day'] = i + 1
+			dailyChangeData[i]['Midpoint'] = i + 1 + .5
+			dailyChangeData[i]['StartTime'] = str(start)
+
+			current_axs = [figDaily.add_subplot(midGrid[n, i]) for n in [0, 1, 2]]
+			
+			current_axs[0].imshow(self.da_obj.returnHeightChange(start_day, stop, cropped=True), vmin=-v, vmax=v)
+			bower_data = self.da_obj.returnVolumeSummary(start,stop)
+			current_axs[0].set_title('Day %i' % (i + 1) + f': {bower_data.thresholdPitVolume:.2f},{bower_data.thresholdCastleVolume:.2f}',
+                          rotation=45, fontsize=3)
+
+			current_axs[1].imshow(self.da_obj.returnHeightChange(start, stop, cropped=True), vmin=-v, vmax=v)
+			current_axs[2].imshow(self.da_obj.returnHeightChange(start, stop, masked=True, cropped=True), vmin=-v, vmax=v)
+			[ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
+			[ax.set_adjustable('box') for ax in current_axs]
+		cax = figDaily.add_subplot(midGrid[:, -1])
+		plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
+
 		figHourly = plt.figure(figsize=(11, 8.5))
-		gridHourly = plt.GridSpec(self.lp.numDays, int(11 / hourlyDelta) + 2, wspace=0.05, hspace=0.05)
+		gridHourly = plt.GridSpec(self.lp.numDays, int(11 / hourlyDelta) + 2, wspace=0.5, hspace=0.05)
 		bounding_ax = figHourly.add_subplot(gridHourly[:, :])
 		bounding_ax.xaxis.set_visible(False)
 		bounding_ax.set_ylabel('Day')
@@ -309,7 +567,6 @@ class DepthPreparer:
 		bounding_ax.yaxis.set_major_locator(ticker.MultipleLocator(base=1.0))
 		bounding_ax.set_yticklabels(range(self.lp.numDays + 1))
 		sns.despine(ax=bounding_ax, left=True, bottom=True)
-		start_day = self.lp.frames[0].time.replace(hour=0, minute=0, second=0, microsecond=0)
 
 		hourlyChangeData = []
 		v = 1
@@ -332,10 +589,15 @@ class DepthPreparer:
 				current_ax.imshow(self.da_obj.returnHeightChange(start, stop, cropped=True), vmin=-v, vmax=v)
 				current_ax.set_adjustable('box')
 				current_ax.tick_params(colors=[0, 0, 0, 0])
+				bower_data = self.da_obj.returnVolumeSummary(start,stop)
+
 				if i == 0:
 					current_ax.set_title(str(j * hourlyDelta) + '-' + str((j + 1) * hourlyDelta))
 				current_j += 1
-
+				# current_ax.set_title(':'+str(bower_data.thresholdPitVolume)+','+str(bower_data.thresholdCastleVolume),rotation = 45)
+				current_ax.text(1.05, 0.5, f': {bower_data.thresholdPitVolume:.2f}, {bower_data.thresholdCastleVolume:.2f}',
+                transform=current_ax.transAxes, ha='left', va='center', fontsize=5,rotation = 90)
+				# pdb.set_trace()
 			current_ax = figHourly.add_subplot(gridHourly[i, -2])
 			current_ax.imshow(self.da_obj.returnBowerLocations(stop - datetime.timedelta(hours=24), stop, cropped=True),
 							  vmin=-v, vmax=v)
@@ -351,9 +613,38 @@ class DepthPreparer:
 			current_ax.tick_params(colors=[0, 0, 0, 0])
 			if i == 0:
 				current_ax.set_title('Daily\nChange')
+			figHourly.tight_layout(pad=2.0) 
 
+		totalDT = pd.DataFrame([totalChangeData])
+		dailyDT = pd.DataFrame(dailyChangeData)
+		hourlyDT = pd.DataFrame(hourlyChangeData)
+
+		writer = pd.ExcelWriter(self.fileManager.localDepthSummaryFile)
+		totalDT.to_excel(writer, 'Total')
+		dailyDT.to_excel(writer, 'Daily')
+		hourlyDT.to_excel(writer, 'Hourly')
+		writer.close()
+
+		bottomGrid = gridspec.GridSpecFromSubplotSpec(2, 1, subplot_spec=gridDaily[2], hspace=0.05)
+		bIAx = figDaily.add_subplot(bottomGrid[1])
+		bIAx.axhline(linewidth=1, alpha=0.5, y=0)
+		bIAx.scatter(dailyDT['Midpoint'], dailyDT['depthBowerIndex'])
+		bIAx.scatter(hourlyDT['Midpoint'], hourlyDT['depthBowerIndex'])
+		bIAx.set_xlabel('Day')
+		bIAx.set_ylabel('Bower\nIndex')
+		bIAx.xaxis.set_major_locator(ticker.MultipleLocator(base=1.0))
+
+		volAx = figDaily.add_subplot(bottomGrid[0], sharex=bIAx)
+		volAx.plot(dailyDT['Midpoint'], dailyDT['depthBowerVolume'])
+		volAx.plot(hourlyDT['Midpoint'], hourlyDT['depthBowerVolume'])
+		volAx.set_ylabel('Volume\nChange')
+		plt.setp(volAx.get_xticklabels(), visible=False)
+
+		figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
+	
 		figHourly.savefig(self.fileManager.localHourlyDepthSummaryFigure)
-		"""
+		# pdb.set_trace()
+
 		plt.close('all')
 
 	def createRGBVideo(self):

@@ -8,20 +8,35 @@ from PIL import Image,ImageDraw
 class DepthAnalyzer:
     # Contains code process depth data for figure creation
 
-    def __init__(self, fileManager):
+    def __init__(self, fileManager,smooth_depth = True):
+        self.smooth_depth = smooth_depth
         self.fileManager = fileManager
         self.lp = self.fileManager.lp
         self.first_good_index = self.lp.frames
+        # pdb.set_trace()
         self._loadData()
+        
         self.goodPixels = np.count_nonzero(~np.isnan(self.depth_data[0,:]))
 
     def _loadData(self):
         # Loads depth tray information and smoothedDepthData from files that have already been downloaded
 
-        try:
-            self.depth_data
-        except AttributeError:
-            self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
+        # try:
+        #     self.depth_data
+        # except AttributeError:
+        #     self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
+        if self.smooth_depth:
+            try:
+                self.depth_data
+            except AttributeError:
+                self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
+        else:
+            try:
+                self.depth_data
+            except AttributeError:
+                self.depth_data = np.load(self.fileManager.localInterpDepthFile)
+            except FileNotFoundError:
+                self.depth_data = None
 
     def t_to_index(self, t):
         try:

@@ -174,6 +174,7 @@ class FileManager():
         self.localSmoothDepthDT = self.localAnalysisDir + 'smoothedDepthData.csv'
         self.localRGBDepthVideo = self.localAnalysisDir + 'DepthRGBVideo.mp4'
         self.localRawDepthFile = self.localTroubleshootingDir + 'rawDepthData.npy'
+        self.localInterpDepthFile = self.localTroubleshootingDir + 'interpDepthData.npy'
         self.localDepthSummaryFile = self.localSummaryDir + 'DataSummary.xlsx'
         self.localDailyDepthSummaryFigure = self.localSummaryDir + 'DailyDepthSummary.pdf'
         self.localHourlyDepthSummaryFigure = self.localSummaryDir + 'HourlyDepthSummary.pdf'
@@ -374,7 +375,7 @@ class FileManager():
         else:
             raise KeyError('Unknown key: ' + dtype)
 
-    def uploadProjectData(self, dtype, videoIndex, delete, no_upload = False):
+    def uploadProjectData(self, dtype, delete, no_upload = False):
         if dtype == 'Prep':
             if not no_upload:
                 self.uploadData(self.localDepthCropFile)
@@ -386,12 +387,25 @@ class FileManager():
             if delete:
                 shutil.rmtree(self.localProjectDir)
         
+        # elif dtype == 'Depth':
+        #     if not no_upload:
+        #         self.uploadData(self.localSmoothDepthFile)
+        #         self.uploadData(self.localSmoothDepthDT)
+        #         self.uploadData(self.localInterpDepthFile)
+        #         #self.uploadData(self.localRGBDepthVideo)
+        #         self.uploadData(self.localDepthLogfile)
+        #         self.uploadData(self.localDailyDepthSummaryFigure)
+        #         self.uploadData(self.localHourlyDepthSummaryFigure)
+
+        #         #self.uploadData(self.localPaceDir)
+        #     if delete:
+        #         shutil.rmtree(self.localProjectDir)
         elif dtype == 'Depth':
             if not no_upload:
                 self.uploadData(self.localSmoothDepthFile)
-                self.uploadData(self.localSmoothDepthDT)
-                
-                #self.uploadData(self.localRGBDepthVideo)
+                self.uploadData(self.localRGBDepthVideo)
+                self.uploadData(self.localRawDepthFile)
+                self.uploadData(self.localInterpDepthFile)
                 self.uploadData(self.localDepthLogfile)
                 self.uploadData(self.localDailyDepthSummaryFigure)
                 self.uploadData(self.localHourlyDepthSummaryFigure)

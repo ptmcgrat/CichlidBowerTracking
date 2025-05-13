@@ -46,7 +46,7 @@ class PrepPreparer:
 
     def _createLogFile(self):
         with open(self.fileManager.localPrepLogfile,'w') as f:
-            print('GitBranch: ' + fm_obj.branch_name)
+            print('GitBranch: ' + self.fileManager.branch_name)
             print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
             print('NumpyVersion: ' + np.__version__, file = f)
             print('MatplotlibVersion: ' + matplotlib.__version__, file = f)
