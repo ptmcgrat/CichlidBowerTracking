@@ -139,7 +139,7 @@ class DriveUpdater:
         daylightFrames_day = [x for x in daylightFrames if x.time.day == daylightFrames[-1].time.day ]
 
         for i in range(5):
-            axes.append(fig.add_subplot(num_rows, 5, i))
+            axes.append(fig.add_subplot(num_rows, 5, i+1))
         axes[0].set_title('Depth RGB')
         axes[1].set_title('PiCamera RGB')
         axes[2].set_title('First Depth')
@@ -182,13 +182,13 @@ class DriveUpdater:
                 reset_depth = [x for x in daylightFrames if x.time > self.tankresetstop[j+1]][0]
             
             offset = (num_trials - j) * 5
-            axes[offset + 0].imshow(img_1)
-            axes[offset + 0].set_ylabel('Trial ' + 'str(j+1)',fontsize=10, rotation=90, labelpad=20)# ha ='right')
+            axes[offset + 1].imshow(img_1)
+            axes[offset + 1].set_ylabel('Trial ' + 'str(j+1)',fontsize=10, rotation=90, labelpad=20)# ha ='right')
 
-            axes[offset + 1].imshow(img_2)
-            axes[offset + 2].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
+            axes[offset + 2].imshow(img_2)
+            axes[offset + 3].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
             if j != num_trials - 1:
-                axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
+                axes[offset + 4].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
 
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
