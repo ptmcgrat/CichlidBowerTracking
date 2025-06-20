@@ -179,7 +179,7 @@ class DriveUpdater:
             depth_last = self._filterPixels(np.load(self.projectDirectory + trial_frames[-1].npy_file))
             
             if j != num_trials - 1:
-                reset_depth = [x for x in daylightFrames if x.time > self.tankresetstop[j+1]][0]
+                reset_depth = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j+1]][0]
             
             offset = (num_trials - j) * 5
             axes[offset + 1].imshow(img_1)
