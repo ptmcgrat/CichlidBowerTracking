@@ -180,7 +180,7 @@ class DriveUpdater:
             
             if j != num_trials - 1:
                 reset_depth = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j+1]][0]
-            
+            pdb.set_trace()
             offset = (num_trials - j) * 5
             axes[offset + 1].imshow(img_1)
             axes[offset + 1].set_ylabel('Trial ' + 'str(j+1)',fontsize=10, rotation=90, labelpad=20)# ha ='right')
