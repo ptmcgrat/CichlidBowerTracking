@@ -173,7 +173,8 @@ class DriveUpdater:
             else:
                 trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1] and x.time < self.lp.tankresetstart[j]]
             days = {}
-            [days[x.time.day] for x in trial_frames]
+            for x in trial_frames:
+                days[x.time.day] = 1
             pdb.set_trace()
             img_1 = img.imread(self.projectDirectory + trial_frames[0].pic_file)
             img_2 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
