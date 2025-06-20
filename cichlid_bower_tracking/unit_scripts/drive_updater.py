@@ -172,8 +172,8 @@ class DriveUpdater:
             for i in range(5):
                 axes.append(fig.add_subplot(num_rows, 5, 5*(j+1) + i))
 
-            img_1 = img.imread(self.projectDirectory + total_frames[0].pic_file)
-            img_2 = img.imread(self.projectDirectory + total_frames[-1].pic_file)
+            img_1 = img.imread(self.projectDirectory + trial_frames[0].pic_file)
+            img_2 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
             
             depth_first = self._filterPixels(np.load(self.projectDirectory + trial_frames[0].npy_file))
             depth_last = self._filterPixels(np.load(self.projectDirectory + trial_frames[-1].npy_file))
