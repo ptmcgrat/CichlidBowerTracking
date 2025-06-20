@@ -179,7 +179,9 @@ class DriveUpdater:
             pit = []
             for current_day in days:
                 day_data = [x for x in daylightFrames if x.time.day == current_day]
-                day_change = day_data[-1] - day_data[0]
+                day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0]))
+                day_stop = self._filterPixels(np.load(self.projectDirectory + day_data[-1]))
+                day_change = day_stop - day_start
                 pdb.set_trace()
 
             img_1 = img.imread(self.projectDirectory + trial_frames[0].pic_file)
