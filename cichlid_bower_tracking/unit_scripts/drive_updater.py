@@ -186,13 +186,13 @@ class DriveUpdater:
                     pdb.set_trace()
                 reset_depth = self._filterPixels(np.load(self.projectDirectory + reset_depth_frame.npy_file))
             offset = (num_trials - j) * 5
-            axes[offset + 1].imshow(img_1)
-            axes[offset + 1].set_ylabel('Trial ' + 'str(j+1)',fontsize=10, rotation=90, labelpad=20)# ha ='right')
+            axes[offset].imshow(img_1)
+            axes[offset].set_ylabel('Trial ' + str(j+1),fontsize=16, rotation=90, labelpad=20)# ha ='right')
 
-            axes[offset + 2].imshow(img_2)
-            axes[offset + 3].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
+            axes[offset + 1].imshow(img_2)
+            axes[offset + 2].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
             if j != num_trials - 1:
-                axes[offset + 4].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
+                axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
 
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
