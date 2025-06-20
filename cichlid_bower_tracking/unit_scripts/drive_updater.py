@@ -183,7 +183,8 @@ class DriveUpdater:
             depth_last = self._filterPixels(np.load(self.projectDirectory + trial_frames[-1].npy_file))
             
             if j != num_trials - 1:
-                reset_depth = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j+1]][0]
+                reset_depth_frame = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j+1]][0]
+                reset_depth = self._filterPixels(np.load(self.projectDirectory + resest_depth_frame.npy_file))
             offset = (num_trials - j) * 5
             axes[offset + 1].imshow(img_1)
             axes[offset + 1].set_ylabel('Trial ' + 'str(j+1)',fontsize=10, rotation=90, labelpad=20)# ha ='right')
