@@ -163,11 +163,11 @@ class DriveUpdater:
 
         for j in range(num_trials):
             if j == 0:
-                trial_frames = [x for x in daylightFrames if x.time < self.tankresetstart[j]]
+                trial_frames = [x for x in daylightFrames if x.time < self.lp.tankresetstart[j]]
             elif j == num_trials - 1:
-                trial_frames = [x for x in daylightFrames if x.time > self.tankresetstop[j-1]]
+                trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1]]
             else:
-                trial_frames = [x for x in daylightFrames if x.time > self.tankresetstop[j-1] and x.time < self.tankresetstart[j]]
+                trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1] and x.time < self.lp.tankresetstart[j]]
 
             for i in range(5):
                 axes.append(fig.add_subplot(num_rows, 5, 5*(j+1) + i))
