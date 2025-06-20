@@ -173,9 +173,6 @@ class DriveUpdater:
             else:
                 trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1] and x.time < self.lp.tankresetstart[j]]
 
-            for i in range(5):
-                axes.append(fig.add_subplot(num_rows, 5, 5*(j+1) + i))
-
             img_1 = img.imread(self.projectDirectory + trial_frames[0].pic_file)
             img_2 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
             
