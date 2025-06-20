@@ -42,6 +42,21 @@ class DriveUpdater:
         self._uploadImage(self.projectDirectory + self.lp.tankID + '.jpg', self.projectDirectory + self.lp.tankID + '_2.jpg', self.lp.tankID, self.lp.tankID + '_2.jpg')
     
     def _filterPixels(self, pixels):
+            
+            try:
+                self.depth_max
+            except AttributeError:
+                try:
+                    local_path = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/MaskedImg.jpg"
+                    self.fileManager.downloadData(local_path)
+                    mask = Image.open(local_path)
+                    mask = mask.convert("L")
+                    mask = np.array(mask)
+                    self.depth_mask = mask != 0
+                except:
+                    self.depth_mask = np.ones(shape = (480,640))
+
+
             """
             try:
                 self.badPixels
@@ -92,232 +107,113 @@ class DriveUpdater:
         return daily_bower, volume_pits, volume_castles
     
     def _createImage(self, stdcutoff = 0.1):
-        if len(self.lp.frames) > 1 and self.lp.frames[-1].std< 0.00001 and self.lp.frames[-1].gp==self.lp.frames[-2].gp:
+        # Creates an image to describe the previous round of building. Current setup is:
+        # 1st row: Depth Sensory RGB; PiCamera RGB; Current Depth; First Depth; Current Day of Building
+        # For each trial
+        # 2nd row: First pic; last pic; Total change; Reset change (if available); daily volume info
+
+        # Check to see if the data is duplicated
+        if len(self.lp.frames) > 1 and self.lp.frames[-1].std < 0.00001 and self.lp.frames[-1].gp==self.lp.frames[-2].gp:
             self.googleController.modifyPiGS('DataDuplicated', 'Yes')
         else: 
             self.googleController.modifyPiGS('DataDuplicated', 'No')
 
-
-        lastHourFrames = [x for x in self.lp.frames if x.time > self.lastFrameTime - datetime.timedelta(hours = 1)] # frames from the last hour
-        lastTwoHourFrames = [x for x in self.lp.frames if x.time > self.lastFrameTime - datetime.timedelta(hours = 2)] # frames from the last two hours
-        daylightFrames = [x for x in self.lp.frames if x.time.hour >= 8 and x.time.hour <= 17] # frames during daylight
+        # Calulate how many trials
         if self.lp.tankresetstop:
-            reset_time_delta = self.lastFrameTime - self.lp.tankresetstop[-1]
-            lastTankResetFrame = [x for x in self.lp.frames if x.time > self.lastFrameTime - reset_time_delta]
-
-        th_change = str(self.lastFrameTime-lastTwoHourFrames[0].time)
-        h_change = str(self.lastFrameTime - lastHourFrames[0].time)
-
-        # Dictionary to hold all the unique days that have daylight frames
-        days={}
-        
-        for x in daylightFrames:
-            days.update({str(x.time.day)+' '+str(x.time.month):x.time.month})
-            # This way we only identify days that have frames during the daylight
+            num_trials = len(self.lp.tankresetstop) + 1
+        else:
+            num_trials = 1
 
         # Determine the size of the figure and create it
-        num_rows = 3 + len(days) # First pic rows, 1 hour, 2 hour, then 1 row for each unique day
-        axes = [0]*4*num_rows # Hold axes in lis
-        
+        num_rows = num_trials + 1 # First row is general, rest of rows are per trial   
         fig = plt.figure(figsize=(20,4*num_rows + 1))
         fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime))
-        
         plt.rcParams.update({'font.size': 18})
+        axes = []
+
+        # Grab daylight frames
+
         
-        local_path = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/MaskedImg.jpg"
-        
-        try:
-            self.fileManager.downloadData(local_path)
-            mask = Image.open(local_path)
-            mask = mask.convert("L")
-            mask = np.array(mask)
-            self.depth_mask = mask != 0
-        except:
-            self.depth_mask = np.ones(shape = (480,640))
+        # Create first row
+        daylightFrames = [x for x in self.lp.frames if x.time.hour >= 8 and x.time.hour <= 17] # frames during daylight        
+        daylightFrames_day = [x for x in daylightFrames if x.time.day == daylightFrames[-1].time.day ]
 
-        # Create subplots
-        for i in range(num_rows):
-            #pdb.set_trace()
-            axes[4*i + 0] = fig.add_subplot(num_rows, 4, 4*i + 1) # Filtered Absolute Depth
-            axes[4*i + 1] = fig.add_subplot(num_rows, 4, 4*i + 2) # Relative Depth Change
-            axes[4*i + 2] = fig.add_subplot(num_rows, 4, 4*i + 3) # Bower changes
-            axes[4*i + 3] = fig.add_subplot(num_rows, 4, 4*i + 4) # Scatterplot
+        for i in range(5):
+            axes.append(fig.add_subplot(num_rows, 5, i))
+        axes[0].set_title('Depth RGB')
+        axes[1].set_title('PiCamera RGB')
+        axes[2].set_title('First Depth')
+        axes[3].set_title('Current Depth')
+        axes[4].set_title('Last day change')
 
-       
-        # Set titles of each plot, strating with the first three rows
-        axes[0].set_title('Kinect RGB Picture')
-        axes[1].set_title('PiCamera RGB Picture')
-        axes[2].set_title('Total Depth Change' )
-        axes[3].set_title('Bower volumes for different thresholds', fontsize = 10)
-        axes[5].set_ylabel('Last hour change\n'+h_change,fontsize=10, rotation=90, labelpad=20)# ha ='right') #, ha='left', va='center')
-        axes[5].yaxis.set_label_coords(-0.05, 0.5)
-        axes[6].set_ylabel('Last hour bower\n',fontsize=10, rotation=90, labelpad=20)# ha ='right')
-        axes[6].yaxis.set_label_coords(-0.05, 0.5)
-        # axes[7].set_ylabel('Bower volumes for different thresholds\n',fontsize=10, rotation=90, labelpad=20)
-
-        axes[9].set_ylabel('Last 2 hours change\n'+th_change,fontsize=10, rotation=90, labelpad=20)# ha ='right') #, ha='left', va='center')
-        axes[9].yaxis.set_label_coords(-0.05, 0.5)
-        axes[10].set_ylabel('Last 2 hours bower\n',fontsize=10, rotation=90, labelpad=20)#, ha ='right')
-        axes[10].yaxis.set_label_coords(-0.05, 0.5)
-        # axes[11].set_ylabel('Bower volumes for different thresholds\n',fontsize=10, rotation=90, labelpad=20)
-        # axes[3].set_title('Hour ago Depth')
-        # axes[4].set_title('Last hour change\n'+h_change)
-        # axes[5].set_title('Last hour bower\n')
-        # axes[6].set_title('2 Hour ago Depth')
-        # axes[7].set_title('Last 2 hours change\n'+th_change)
-        # axes[8].set_title('Last 2 hours bower\n')
-        
-        #pdb.set_trace()
-        # Now set titles of the unknown number of days
-        for i, day in enumerate([x for x in days.keys()][::-1]):
-            # axes[3*i+9].set_title(str(days[day]) + '/' + str(day) + ' Depth Data')
-            axes[4*i+13].set_ylabel(str(days[day]) + '/' + str(day) + ' Daytime Depth Change',fontsize=10, rotation=90, labelpad=20)
-            axes[4*i+14].set_ylabel(str(days[day]) + '/' + str(day) + ' Identified Bower',fontsize=10, rotation=90, labelpad=20)
-            axes[4*i+15].set_ylabel(str(days[day]) + '/' + str(day) + ' Bower volumes for different thresholds',fontsize=10, rotation=90, labelpad=20)
-        
-
-        # Hide x and y axis ticks & labels for all subplots
-        for ax in axes:
-            ax.set_xticks([])  # Remove x-axis ticks
-            ax.set_yticks([])  # Remove y-axis ticks
-            ax.set_xticklabels([])  # Remove x-axis tick labels
-            ax.set_yticklabels([])  # Remove y-axis tick labels
-
-        # Plot data  for first two rows
         img_1 = img.imread(self.projectDirectory + self.lp.frames[-1].pic_file)
-        try:
-            img_2 = img.imread(self.projectDirectory + self.lp.movies[-1].pic_file)
-        except:
-            img_2 = img_1
-        
-        # depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
-        # depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
-        # depth_hour = self._filterPixels(np.load(self.projectDirectory + lastHourFrames[0].npy_file))
-        # depth_twohours = self._filterPixels(np.load(self.projectDirectory + lastTwoHourFrames[0].npy_file))
-        if self.lp.tankresetstop:
-            depth_first = self._filterPixels(np.load(self.projectDirectory + lastTankResetFrame[0].npy_file))
-        else:
-            depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
-        
+        img_2 = img.imread(self.projectDirectory + self.lp.movies[-1].pic_file)
+        depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
         depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
-        depth_last[(self.depth_mask == 0)] = np.nan
+        depth_dayend = self._filterPixels(np.load(self.projectDirectory + daylightFrames[-1].npy_file))
+        depth_daystart = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0]))
 
-        # depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
-        depth_first[(self.depth_mask == 0)] = np.nan
-
-        depth_hour = self._filterPixels(np.load(self.projectDirectory + lastHourFrames[0].npy_file))
-        depth_hour[(self.depth_mask == 0)] = np.nan
-
-        depth_twohours = self._filterPixels(np.load(self.projectDirectory + lastTwoHourFrames[0].npy_file))
-        depth_twohours[(self.depth_mask == 0)] = np.nan
-
-        median_height = np.nanmedian(depth_first)
-
-        total_depth_change = np.array(depth_last - depth_first, dtype=np.float32)
-
-        # bower_mask = np.where(total_depth_change < 0, -1, np.where(total_depth_change > 1,1,0))
-        thresholds = [0.125, 0.25, 0.5, 0.75, 1.0, 1.5, 2.25, 3.0, 4.0]
-
-        bower_hour, hour_volume_pits, hour_volume_castles = self._calculateBower(depth_last - depth_hour,total_depth_change, thresholds)
-        
-        bower_twohours, twohours_volume_pits, twohours_volume_castles = self._calculateBower(depth_last - depth_twohours,total_depth_change, thresholds) 
-
-        axes[8].set_ylabel('2 Hour ago Depth\nThreshold:'+str(thresholds[4])+'\nPit volume change:'+str(int(twohours_volume_pits[4]))+'\nCastle volume change:'+str(int(twohours_volume_castles[4])),fontsize=10, rotation=90, labelpad=20)
-        axes[4].set_ylabel('Hour ago Depth\nThreshold:'+str(thresholds[4])+'\nPit volume change:'+str(int(hour_volume_pits[4]))+'\nCastle volume change:'+str(int(hour_volume_castles[4])),fontsize=10, rotation=90, labelpad=20)
-       
         median_height = np.nanmedian(depth_first)
 
         axes[0].imshow(img_1)
         axes[1].imshow(img_2)
-        axes[2].imshow(depth_last - depth_first, vmin = -2, vmax = 2)
-        axes[4].imshow(depth_hour, vmin = median_height - 8, vmax = median_height + 8)
-        axes[5].imshow(depth_last - depth_hour, vmin = -0.5, vmax = 0.5)
-        axes[6].imshow(bower_hour, vmin = -1, vmax = 1)
-        axes[7].scatter(thresholds, hour_volume_pits, color='blue', label='Pit volume', s=25, alpha=0.7)
-        axes[7].scatter(thresholds, hour_volume_castles, color='red', label='Castle volume', s=25, alpha=0.7)
+        axes[2].imshow(depth_first, vmin = median_height - 4, vmax = median_height + 4)
+        axes[3].imshow(depth_last, vmin = median_height - 4, vmax = median_height + 4)
+        axes[4].imshow(depth_dayend - depth_daystart, vmin = -2, vmax = 2)
 
-        axes[7].set_xlabel('Thresholds', fontsize = 8)  # Label for X-axis
-        axes[7].set_ylabel('Volumes', fontsize = 8, ha = 'right')  # Label for Y-axis
-        axes[7].legend(fontsize = 6)  # Add a legend to differentiate the datasets
-        # axes[7].grid(True)
-        axes[7].set_xticks(thresholds)
-        axes[7].set_xticklabels(thresholds, fontsize=5, rotation=45)
-        axes[7].set_ylim(-250, 250)
-        y_ticks = [-200,-150, -100, -50,  0, 50, 100, 150, 200]
-        axes[7].set_yticks(y_ticks)
-        axes[7].set_yticklabels(y_ticks, fontsize = 5)
-        axes[7].yaxis.set_label_coords(-0.1, 0.5)
+        for j in num_trials:
+            if j == 0:
+                trial_frames = [x for x in daylightFrames if x.time < self.tankresetstart[j]]
+            elif j == num_trials - 1:
+                trial_frames = [x for x in daylightFrames if x.time > self.tankresetstop[j-1]]
+            else:
+                trial_frames = [x for x in daylightFrames if x.time > self.tankresetstop[j-1] and x.time < self.tankresetstart[j]]
 
-        axes[8].imshow(depth_twohours, vmin = median_height - 8, vmax = median_height + 8)
-        axes[9].imshow(depth_last - depth_twohours, vmin = -0.5, vmax = 0.5)
-        axes[10].imshow(bower_twohours, vmin = -0.5, vmax = 0.5)
-        axes[11].scatter(thresholds, twohours_volume_pits, color='blue', label='Pit volume', s=25, alpha=0.7)
-        axes[11].scatter(thresholds, twohours_volume_castles, color='red', label='Castle volume', s=25, alpha=0.7)
-        axes[11].set_xlabel('Thresholds', fontsize = 8)  # Label for X-axis
-        axes[11].set_ylabel('Volumes', fontsize = 8, ha = 'right')  # Label for Y-axis
-        axes[11].legend(fontsize = 6)  # Add a legend to differentiate the datasets
-        # axes[11].grid(True)
-        axes[11].set_xticks(thresholds)
-        axes[11].set_xticklabels(thresholds, fontsize=5, rotation=45)
-        axes[11].set_ylim(-250, 250)
-        axes[11].set_yticks(y_ticks)
-        axes[11].set_yticklabels(y_ticks, fontsize = 5)
-        axes[11].yaxis.set_label_coords(-0.1, 0.5)
+            for i in range(5):
+                axes.append(fig.add_subplot(num_rows, 5, 5*(j+1) + i))
 
-        for i,date in enumerate([x for x in days.keys()][::-1]):
-            day=date.split(' ')[0]
-            month=date.split(' ')[1]
-            daylightFrames_month = [x for x in daylightFrames if x.time.month == int(month) ]
-            daylightFrames_day = [x for x in daylightFrames_month if x.time.day == int(day) ]
+            img_1 = img.imread(self.projectDirectory + total_frames[0].pic_file)
+            img_2 = img.imread(self.projectDirectory + total_frames[-1].pic_file)
             
-            if daylightFrames_day==[]:
-                print(date)
-                # frames during daylight
-            depth_start = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0].npy_file))
-            depth_start[(self.depth_mask == 0)] = np.nan
-            depth_stop = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[-1].npy_file))
-            depth_stop[(self.depth_mask == 0)] = np.nan
-            bower, volume_pits, volume_castles = self._calculateBower(depth_stop - depth_start, total_depth_change, thresholds)
-
-            axes[4*i+12].set_ylabel(str(days[date]) + '/' + str(date) + ' Depth Data\nThreshold:'+str(thresholds[4])+'\nPit volume change:'+str(int(volume_pits[4]))+'\nCastle volume change:' + str(int(volume_castles[4])),fontsize=10, rotation=90, labelpad=20)
+            depth_first = self._filterPixels(np.load(self.projectDirectory + trial_frames[0].npy_file))
+            depth_last = self._filterPixels(np.load(self.projectDirectory + trial_frames[-1].npy_file))
             
-            axes[4*i+12].imshow(depth_start, vmin = median_height - 8, vmax = median_height + 8)
-            axes[4*i+13].imshow(depth_stop - depth_start, vmin = -1, vmax = 1)
-            axes[4*i+14].imshow(bower, vmin = -1, vmax = 1)
-            axes[4*i+15].scatter(thresholds, volume_pits, color='blue', label='Pit volume', s=25, alpha=0.7)
-            axes[4*i+15].scatter(thresholds, volume_castles, color='red', label='Castle volume', s=25, alpha=0.7)
-            axes[4*i+15].set_xlabel('Thresholds', fontsize = 8)  # Label for X-axis
-            axes[4*i+15].set_ylabel('Volumes', fontsize = 8, ha = 'right')  # Label for Y-axis
-            axes[4*i+15].legend(fontsize = 6)  # Add a legend to differentiate the datasets
-            # axes[4*i+15].grid(True)
-            axes[4*i+15].set_xticks(thresholds)
-            axes[4*i+15].set_xticklabels(thresholds, fontsize=5,rotation=45)
-            axes[4*i + 15].set_ylim(-250, 250)
-            axes[4*i+15].set_yticks(y_ticks)
-            axes[4*i+15].set_yticklabels(y_ticks, fontsize = 5)
-            axes[4*i+15].yaxis.set_label_coords(-0.1, 0.5)
+            if j != num_trials - 1:
+                reset_depth = [x for x in daylightFrames if x.time > self.tankresetstop[j+1]][0]
+            
+            offset = (num_trials - j) * 5
+            axes[offset + 0].imshow(img_1)
+            axes[offset + 0].set_ylabel('Trial ' + 'str(j+1)',fontsize=10, rotation=90, labelpad=20)# ha ='right')
+
+            axes[offset + 1].imshow(img_2)
+            axes[offset + 2].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
+            if j != num_trials - 1:
+                axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
+
+
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         fig.subplots_adjust(left=0.2, hspace=0.4)
         plt.savefig(self.projectDirectory + self.lp.tankID + '.jpg')
         #return self.graph_summary_fname
 
-        fig = plt.figure(figsize=(6,3))
+        fig = plt.figure(figsize=(3,3))
         fig.tight_layout()
         fig.subplots_adjust(left=0.2, hspace=0.4)
-        ax1 = fig.add_subplot(1, 2, 1) #Pic from Kinect
-        ax2 = fig.add_subplot(1, 2, 2) #Pic from Camera
-        ax1.imshow(depth_last - depth_twohours, vmin = -.75, vmax = .75)
+        ax1 = fig.add_subplot(1, 1, 1) #Pic from Kinect
+        #ax2 = fig.add_subplot(1, 2, 2) #Pic from Camera
+
+        ax1.imshow(depth_dayend - depth_daystart, vmin = -1, vmax = 1)
         ax1.axes.get_xaxis().set_visible(False)
         ax1.axes.get_yaxis().set_visible(False)
 
-        ax2.imshow(depth_last - depth_hour, vmin = -.75, vmax = .75) # +- 1 cms
-        ax2.axes.get_xaxis().set_visible(False)
-        ax2.axes.get_yaxis().set_visible(False)
+        #ax2.imshow(depth_last - depth_hour, vmin = -.75, vmax = .75) # +- 1 cms
+        #ax2.axes.get_xaxis().set_visible(False)
+        #ax2.axes.get_yaxis().set_visible(False)
 
         ax1.set_xticklabels([])  # Hide x-axis labels
         ax1.set_yticklabels([]) 
-        ax2.set_xticklabels([])  # Hide x-axis labels
-        ax2.set_yticklabels([]) 
+        #ax2.set_xticklabels([])  # Hide x-axis labels
+        #ax2.set_yticklabels([]) 
 
         fig.tight_layout()
 
