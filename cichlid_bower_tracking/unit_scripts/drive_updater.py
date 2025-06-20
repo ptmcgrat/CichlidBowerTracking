@@ -151,7 +151,7 @@ class DriveUpdater:
         depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
         depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
         depth_dayend = self._filterPixels(np.load(self.projectDirectory + daylightFrames[-1].npy_file))
-        depth_daystart = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0]))
+        depth_daystart = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0].npy_file))
 
         median_height = np.nanmedian(depth_first)
 
