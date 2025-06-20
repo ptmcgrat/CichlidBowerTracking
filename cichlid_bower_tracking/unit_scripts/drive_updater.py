@@ -161,7 +161,7 @@ class DriveUpdater:
         axes[3].imshow(depth_last, vmin = median_height - 4, vmax = median_height + 4)
         axes[4].imshow(depth_dayend - depth_daystart, vmin = -2, vmax = 2)
 
-        for j in num_trials:
+        for j in range(num_trials):
             if j == 0:
                 trial_frames = [x for x in daylightFrames if x.time < self.tankresetstart[j]]
             elif j == num_trials - 1:
