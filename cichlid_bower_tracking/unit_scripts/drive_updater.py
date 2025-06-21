@@ -88,7 +88,7 @@ class DriveUpdater:
 
         #bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
         volume_pit = np.nansum(daily_bower[np.where(bower_mask == 1)])* self.fileManager.pixelLength ** 2
-        volume_castle = np.nansum(daily_bower[np.where(bower_mask == -1)])*-1* self.fileManager.pixelLength ** 2
+        volume_castle = np.nansum(daily_bower[np.where(bower_mask == -1)])* self.fileManager.pixelLength ** 2
         # print("volume_castle", volume_castle)
         # print("volume_pit",volume_pit)
         # pdb.set_trace()
@@ -132,6 +132,7 @@ class DriveUpdater:
         # Create first row
         daylightFrames = [x for x in self.lp.frames if x.time.hour >= 8 and x.time.hour <= 17] # frames during daylight        
         daylightFrames_day = [x for x in daylightFrames if x.time.day == daylightFrames[-1].time.day ]
+        pdb.set_trace()
 
         for i in range(5):
             axes.append(fig.add_subplot(num_rows, 5, i+1))
@@ -217,9 +218,9 @@ class DriveUpdater:
             axes[offset + 4].plot(plotdays, pit, '-o', color = 'blue', label = 'Pit volume', alpha = 0.7)
             axes[offset + 4].plot(plotdays, castle, '-o', color = 'red', label = 'Castle volume', alpha = 0.7)
             axes[offset + 4].set_ylim(-1000,1000)
-            for i in range(5):
-                axes[offset + 1].set_xticks([])
-                axes[offset + 1].set_yticks([])
+            for i in range(4):
+                axes[offset + i].set_xticks([])
+                axes[offset + i].set_yticks([])
 
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
