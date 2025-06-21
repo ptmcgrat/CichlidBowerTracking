@@ -185,6 +185,8 @@ class DriveUpdater:
             
             castle = []
             pit = []
+            total_depth_change = depth_last - depth_first
+            threshold = 1
             bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
             for current_day in days:
                 day_data = [x for x in daylightFrames if x.time.day == current_day]
