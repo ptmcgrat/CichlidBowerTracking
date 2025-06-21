@@ -54,8 +54,7 @@ class DriveUpdater:
                     self.depth_mask = mask != 0
                 except:
                     self.depth_mask = np.ones(shape = (480,640))
-
-            pdb.set_trace()
+            pixels[self.depth_mask == False] = np.nan
             """
             try:
                 self.badPixels
