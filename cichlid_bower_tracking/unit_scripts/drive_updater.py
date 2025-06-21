@@ -71,7 +71,7 @@ class DriveUpdater:
             """
             return pixels
         
-    def _calculateBower(self, depthChange, total_depth_change, i):
+    def _calculateBower(self, depthChange, total_depth_change, threshold):
         """
         daily_bower = daily_change.copy()
         thresholded_change = np.where((daily_change >= 0.4) | (daily_change <= -0.4), True, False)
@@ -84,26 +84,22 @@ class DriveUpdater:
         # daily_bower[(thresholded_change == 0) & (~np.isnan(depthChange))] = 0
         # return daily_bower
         # thresholds = [0.2,0.3,0.5,0.7,0.9, 1.2, 1.3, 1.5, 1.7, 2]
-        volume_pits = []
-        volume_castles =[]
         daily_bower = depthChange.copy()
 
         bower_mask = np.where(total_depth_change < (-1*i), -1, np.where(total_depth_change > i,1,0))
         volume_pit = np.nansum(daily_bower[np.where(bower_mask == 1)])* self.fileManager.pixelLength ** 2
         volume_castle = np.nansum(daily_bower[np.where(bower_mask == -1)])*-1* self.fileManager.pixelLength ** 2
-        volume_pits.append(volume_pit)
-        volume_castles.append(volume_castle)
         # print("volume_castle", volume_castle)
         # print("volume_pit",volume_pit)
         # pdb.set_trace()
         # daily_bower [(mask == 0)] = 0
         # daily_bower[(self.depth_mask == 0)] = np.nan
 
-        bower_mask = np.where(total_depth_change < -1.0, -1, np.where(total_depth_change > 1.0,1,0))
-        daily_bower [(bower_mask == 0)] = 0
-        daily_bower[(self.depth_mask == 0)] = np.nan
+        #bower_mask = np.where(total_depth_change < -1.0, -1, np.where(total_depth_change > 1.0,1,0))
+        #daily_bower [(bower_mask == 0)] = 0
+        #daily_bower[(self.depth_mask == 0)] = np.nan
 
-        return volume_pits, volume_castles
+        return volume_pit, volume_castle
     
     def _createImage(self, stdcutoff = 0.1):
         # Creates an image to describe the previous round of building. Current setup is:
@@ -174,18 +170,7 @@ class DriveUpdater:
             days = {}
             for x in trial_frames:
                 days[x.time.day] = 1
-            castle = []
-            pit = []
-            for current_day in days:
-                day_data = [x for x in daylightFrames if x.time.day == current_day]
-                day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0].npy_file))
-                day_stop = self._filterPixels(np.load(self.projectDirectory + day_data[-1].npy_file))
-                day_change = day_stop - day_start
-                pit_day, castle_day = self._calculateBower(day_change, day_change, 0.75)
-                pit.append(pit_day)
-                castle.append(castle_day)
-
-            pdb.set_trace()
+            
 
             img_1 = img.imread(self.projectDirectory + trial_frames[0].pic_file)
             img_2 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
@@ -193,6 +178,19 @@ class DriveUpdater:
             depth_first = self._filterPixels(np.load(self.projectDirectory + trial_frames[0].npy_file))
             depth_last = self._filterPixels(np.load(self.projectDirectory + trial_frames[-1].npy_file))
             
+            castle = []
+            pit = []
+            for current_day in days:
+                day_data = [x for x in daylightFrames if x.time.day == current_day]
+                day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0].npy_file))
+                day_stop = self._filterPixels(np.load(self.projectDirectory + day_data[-1].npy_file))
+                day_change = day_stop - day_start
+                pit_day, castle_day = self._calculateBower(day_change, depth_last - depth_first, 1)
+                pit.append(pit_day)
+                castle.append(castle_day)
+
+            pdb.set_trace()
+
             if j != num_trials - 1:
                 try:
                     reset_depth_frame = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j+1]][0]
