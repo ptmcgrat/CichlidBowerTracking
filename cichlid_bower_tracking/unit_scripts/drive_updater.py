@@ -1,5 +1,5 @@
 
-import argparse, datetime, gspread, time, pdb, warnings, psutil
+import argparse, datetime, gspread, time, pdb, warnings, psutil, shutil
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 from cichlid_bower_tracking.helper_modules.googleController import GoogleController as GC
@@ -42,31 +42,26 @@ class DriveUpdater:
         self._uploadImage(self.projectDirectory + self.lp.tankID + '.jpg', self.projectDirectory + self.lp.tankID + '_2.jpg', self.lp.tankID, self.lp.tankID + '_2.jpg')
     
     def _filterPixels(self, pixels):
+            
             try:
                 self.depth_max
             except AttributeError:
-                try:
-                    local_path = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/MaskedImg.jpg"
-                    self.fileManager.downloadData(local_path)
-                    mask = Image.open(local_path)
+                mask_file = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/MaskedImg.jpg"
+                if self.fileManager.checkFileExists(mask_file):
+                    self.fileManager.downloadData(mask_file)
+                    mask = Image.open(mask_file)
                     mask = mask.convert("L")
                     mask = np.array(mask)
                     self.depth_mask = mask != 0
-                except:
+                else:
+                    raw_file = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/FirstDepthRGB.jpg"
+                    if not self.fileManager.checkFileExists(raw_file):
+                        shutil.copyfile(self.fileManager.localFirstDepthRGB, raw_file)
+                        self.fileManager.uploadData(raw_file)
                     self.depth_mask = np.ones(shape = (480,640))
+            
             pixels[self.depth_mask == False] = np.nan
-            """
-            try:
-                self.badPixels
-            except AttributeError:
-                # Identify bad pixels
-                std_template = np.load(self.projectDirectory + daylightFrames[0].std_file)
-                stds = np.zeros(shape = (min(len(days), 10), std_template.shape[0], std_template.shape[1]), dtype = std_template.dtype())
-                # Read in std deviation data to determine threshold
-                #moved
-                dpth_dif = np.load(self.projectDirectory + self.lp.frames[-1].npy_file)
-                median_height = np.nanmedian(dpth_3)
-            """
+            
             return pixels
         
     def _calculateBower(self, daily_bower, bower_mask):
