@@ -71,7 +71,7 @@ class DriveUpdater:
             """
             return pixels
         
-    def _calculateBower(self, depthChange, total_depth_change, threshold):
+    def _calculateBower(self, daily_bower, bower_mask):
         """
         daily_bower = daily_change.copy()
         thresholded_change = np.where((daily_change >= 0.4) | (daily_change <= -0.4), True, False)
@@ -84,9 +84,9 @@ class DriveUpdater:
         # daily_bower[(thresholded_change == 0) & (~np.isnan(depthChange))] = 0
         # return daily_bower
         # thresholds = [0.2,0.3,0.5,0.7,0.9, 1.2, 1.3, 1.5, 1.7, 2]
-        daily_bower = depthChange.copy()
+        #daily_bower = depthChange.copy()
 
-        bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
+        #bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
         volume_pit = np.nansum(daily_bower[np.where(bower_mask == 1)])* self.fileManager.pixelLength ** 2
         volume_castle = np.nansum(daily_bower[np.where(bower_mask == -1)])*-1* self.fileManager.pixelLength ** 2
         # print("volume_castle", volume_castle)
@@ -122,8 +122,8 @@ class DriveUpdater:
         # Determine the size of the figure and create it
         num_rows = num_trials + 1 # First row is general, rest of rows are per trial   
         fig = plt.figure(figsize=(20,4*num_rows + 1))
-        fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime))
-        plt.rcParams.update({'font.size': 18})
+        fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime), fontsize=24)
+        #plt.rcParams.update({'font.size': 18})
         axes = []
 
         # Grab daylight frames
@@ -156,6 +156,11 @@ class DriveUpdater:
         axes[3].imshow(depth_last, vmin = median_height - 4, vmax = median_height + 4)
         axes[4].imshow(depth_dayend - depth_daystart, vmin = -2, vmax = 2)
 
+        for i in range(5):
+            axes[i].set_xticks([])
+            axes[i].set_yticks([])
+
+
         for j in range(num_trials):
             for i in range(5):
                 axes.append(fig.add_subplot(num_rows, 5, 5*(j+1) + i+1))
@@ -180,6 +185,7 @@ class DriveUpdater:
             
             castle = []
             pit = []
+            bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
             for current_day in days:
                 day_data = [x for x in daylightFrames if x.time.day == current_day]
                 day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0].npy_file))
@@ -201,12 +207,18 @@ class DriveUpdater:
             axes[offset].set_ylabel('Trial ' + str(j+1),fontsize=16, rotation=90, labelpad=20)# ha ='right')
 
             axes[offset + 1].imshow(img_2)
+
             axes[offset + 2].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
             if j != num_trials - 1:
                 axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
             plotdays = [x + 1 for x in range(len(days))]
-            axes[offset + 4].scatter(plotdays, pit, color = 'blue', label = 'Pit volume', s=25, alpha = 0.7)
-            axes[offset + 4].scatter(plotdays, castle, color = 'red', label = 'Pit volume', s=25, alpha = 0.7)
+            axes[offset + 4].plot(plotdays, pit, '-o', color = 'blue', label = 'Pit volume', s=25, alpha = 0.7)
+            axes[offset + 4].plot(plotdays, castle, '-o', color = 'red', label = 'Pit volume', s=25, alpha = 0.7)
+            axes[offset + 4].set_ylim(-1000,1000)
+            for i in range(5):
+                axes[offset + 1].set_xticks([])
+                axes[offset + 1].set_yticks([])
+
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         fig.subplots_adjust(left=0.2, hspace=0.4)
