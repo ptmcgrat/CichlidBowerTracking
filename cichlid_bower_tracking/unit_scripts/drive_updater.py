@@ -182,7 +182,7 @@ class DriveUpdater:
             threshold = 1
             bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
             for current_day in days:
-                day_data = [x for x in daylightFrames if x.time.day == current_day]
+                day_data = [x for x in trial_frames if x.time.day == current_day]
                 day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0].npy_file))
                 day_stop = self._filterPixels(np.load(self.projectDirectory + day_data[-1].npy_file))
                 day_change = day_stop - day_start
