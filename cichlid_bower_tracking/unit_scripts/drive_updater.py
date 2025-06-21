@@ -189,7 +189,6 @@ class DriveUpdater:
                 pit.append(pit_day)
                 castle.append(castle_day)
 
-            pdb.set_trace()
 
             if j != num_trials - 1:
                 try:
@@ -205,8 +204,9 @@ class DriveUpdater:
             axes[offset + 2].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
             if j != num_trials - 1:
                 axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
-            axes[offset + 4].scatter()
-
+            plotdays = [x + 1 for x in range(len(days))]
+            axes[offset + 4].scatter(plotdays, pit, color = 'blue', label = 'Pit volume', s=25, alpha = 0.7)
+            axes[offset + 4].scatter(plotdays, castle, color = 'red', label = 'Pit volume', s=25, alpha = 0.7)
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         fig.subplots_adjust(left=0.2, hspace=0.4)
