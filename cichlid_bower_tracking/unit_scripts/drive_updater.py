@@ -214,8 +214,8 @@ class DriveUpdater:
             if j != num_trials - 1:
                 axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
             plotdays = [x + 1 for x in range(len(days))]
-            axes[offset + 4].plot(plotdays, pit, '-o', color = 'blue', label = 'Pit volume', s=25, alpha = 0.7)
-            axes[offset + 4].plot(plotdays, castle, '-o', color = 'red', label = 'Pit volume', s=25, alpha = 0.7)
+            axes[offset + 4].plot(plotdays, pit, '-o', color = 'blue', label = 'Pit volume', alpha = 0.7)
+            axes[offset + 4].plot(plotdays, castle, '-o', color = 'red', label = 'Castle volume', alpha = 0.7)
             axes[offset + 4].set_ylim(-1000,1000)
             for i in range(5):
                 axes[offset + 1].set_xticks([])
