@@ -131,8 +131,7 @@ class DriveUpdater:
         
         # Create first row
         daylightFrames = [x for x in self.lp.frames if x.time.hour >= 8 and x.time.hour <= 17] # frames during daylight        
-        daylightFrames_day = [x for x in daylightFrames if x.time.day == daylightFrames[-1].time.day ]
-        pdb.set_trace()
+        daylightFrames_day = [x for x in daylightFrames if x.time.day == daylightFrames[-1].time.day and x.time.month == daylightFrames[-1].time.month]
 
         for i in range(5):
             axes.append(fig.add_subplot(num_rows, 5, i+1))
