@@ -42,7 +42,7 @@ class DriveUpdater:
         self._uploadImage(self.projectDirectory + self.lp.tankID + '.jpg', self.projectDirectory + self.lp.tankID + '_2.jpg', self.lp.tankID, self.lp.tankID + '_2.jpg')
     
     def _filterPixels(self, pixels):
-            
+            pdb.set_trace()
             try:
                 self.depth_max
             except AttributeError:
