@@ -193,7 +193,7 @@ class DriveUpdater:
                 day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0].npy_file))
                 day_stop = self._filterPixels(np.load(self.projectDirectory + day_data[-1].npy_file))
                 day_change = day_stop - day_start
-                pit_day, castle_day = self._calculateBower(day_change, depth_last - depth_first, 1)
+                pit_day, castle_day = self._calculateBower(day_change, bower_mask)
                 pit.append(pit_day)
                 castle.append(castle_day)
 
