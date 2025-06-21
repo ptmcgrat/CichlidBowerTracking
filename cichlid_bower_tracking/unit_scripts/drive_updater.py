@@ -86,7 +86,7 @@ class DriveUpdater:
         # thresholds = [0.2,0.3,0.5,0.7,0.9, 1.2, 1.3, 1.5, 1.7, 2]
         daily_bower = depthChange.copy()
 
-        bower_mask = np.where(total_depth_change < (-1*i), -1, np.where(total_depth_change > i,1,0))
+        bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
         volume_pit = np.nansum(daily_bower[np.where(bower_mask == 1)])* self.fileManager.pixelLength ** 2
         volume_castle = np.nansum(daily_bower[np.where(bower_mask == -1)])*-1* self.fileManager.pixelLength ** 2
         # print("volume_castle", volume_castle)
@@ -205,6 +205,7 @@ class DriveUpdater:
             axes[offset + 2].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
             if j != num_trials - 1:
                 axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
+            axes[offset + 4].scatter()
 
 
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
