@@ -155,7 +155,9 @@ class DriveUpdater:
                 axes.append(fig.add_subplot(num_rows, 5, 5*(j+1) + i+1))
 
         for j in range(num_trials):
-            if j == 0:
+            if not self.lp.tankresetstop:
+                trial_frames = [x for x in daylightFrames]
+            elif j == 0:
                 trial_frames = [x for x in daylightFrames if x.time < self.lp.tankresetstart[j]]
             elif j == num_trials - 1:
                 trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1]]
