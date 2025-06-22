@@ -1,5 +1,5 @@
 
-import argparse, datetime, gspread, time, pdb, warnings, psutil, shutil
+import argparse, datetime, gspread, time, pdb, warnings, psutil, shutil, os
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 from cichlid_bower_tracking.helper_modules.googleController import GoogleController as GC
@@ -11,10 +11,7 @@ import matplotlib.image as img
 import numpy as np
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
-from oauth2client.service_account import ServiceAccountCredentials
 import oauth2client
-from skimage import morphology
-import pdb
 from PIL import Image 
 
 parser = argparse.ArgumentParser()
@@ -27,9 +24,7 @@ class DriveUpdater:
         self.lp = LP(logfile)
 
         self.fileManager = FM(projectID = self.lp.projectID, analysisID = self.lp.analysisID)
-        self.node = self.lp.uname.split("node='")[1].split("'")[0]
         self.lastFrameTime = self.lp.frames[-1].time
-        self.masterDirectory = self.fileManager.localMasterDir
         self.projectDirectory = self.fileManager.localProjectDir
         
         self.googleController = GC(self.fileManager.localCredentialSpreadsheet)
@@ -56,6 +51,7 @@ class DriveUpdater:
                 else:
                     raw_file = self.fileManager.localMasterDir + "__TankData/"+ self.lp.tankID + "/FirstDepthRGB.jpg"
                     if not self.fileManager.checkFileExists(raw_file):
+                        os.makedirs(os.path.dirname(raw_file), exist_ok=True)
                         shutil.copyfile(self.fileManager.localFirstDepthRGB, raw_file)
                         self.fileManager.uploadData(raw_file)
                     self.depth_mask = np.ones(shape = (480,640))
