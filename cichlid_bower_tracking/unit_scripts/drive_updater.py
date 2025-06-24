@@ -198,7 +198,7 @@ class DriveUpdater:
 
             if j != num_trials - 1:
                 try:
-                    reset_depth_frame = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j+1]][0]
+                    reset_depth_frame = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j]][0]
                 except IndexError:
                     pdb.set_trace()
                 reset_depth = self._filterPixels(np.load(self.projectDirectory + reset_depth_frame.npy_file))
