@@ -104,7 +104,7 @@ class DriveUpdater:
 
         # Calulate how many trials
         if self.lp.tankresetstop:
-            num_trials = len(self.lp.tankresetstop)
+            num_trials = len(self.lp.tankresetstop) + 1
         else:
             num_trials = 1
 
