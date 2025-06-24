@@ -178,7 +178,7 @@ class DriveUpdater:
             days = {}
             for x in trial_frames:
                 days[x.time.day] = 1
-            print(str(j) + ':' + str(days)) 
+            #print(str(j) + ':' + str(days)) 
 
             img_1 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
             img_2 = img.imread(self.projectDirectory + trial_movies[-1].pic_file)
