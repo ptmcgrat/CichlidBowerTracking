@@ -130,13 +130,22 @@ class DriveUpdater:
         axes[3].set_title('Current Depth')
         axes[4].set_title('Last day change')
 
+        print('Starting' + str(datetime.datetime.now()))
         img_1 = img.imread(self.projectDirectory + self.lp.frames[-1].pic_file)
         img_2 = img.imread(self.projectDirectory + self.lp.movies[-1].pic_file)
+        print('Current images read' + str(datetime.datetime.now()))
         depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
+        print('Depth read' + str(datetime.datetime.now()))
+        
         depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
+        print('Depth 2 read' + str(datetime.datetime.now()))
+        
         depth_dayend = self._filterPixels(np.load(self.projectDirectory + daylightFrames[-1].npy_file))
+        print('Depth 3 read' + str(datetime.datetime.now()))
+        
         depth_daystart = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0].npy_file))
-
+        print('Depth 4 read' + str(datetime.datetime.now()))
+        
         median_height = np.nanmedian(depth_first)
 
         axes[0].imshow(img_1)
@@ -180,6 +189,7 @@ class DriveUpdater:
             threshold = 1
             bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
             for current_day in days:
+                print('Volume calculated' + str(datetime.datetime.now()))
                 day_data = [x for x in trial_frames if x.time.day == current_day]
                 day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0].npy_file))
                 day_stop = self._filterPixels(np.load(self.projectDirectory + day_data[-1].npy_file))
