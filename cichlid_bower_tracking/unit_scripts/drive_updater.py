@@ -173,7 +173,7 @@ class DriveUpdater:
                 trial_movies = [x for x in self.lp.movies if x.startTime > self.lp.tankresetstop[j-1]]
             else:
                 trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1] and x.time < self.lp.tankresetstart[j]]
-                trial_movies = [x for x in self.lp.moveis if x.startTime > self.lp.tankresetstop[j-1] and x.startTime < self.lp.tankresetstart[j]]
+                trial_movies = [x for x in self.lp.movies if x.startTime > self.lp.tankresetstop[j-1] and x.startTime < self.lp.tankresetstart[j]]
 
             days = {}
             for x in trial_frames:
