@@ -163,19 +163,25 @@ class DriveUpdater:
         for j in range(num_trials):
             if not self.lp.tankresetstop:
                 trial_frames = [x for x in daylightFrames]
+                trial_movies = [x for x in self.lp.movies]
             elif j == 0:
                 trial_frames = [x for x in daylightFrames if x.time < self.lp.tankresetstart[j]]
+                trial_movies = [x for x in self.lp.movies if x.startTime < self.lp.tankresetstart[j]]
+
             elif j == num_trials - 1:
                 trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1]]
+                trial_movies = [x for x in self.lp.movies if x.startTime > self.lp.tankresetstop[j-1]]
             else:
-                trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1] and x.time < self.lp.tankresetstart[j]]
+                trial_frames = [x for x in daylightFrames if x.startTime > self.lp.tankresetstop[j-1] and x.startTime < self.lp.tankresetstart[j]]
+                trial_movies = [x for x in daylightFrames if x.startTime > self.lp.tankresetstop[j-1] and x.startTime < self.lp.tankresetstart[j]]
+
             days = {}
             for x in trial_frames:
                 days[x.time.day] = 1
             print(str(j) + ':' + str(days)) 
 
-            img_1 = img.imread(self.projectDirectory + trial_frames[0].pic_file)
-            img_2 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
+            img_1 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
+            img_2 = img.imread(self.projectDirectory + trial_movies[-1].pic_file)
             
             depth_first = self._filterPixels(np.load(self.projectDirectory + trial_frames[0].npy_file))
             depth_last = self._filterPixels(np.load(self.projectDirectory + trial_frames[-1].npy_file))
@@ -214,7 +220,7 @@ class DriveUpdater:
             plotdays = [x + 1 for x in range(len(days))]
             axes[offset + 4].plot(plotdays, pit, '-o', color = 'blue', label = 'Pit volume', alpha = 0.7)
             axes[offset + 4].plot(plotdays, castle, '-o', color = 'red', label = 'Castle volume', alpha = 0.7)
-            axes[offset + 4].set_ylim(-1000,1000)
+            axes[offset + 4].set_ylim(-500,500)
             for i in range(4):
                 axes[offset + i].set_xticks([])
                 axes[offset + i].set_yticks([])
