@@ -21,7 +21,7 @@ class FileManager():
         # Store analysis state information
         
         # Store branch you are running
-        self.branch_name = subprocess.run(['git','rev-parse','--abbrev-ref','HEAD'], capture_output = True).stdout.decode()
+        self.branch_name = subprocess.run(['git','rev-parse','--abbrev-ref','HEAD'], capture_output = True).stdout.decode().strip()
 
         # Read in analysis state information
         if analysisID is not None:

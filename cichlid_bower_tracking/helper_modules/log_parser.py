@@ -10,21 +10,21 @@ class LogFormatError(Exception):
     pass
 
 class LogParser:    
-    def __init__(self, logfile):
+    def __init__(self, logfile, running = False):
 
         
         self.logfile = logfile
         self.master_directory = logfile.replace(logfile.split('/')[-1], '') + '/'
         self.parse_log()
+        self.check_malformed()
         self.height = 480 # This is a temporary fix to hardcode in these values
         self.width = 640
-        self.malformed_file = False
+        self.running = running
+        self.malformed_file = []
 
     def parse_log(self):
         self.speeds = []
         self.frames = []
-        self.alldata = []
-        self.backgrounds = []
         self.movies = []
         self.tankresetstart = []
         self.tankresetstop = []
@@ -43,68 +43,22 @@ class LogParser:
                         self.projectID
                         self.analysisID
                     except AttributeError:
-
                         self.system, self.device, self.camera, self.uname, self.tankID, self.projectID, self.analysisID = self._ret_data(line, ['System', 'Device', 'Camera','Uname', 'TankID', 'ProjectID', 'AnalysisID'])
                     else:
-                        raise LogFormatError('It appears MasterStart is present twice in the Logfile. Unable to deal')
-                    #Check if error in Marks file (tankId and projectID are swapped)
-                    if self.projectID[0:2] == 'Tk':
-                        temp = self.projectID
-                        self.projectID = self.tankID
-                        self.tankID = temp
+                        self.malformed_file.append('MasterStart is present more than once in the Logfile')
 
                 if info_type == 'MasterRecordInitialStart':
                     self.master_start = self._ret_data(line, ['Time'])[0]
-
-                if info_type == 'ROI':
-                    try:
-                        self.bounding_pic
-                        self.bounding_shape
-                    except AttributeError:
-                        self.bounding_pic, self.bounding_shape = self._ret_data(line, ['Image', 'Shape'])
-                        self.width = self.bounding_shape[2]
-                        self.height = self.bounding_shape[3]
-                    else:
-                        raise LogFormatError('It appears ROI is present twice in the Logfile. Unable to deal')
                     
                 if info_type == 'DiagnoseSpeed':
                     self.speeds.append(self._ret_data(line, 'Rate'))
                     
                 if info_type == 'FrameCaptured':
                     t_list = self._ret_data(line, ['NpyFile','PicFile','Time','AvgMed','AvgStd','GP','LOF'])
-                    # Is this a Mark file?
-                    try:
-                        t_list[2].year
-                    except AttributeError:
-                        print(line)
-                        print('-' + t_list[2] + '-')
-                    if t_list[2].year == 1900:
-                        # Get date from directory files are stored in
-                        t_date = dt.strptime(t_list[0].split('/')[0], '%B-%d-%Y')
-                        t_list[2] = t_list[2].replace(year = t_date.year, month = t_date.month, day = t_date.day)
                     self.frames.append(FrameObj(*t_list))
-
-                if info_type == 'AllDataCaptured':
-                    t_list = self._ret_data(line, ['NpyFile','PicFile','Time','NFrames'])
-                    try:
-                        assert self.frames[-1].time == t_list[2]
-                    except:
-                        print(str(self.frames[-1].time) + ' ' + str(t_list[2]))
-                    self.frames[-1].alldata_flag = True
-
-                if info_type == 'BackgroundCaptured':
-                    t_list = self._ret_data(line, ['NpyFile','PicFile','Time','AvgMed','AvgStd','GP','LOF'])
-                    self.backgrounds.append(FrameObj(*t_list))
                     
                 if info_type == 'PiCameraStarted':
-                    if 'VideoFile' in line:
-                        #Patricks logfile
-                        t_list = self._ret_data(line,['Time','VideoFile', 'PicFile', 'FrameRate', 'Resolution'])
-                    else:
-                        #Marks logfile
-                        t_list = self._ret_data(line,['Time','File'])
-                        t_list.extend(['Unknown', 30, (1296, 972)])
-
+                    t_list = self._ret_data(line,['Time','VideoFile', 'PicFile', 'FrameRate', 'Resolution'])
                     self.movies.append(MovieObj(*t_list))
 
                 if info_type == 'PiCameraStopped':
@@ -112,8 +66,7 @@ class LogParser:
                     try:
                         [x for x in self.movies if x.h264_file == t_list[1]][0].endTime = t_list[0]
                     except IndexError:
-                        pass
-                        pdb.set_trace()
+                        self.malformed_file.append('Cant find PiCameraStart for ' + t_list[1])
                 
                 if info_type == 'TankResetStart':
                     t_list = self._ret_data(line, ['Time'])
@@ -123,37 +76,59 @@ class LogParser:
                     t_list = self._ret_data(line, ['Time'])
                     self.tankresetstop.append(t_list[0])
 
+                if info_type == 'MasterRecordStop': 
+                    self.master_stop = self._ret_data(line, ['Time'])[0]
+
         self.frames.sort(key = lambda x: x.time)
 
-        # Process frames into days
-        rel_day = 0
-        cur_day = 0
-        self.days = {}
-        for index,frame in enumerate(self.frames):
-            if frame.time.day != cur_day:
-                if rel_day != 0:
-                    self.days[rel_day][1] = index
-                rel_day += 1
-                self.days[rel_day] = [index,0]
-                frame.rel_day = rel_day
-            
-            cur_day = frame.time.day
-
-        if len(self.frames) == 0:
-            self.malformed_file = True
+        # Create trials
+        if self.running:
+            end_time = datetime.datetime.now()
+            try:
+                self.num_trials = len(self.tankresetstop) + 1
+                self.trials = [Trials(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.videos)]
+                for j in range(self.num_trials-1):
+                    self.trials.append(Trials(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.videos))
+                self.trials.append(Trials(self.tankresetstop[-1], end_time, None, self.frames, self.videos))
+            except:
+                self.trials = [Trials(self.master_start, end_time, None, self.frames, self.videos)]
         else:
-            self.days[rel_day][1] = index + 1
-            self.numDays = len(self.days)
-        
-        for video in self.movies:
-            if video.endTime == '':
-                video.endTime = self.frames[-1].time
+            self.num_trials = len(self.tankresetstop)
+            self.trials = [Trials(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.videos)]
+            for j in range(self.num_trials - 1):
+                self.trials.append(Trials(self.tankresettop[j], self.tankresetstart[j+1], self.tankresetstop[j+1]))
 
-        self.backgrounds.sort(key = lambda x: x.time)
-        self.lastBackgroundCounter = len(self.backgrounds)
+
         self.lastFrameCounter=len(self.frames)
         self.lastVideoCounter=len(self.movies)
-        
+    
+    def check_malformed(self, print = False):
+        try:
+            self.master_start
+        except:
+            self.malformed_file.append('No master start information')
+        try:
+            self.master_stop
+        except:
+            self.malformed_file.append('No master stop information')
+        for movie in self.movies:
+            if movie.endTime == '':
+                self.malformed_file.append('No end time information for: ' + movie.h264_file)
+        try:
+            self.tankresetstart
+            self.tankresetstop
+        except:
+            self.malformed_file.append('No TankResetStartStopInformation')
+            if len(self.tankresetstart) != len(self.tankresetstop):
+                self.malformed_file.append('TankResetStarts != TankResetStops')
+            else:
+                for start,stop in zip(self.tankresetstart,self.tankresetstop):
+                    if stop - start > datetime.timedelta(hours = 3) or stop <= start:
+                        self.malformed_file.append('TimeDelta Unusual for tankresetstart and stop')
+        if print:
+            for mf in self.malformed_file:
+                print(mf)
+
     def _ret_data(self, line, data):
         out_data = []
         if type(data) != list:
@@ -254,3 +229,26 @@ class MovieObj:
         self.baseName = self.mp4_file.split('/')[-1].replace('.mp4', '')
         self.height = resolution[1]
         self.width = resolution[0]
+
+class Trial:
+    def __init__(self, start_time, stop_time, reset_time, all_frames, all_movies):
+        self.startTime = start_time
+        self.stopTime = stop_time
+        self.resetTime = reset_time
+        self.frames = [x for x in all_frames if x.time > start_time and x.time < stop_time]
+        self.daylight_frames = [x for x in self.frames if x.time.hour >= 8 and x.time.hour <= 17]
+        if reset_time is not None:
+            self.reset_frame = [x for x in self.daylight_frames if x.time > reset_time][0]
+        self.movies = [x for x in all_movies if x.endTime > start_time and x.startTime < stop_time]
+
+        days = {}
+
+        days = {}
+        for frame in self.daylight_frames:
+            frame.rel_day = (frame.time - self.daylight_frames[0].time).days
+            try:
+                days[frame.time.date()] = (days[frame.time.date()][0],frame)
+            except KeyError:
+                days[frame.time.date()] = (frame,frame)
+
+        self.days = [x for x in days.values()]        

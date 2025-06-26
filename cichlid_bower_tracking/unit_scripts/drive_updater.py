@@ -61,33 +61,9 @@ class DriveUpdater:
             return pixels
         
     def _calculateBower(self, daily_bower, bower_mask):
-        """
-        daily_bower = daily_change.copy()
-        thresholded_change = np.where((daily_change >= 0.4) | (daily_change <= -0.4), True, False)
-        thresholded_change = morphology.remove_small_objects(thresholded_change,1000).astype(int)
-        daily_bower[(thresholded_change == 0) & (~np.isnan(daily_change))] = 0
-        """
-        # daily_bower = depthChange.copy()
-        # thresholded_change = np.where((depthChange >= th) | (depthChange <= -th), True, False)
-        # thresholded_change = morphology.remove_small_objects(thresholded_change,1000).astype(int)
-        # daily_bower[(thresholded_change == 0) & (~np.isnan(depthChange))] = 0
-        # return daily_bower
-        # thresholds = [0.2,0.3,0.5,0.7,0.9, 1.2, 1.3, 1.5, 1.7, 2]
-        #daily_bower = depthChange.copy()
-
-        #bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
         volume_pit = np.nansum(daily_bower[np.where(bower_mask == 1)])* self.fileManager.pixelLength ** 2
         volume_castle = np.nansum(daily_bower[np.where(bower_mask == -1)])* self.fileManager.pixelLength ** 2
-        # print("volume_castle", volume_castle)
-        # print("volume_pit",volume_pit)
-        # pdb.set_trace()
-        # daily_bower [(mask == 0)] = 0
-        # daily_bower[(self.depth_mask == 0)] = np.nan
-
-        #bower_mask = np.where(total_depth_change < -1.0, -1, np.where(total_depth_change > 1.0,1,0))
-        #daily_bower [(bower_mask == 0)] = 0
-        #daily_bower[(self.depth_mask == 0)] = np.nan
-
+        
         return volume_pit, volume_castle
     
     def _createImage(self, stdcutoff = 0.1):
@@ -102,25 +78,13 @@ class DriveUpdater:
         else: 
             self.googleController.modifyPiGS('DataDuplicated', 'No')
 
-        # Calulate how many trials
-        if self.lp.tankresetstop:
-            num_trials = len(self.lp.tankresetstop) + 1
-        else:
-            num_trials = 1
-
         # Determine the size of the figure and create it
-        num_rows = num_trials + 1 # First row is general, rest of rows are per trial   
+        num_rows = self.lp.num_trials + 1 # First row is general, rest of rows are per trial   
         fig = plt.figure(figsize=(20,4*num_rows + 1))
         fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime), fontsize=24)
-        #plt.rcParams.update({'font.size': 18})
         axes = []
 
         # Grab daylight frames
-
-        
-        # Create first row
-        daylightFrames = [x for x in self.lp.frames if x.time.hour >= 8 and x.time.hour <= 17] # frames during daylight        
-        daylightFrames_day = [x for x in daylightFrames if x.time.day == daylightFrames[-1].time.day and x.time.month == daylightFrames[-1].time.month]
 
         for i in range(5):
             axes.append(fig.add_subplot(num_rows, 5, i+1))
@@ -134,13 +98,13 @@ class DriveUpdater:
         img_1 = img.imread(self.projectDirectory + self.lp.frames[-1].pic_file)
         img_2 = img.imread(self.projectDirectory + self.lp.movies[-1].pic_file)
         #print('Current images read' + str(datetime.datetime.now()))
-        depth_first = self._filterPixels(np.load(self.projectDirectory + daylightFrames[0].npy_file))
+        depth_first = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[0].npy_file))
         #print('Depth read' + str(datetime.datetime.now()))
         depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
         #print('Depth 2 read' + str(datetime.datetime.now()))
-        depth_dayend = self._filterPixels(np.load(self.projectDirectory + daylightFrames[-1].npy_file))
+        depth_dayend = self._filterPixels(np.load(self.projectDirectory + self.lp.trials[-1][-1][0].npy_file))
         #print('Depth 3 read' + str(datetime.datetime.now()))
-        depth_daystart = self._filterPixels(np.load(self.projectDirectory + daylightFrames_day[0].npy_file))
+        depth_daystart = self._filterPixels(np.load(self.projectDirectory + self.lp.trials[-1][-1][1].npy_file))
         #print('Depth 4 read' + str(datetime.datetime.now()))
         
         median_height = np.nanmedian(depth_first)
@@ -155,69 +119,48 @@ class DriveUpdater:
             axes[i].set_xticks([])
             axes[i].set_yticks([])
 
-
-        for j in range(num_trials):
+        for j in range(self.lp.num_trials):
             for i in range(5):
                 axes.append(fig.add_subplot(num_rows, 5, 5*(j+1) + i+1))
 
-        for j in range(num_trials):
-            if not self.lp.tankresetstop:
-                trial_frames = [x for x in daylightFrames]
-                trial_movies = [x for x in self.lp.movies]
-            elif j == 0:
-                trial_frames = [x for x in daylightFrames if x.time < self.lp.tankresetstart[j]]
-                trial_movies = [x for x in self.lp.movies if x.startTime < self.lp.tankresetstart[j]]
-
-            elif j == num_trials - 1:
-                trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1]]
-                trial_movies = [x for x in self.lp.movies if x.startTime > self.lp.tankresetstop[j-1]]
-            else:
-                trial_frames = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j-1] and x.time < self.lp.tankresetstart[j]]
-                trial_movies = [x for x in self.lp.movies if x.startTime > self.lp.tankresetstop[j-1] and x.startTime < self.lp.tankresetstart[j]]
-
-            days = {}
-            for x in trial_frames:
-                days[x.time.day] = 1
-            #print(str(j) + ':' + str(days)) 
-
-            img_1 = img.imread(self.projectDirectory + trial_frames[-1].pic_file)
-            img_2 = img.imread(self.projectDirectory + trial_movies[-1].pic_file)
+        for trial in self.lp.trials:
             
-            depth_first = self._filterPixels(np.load(self.projectDirectory + trial_frames[0].npy_file))
-            depth_last = self._filterPixels(np.load(self.projectDirectory + trial_frames[-1].npy_file))
+            img_1 = img.imread(self.projectDirectory + trial.frames[-1].pic_file)
+            img_2 = img.imread(self.projectDirectory + trial.movies[-1].pic_file)
+            
+            depth_first = self._filterPixels(np.load(self.projectDirectory + trial.daylight_frames[0].npy_file))
+            depth_last = self._filterPixels(np.load(self.projectDirectory + trial.daylight_frames[-1].npy_file))
             
             castle = []
             pit = []
             total_depth_change = depth_last - depth_first
             threshold = 1
             bower_mask = np.where(total_depth_change < (-1*threshold), -1, np.where(total_depth_change > threshold,1,0))
-            for current_day in days:
+            for current_day in trial.days:
                 #print('Volume calculated' + str(datetime.datetime.now()))
-                day_data = [x for x in trial_frames if x.time.day == current_day]
-                day_start = self._filterPixels(np.load(self.projectDirectory + day_data[0].npy_file))
-                day_stop = self._filterPixels(np.load(self.projectDirectory + day_data[-1].npy_file))
+                day_start = self._filterPixels(np.load(self.projectDirectory + current_day[0].npy_file))
+                day_stop = self._filterPixels(np.load(self.projectDirectory + current_day[1].npy_file))
                 day_change = day_stop - day_start
                 pit_day, castle_day = self._calculateBower(day_change, bower_mask)
                 pit.append(pit_day)
                 castle.append(castle_day)
 
 
-            if j != num_trials - 1:
-                try:
-                    reset_depth_frame = [x for x in daylightFrames if x.time > self.lp.tankresetstop[j]][0]
-                except IndexError:
-                    pdb.set_trace()
-                reset_depth = self._filterPixels(np.load(self.projectDirectory + reset_depth_frame.npy_file))
-            offset = (num_trials - j) * 5
+            try:
+                reset_depth = self._filterPixels(np.load(self.projectDirectory + trial.reset_depth))
+            except:
+                reset_depth = depth_first
+
+            offset = (self.lp.num_trials - j) * 5
             axes[offset].imshow(img_1)
             axes[offset].set_ylabel('Trial ' + str(j+1),fontsize=16, rotation=90, labelpad=20)# ha ='right')
 
             axes[offset + 1].imshow(img_2)
 
             axes[offset + 2].imshow(depth_last-depth_first, vmin = -2, vmax = 2)
-            if j != num_trials - 1:
+            if j != self.lp.num_trials - 1:
                 axes[offset + 3].imshow(depth_last - reset_depth, vmin = -2, vmax = 2)
-            plotdays = [x + 1 for x in range(len(days))]
+            plotdays = [x + 1 for x in range(len(trial.days))]
             axes[offset + 4].plot(plotdays, pit, '-o', color = 'blue', label = 'Pit volume', alpha = 0.7)
             axes[offset + 4].plot(plotdays, castle, '-o', color = 'red', label = 'Castle volume', alpha = 0.7)
             axes[offset + 4].set_ylim(-500,500)
