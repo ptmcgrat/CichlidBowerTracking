@@ -15,12 +15,13 @@ class LogParser:
         
         self.logfile = logfile
         self.master_directory = logfile.replace(logfile.split('/')[-1], '') + '/'
+        self.running = running
+        self.malformed_file = []
+
         self.parse_log()
         self.check_malformed()
         self.height = 480 # This is a temporary fix to hardcode in these values
         self.width = 640
-        self.running = running
-        self.malformed_file = []
 
     def parse_log(self):
         self.speeds = []
