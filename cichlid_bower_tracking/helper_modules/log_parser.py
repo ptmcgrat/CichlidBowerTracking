@@ -147,23 +147,23 @@ class LogParser:
                         continue
             # Is it a date?
             try:
-                out_data.append(dt.strptime(t_data, '%Y-%m-%d %H:%M:%S.%f'))
+                out_data.append(dt.datetime.strptime(t_data, '%Y-%m-%d %H:%M:%S.%f'))
                 continue
             except ValueError:
                 pass
             try:
-                out_data.append(dt.strptime(t_data, '%Y-%m-%d %H:%M:%S'))
+                out_data.append(dt.datetime.strptime(t_data, '%Y-%m-%d %H:%M:%S'))
                 continue
             except ValueError:
                 pass
 
             try:
-                out_data.append(dt.strptime(t_data, '%a %b %d %H:%M:%S %Y'))
+                out_data.append(dt.datetime.strptime(t_data, '%a %b %d %H:%M:%S %Y'))
                 continue
             except ValueError:
                 pass
             try:
-                out_data.append(dt.strptime(t_data, '%H:%M:%S'))
+                out_data.append(dt.datetime.strptime(t_data, '%H:%M:%S'))
                 continue
             except ValueError:
                 pass
