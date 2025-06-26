@@ -80,7 +80,8 @@ class LogParser:
                     self.master_stop = self._ret_data(line, ['Time'])[0]
 
         self.frames.sort(key = lambda x: x.time)
-
+        if self.running:
+            self.movies[-1].endTime = self.frames[-1].time
         # Create trials
         if self.running:
             end_time = dt.datetime.now()
