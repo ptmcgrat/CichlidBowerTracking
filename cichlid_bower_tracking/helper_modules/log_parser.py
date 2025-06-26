@@ -84,7 +84,7 @@ class LogParser:
 
         # Create trials
         if self.running:
-            end_time = datetime.datetime.now()
+            end_time = dt.datetime.now()
             try:
                 self.num_trials = len(self.tankresetstop) + 1
                 self.trials = [Trials(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.videos)]
@@ -124,7 +124,7 @@ class LogParser:
                 self.malformed_file.append('TankResetStarts != TankResetStops')
             else:
                 for start,stop in zip(self.tankresetstart,self.tankresetstop):
-                    if stop - start > datetime.timedelta(hours = 3) or stop <= start:
+                    if stop - start > dt.timedelta(hours = 3) or stop <= start:
                         self.malformed_file.append('TimeDelta Unusual for tankresetstart and stop')
         if print:
             for mf in self.malformed_file:
