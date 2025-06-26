@@ -86,17 +86,17 @@ class LogParser:
             end_time = dt.datetime.now()
             try:
                 self.num_trials = len(self.tankresetstop) + 1
-                self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.videos)]
+                self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies)]
                 for j in range(self.num_trials-1):
-                    self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.videos))
-                self.trials.append(Trial(self.tankresetstop[-1], end_time, None, self.frames, self.videos))
+                    self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
+                self.trials.append(Trial(self.tankresetstop[-1], end_time, None, self.frames, self.movies))
             except:
-                self.trials = [Trial(self.master_start, end_time, None, self.frames, self.videos)]
+                self.trials = [Trial(self.master_start, end_time, None, self.frames, self.movies)]
         else:
             self.num_trials = len(self.tankresetstop)
-            self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.videos)]
+            self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies)]
             for j in range(self.num_trials - 1):
-                self.trials.append(Trial(self.tankresettop[j], self.tankresetstart[j+1], self.tankresetstop[j+1]))
+                self.trials.append(Trial(self.tankresettop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
 
 
         self.lastFrameCounter=len(self.frames)
