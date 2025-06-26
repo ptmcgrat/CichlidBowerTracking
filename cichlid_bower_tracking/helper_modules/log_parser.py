@@ -10,7 +10,7 @@ class LogFormatError(Exception):
     pass
 
 class LogParser:    
-    def __init__(self, logfile, running = False):
+    def __init__(self, logfile, running = True):
 
         
         self.logfile = logfile
