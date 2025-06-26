@@ -1,7 +1,6 @@
 
 import os, sys, io, pdb
-from datetime import datetime as dt
-
+import datetime as dt
 
 #add delta value for frame and background
 #make masterstart return 2 lines
