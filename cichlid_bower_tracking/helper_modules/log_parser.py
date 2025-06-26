@@ -239,8 +239,10 @@ class Trial:
         self.daylight_frames = [x for x in self.frames if x.time.hour >= 8 and x.time.hour <= 17]
         if reset_time is not None:
             self.reset_frame = [x for x in self.daylight_frames if x.time > reset_time][0]
-        self.movies = [x for x in all_movies if x.endTime > start_time and x.startTime < stop_time]
-
+        try:
+            self.movies = [x for x in all_movies if x.endTime > start_time and x.startTime < stop_time]
+        except:
+            pdb.set_trace()
         days = {}
 
         days = {}
