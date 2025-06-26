@@ -102,9 +102,9 @@ class DriveUpdater:
         #print('Depth read' + str(datetime.datetime.now()))
         depth_last = self._filterPixels(np.load(self.projectDirectory + self.lp.frames[-1].npy_file))
         #print('Depth 2 read' + str(datetime.datetime.now()))
-        depth_dayend = self._filterPixels(np.load(self.projectDirectory + self.lp.trials[-1][-1][0].npy_file))
+        depth_dayend = self._filterPixels(np.load(self.projectDirectory + self.lp.trials[-1].days[-1][0].npy_file))
         #print('Depth 3 read' + str(datetime.datetime.now()))
-        depth_daystart = self._filterPixels(np.load(self.projectDirectory + self.lp.trials[-1][-1][1].npy_file))
+        depth_daystart = self._filterPixels(np.load(self.projectDirectory + self.lp.trials[-1].days[-1][1].npy_file))
         #print('Depth 4 read' + str(datetime.datetime.now()))
         
         median_height = np.nanmedian(depth_first)
