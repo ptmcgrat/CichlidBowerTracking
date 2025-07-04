@@ -238,6 +238,7 @@ class Trial:
         self.resetTime = reset_time
         self.frames = [x for x in all_frames if x.time > start_time and x.time < stop_time]
         self.daylight_frames = [x for x in self.frames if x.lof == True]
+        pdb.set_trace()
         if reset_time is not None:
             self.reset_frame = [x for x in self.daylight_frames if x.time > reset_time][0]
         try:
