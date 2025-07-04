@@ -211,7 +211,7 @@ class FrameObj:
         self.lof = lof
         self.rel_day = 0
         self.frameDir = npy_file.replace(npy_file.split('/')[-1],'')
-        self.index = int(npy_file.split('_')[1].split('.jpg')[0]) - 1
+        self.index = int(npy_file.split('_')[1].split('.npy')[0]) - 1
  
 class MovieObj:
     def __init__(self, time, movie_file, pic_file, framerate, resolution):
