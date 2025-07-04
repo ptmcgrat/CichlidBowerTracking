@@ -85,7 +85,7 @@ class DriveUpdater:
         axes = []
 
         # Grab daylight frames
-
+        pdb.set_trace()
         for i in range(5):
             axes.append(fig.add_subplot(num_rows, 5, i+1))
         axes[0].set_title('Latest Depth RGB')

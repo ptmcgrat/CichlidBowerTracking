@@ -268,7 +268,7 @@ class CichlidTracker:
         if command in ['New', 'Rewrite']:
             self._print('MasterStart: System: '+self.system + ',,Device: ' + self.device + ',,Camera: ' + str(self.piCamera) + ',,Uname: ' + str(platform.uname()) + ',,TankID: ' + self.tankID + ',,ProjectID: ' + self.projectID + ',,AnalysisID: ' + self.analysisID)
             self._print('MasterRecordInitialStart: Time: ' + str(self.masterStart))
-            self._print('SoftwareSettings: GitBranch: ' + self.fileManager.branch_name )
+            self._print('SoftwareSettings: GitBranch: ' + self.fileManager.branch_name)
             self._print('PrepFiles: FirstDepth: PrepFiles/FirstDepth.npy,,LastDepth: PrepFiles/LastDepth.npy,,PiCameraRGB: PiCameraRGB.jpg,,DepthRGB: DepthRGB.jpg')
             picamera_settings = {'AnalogGain': str(self.camera.analog_gain), 'AWB_Gains': str(self.camera.awb_gains), 
                                 'AWB_Mode': str(self.camera.awb_mode), 'Brightness': str(self.camera.brightness), 

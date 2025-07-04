@@ -204,7 +204,6 @@ class FrameObj:
         self.npy_file = npy_file
         self.pic_file = pic_file
         self.std_file = npy_file.replace('Frame_', 'Frame_std_')
-        self.alldata_file = npy_file.replace('Frame_', 'AllData_')
         self.time = time
         self.med = med
         self.std = std
@@ -212,7 +211,7 @@ class FrameObj:
         self.lof = lof
         self.rel_day = 0
         self.frameDir = npy_file.replace(npy_file.split('/')[-1],'')
-        self.alldata_flag = True
+        self.index = int(npy_file.split('_')[1].split('.jpg')[0]) - 1
  
 class MovieObj:
     def __init__(self, time, movie_file, pic_file, framerate, resolution):
@@ -237,7 +236,7 @@ class Trial:
         self.stopTime = stop_time
         self.resetTime = reset_time
         self.frames = [x for x in all_frames if x.time > start_time and x.time < stop_time]
-        self.daylight_frames = [x for x in self.frames if x.time.hour >= 8 and x.time.hour <= 17]
+        self.daylight_frames = [x for x in self.frames if x.lof == True]
         if reset_time is not None:
             self.reset_frame = [x for x in self.daylight_frames if x.time > reset_time][0]
         try:
@@ -247,6 +246,7 @@ class Trial:
         days = {}
 
         days = {}
+        days_index = {}
         for frame in self.daylight_frames:
             frame.rel_day = (frame.time - self.daylight_frames[0].time).days
             try:

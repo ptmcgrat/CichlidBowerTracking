@@ -89,15 +89,6 @@ class DepthPreparer:
 	def createSmoothedArray(self, goodDataCutoff = 0.8, minimumGoodData = 0.95, tunits = 71, order = 4, max_depth = 4, max_height = 8):
 		
 
-		#To be deleted
-		day_ad_count = 0
-		for ad in self.lp.alldata:
-			if [x for x in self.lp.frames if x.time == ad.time][0].lof:
-				day_ad_count += 1
-
-		ad_stds = np.zeros(shape = (day_ad_count, self.lp.height, self.lp.width))
-		ad_counts = np.zeros(shape = (day_ad_count, self.lp.height, self.lp.width))
-
 		# Create arrays to store raw depth data and data in the daytime
 		rawDepthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
 		daytimeData = np.empty(shape = (sum([x.lof for x in self.lp.frames]), self.lp.height, self.lp.width))
@@ -118,23 +109,6 @@ class DepthPreparer:
 			else:
 				rawDepthData[i] = data
 
-			if frame.lof:
-				alldata_files = [x for x in self.lp.alldata if x.time == frame.time]
-				if len(alldata_files) == 1:
-					alldata = np.load(self.fileManager.localProjectDir + alldata_files[0].npy_file)
-					ad_stds[ad_idx] = np.nanstd(alldata, axis = 0)
-					ad_counts[ad_idx] = np.count_nonzero(~np.isnan(alldata), axis = 0)
-					ad_idx+=1
-				# Daytime frame
-				daytimeData[day_idx] = rawDepthData[i]
-				day_idx += 1
-
-				# Store first and last frame for each day
-				if day not in day_start_stop:
-					day_start_stop[day] = [i,i]
-				else:
-					day_start_stop[day][1] = i
-
 		# Save raw data file
 		np.save(self.fileManager.localRawDepthFile, rawDepthData)
 
@@ -142,23 +116,24 @@ class DepthPreparer:
 		# Make copy of raw data
 		interpDepthData = rawDepthData.copy()
 
-		# Loop through each day and interpolate missing data
-		for day,(start_index,stop_index) in day_start_stop.items():
-			dailyData = interpDepthData[start_index:stop_index] # Create view of numpy array just creating a single day during the daytime
-			goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
+		for trial in self.lp.trials:
+			# Loop through each day and interpolate missing data
+			for start_f,stop_f in trial.days:
+				dailyData = interpDepthData[start_f.index:stop_frame.index+1] # Create view of numpy array just creating a single day during the daytime
+				goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
 
-			# Process each pixel
-			for i in range(dailyData.shape[1]):
-				for j in range(dailyData.shape[2]):
-					if goodDataAll[i,j] > goodDataCutoff: # If enough data is present in the pixel then interpolate
-				
-						x_interp, = np.where(np.isnan(dailyData[:,i,j])) # Indices with missing data
-						x_good, = np.where(~np.isnan(dailyData[:,i,j])) # Indices with good data
+				# Process each pixel
+				for i in range(dailyData.shape[1]):
+					for j in range(dailyData.shape[2]):
+						if goodDataAll[i,j] > goodDataCutoff: # If enough data is present in the pixel then interpolate
+					
+							x_interp, = np.where(np.isnan(dailyData[:,i,j])) # Indices with missing data
+							x_good, = np.where(~np.isnan(dailyData[:,i,j])) # Indices with good data
 
-						if len(x_interp) != 0: # Only interpolate if there is missing data
-							interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
-							dailyData[x_interp, i, j] = interp_data
-		
+							if len(x_interp) != 0: # Only interpolate if there is missing data
+								interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
+								dailyData[x_interp, i, j] = interp_data
+			
 		# Save interpolated data
 		np.save(self.fileManager.localInterpDepthFile, interpDepthData)
 
