@@ -80,7 +80,6 @@ class LogParser:
                     self.master_stop = self._ret_data(line, ['Time'])[0]
 
         self.frames.sort(key = lambda x: x.time)
-        pdb.set_trace()
         if self.running:
             self.movies[-1].endTime = self.frames[-1].time
         # Create trials
@@ -244,7 +243,7 @@ class Trial:
             pdb.set_trace()
         if reset_time is not None:
             try:
-                self.reset_frame = [x for x in self.daylight_frames if x.time > reset_time][0]
+                self.reset_frame = [x for x in all_frames if x.time > reset_time][0]
             except IndexError:
                 pdb.set_trace()
         try:
