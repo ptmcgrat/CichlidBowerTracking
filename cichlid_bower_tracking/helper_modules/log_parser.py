@@ -257,5 +257,9 @@ class Trial:
                 days[frame.time.date()] = (days[frame.time.date()][0],frame)
             except KeyError:
                 days[frame.time.date()] = (frame,frame)
-
-        self.days = [x for x in days.values()]        
+            except IndexError:
+                pdb.set_trace()
+        try:
+            self.days = [x for x in days.values()]        
+        except IndexError:
+            pdb.set_trace()
