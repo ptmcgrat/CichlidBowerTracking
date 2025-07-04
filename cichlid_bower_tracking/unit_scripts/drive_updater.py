@@ -83,7 +83,6 @@ class DriveUpdater:
         fig = plt.figure(figsize=(20,4*num_rows + 1))
         fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime), fontsize=24)
         axes = []
-        pdb.set_trace()
         # Grab daylight frames
         for i in range(5):
             axes.append(fig.add_subplot(num_rows, 5, i+1))
@@ -126,7 +125,7 @@ class DriveUpdater:
             
             img_1 = img.imread(self.projectDirectory + trial.frames[-1].pic_file)
             img_2 = img.imread(self.projectDirectory + trial.movies[-1].pic_file)
-            
+            pdb.set_trace()
             depth_first = self._filterPixels(np.load(self.projectDirectory + trial.daylight_frames[0].npy_file))
             depth_last = self._filterPixels(np.load(self.projectDirectory + trial.daylight_frames[-1].npy_file))
             
