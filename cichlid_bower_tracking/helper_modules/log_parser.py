@@ -242,7 +242,10 @@ class Trial:
         except IndexError:
             pdb.set_trace()
         if reset_time is not None:
-            self.reset_frame = [x for x in self.daylight_frames if x.time > reset_time][0]
+            try:
+                self.reset_frame = [x for x in self.daylight_frames if x.time > reset_time][0]
+            except IndexError:
+                pdb.set_trace()
         try:
             self.movies = [x for x in all_movies if x.endTime > start_time and x.startTime < stop_time]
         except:
