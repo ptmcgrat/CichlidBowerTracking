@@ -93,7 +93,6 @@ class LogParser:
                 self.trials.append(Trial(self.tankresetstop[-1], end_time, None, self.frames, self.movies))
             except KeyError:
                 self.trials = [Trial(self.master_start, end_time, None, self.frames, self.movies)]
-                pdb.set_trace()
         else:
             self.num_trials = len(self.tankresetstop)
             self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies)]
