@@ -83,7 +83,7 @@ class DriveUpdater:
         fig = plt.figure(figsize=(20,4*num_rows + 1))
         fig.suptitle(self.lp.projectID + ' ' + str(self.lastFrameTime), fontsize=24)
         axes = []
-
+        pdb.set_trace()
         # Grab daylight frames
         for i in range(5):
             axes.append(fig.add_subplot(num_rows, 5, i+1))
