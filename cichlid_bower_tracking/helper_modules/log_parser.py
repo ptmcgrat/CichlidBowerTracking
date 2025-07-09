@@ -99,7 +99,6 @@ class LogParser:
             for j in range(self.num_trials - 1):
                 self.trials.append(Trial(self.tankresettop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
 
-
         self.lastFrameCounter=len(self.frames)
         self.lastVideoCounter=len(self.movies)
     
@@ -265,3 +264,12 @@ class Trial:
             self.days = [x for x in days.values()]        
         except IndexError:
             pdb.set_trace()
+        self.num_rows = int((len(self.days) - 1)/ 10) + 2 # Also a row for the top
+        for frame in self.frames:
+            if not frame.lof:
+                try:
+                    day_first = [x[1] for x in self.days if x[1].time < frame.time][-1]
+                    day_second = [x[0] for x in self.days if x[0].time > frame.time][0]
+                except IndexError:
+                    continue
+                frame.nearest_day = (day_first,day_second)
