@@ -1,5 +1,5 @@
 
-import platform, sys, os, shutil, datetime, subprocess, pdb, time, sendgrid, psutil
+import platform, sys, os, shutil, datetime, subprocess, pdb, time, sendgrid, psutil, atexit
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 from cichlid_bower_tracking.helper_modules.googleController import GoogleController as GC
@@ -66,7 +66,8 @@ class CichlidTracker:
         self.running = False
         self.resetting = False
         self.monitorCommands()
-        
+     
+    @atexit.register    
     def __del__(self):
         # Try to close out files and stop running Kinects
         #self.googleController.modifyPiGS('Command','None', ping = False)
@@ -235,7 +236,7 @@ class CichlidTracker:
             self.firstDepthCaptured = False
 
         if command == 'Restart':
-            logObj = LP(self.loggerFile)
+            logObj = LP(self.loggerFile, running = True)
             self.masterStart = logObj.master_start
             self.frameCounter = logObj.lastFrameCounter + 1
             self.videoCounter = logObj.lastVideoCounter + 1

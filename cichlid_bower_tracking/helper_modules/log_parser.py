@@ -86,9 +86,9 @@ class LogParser:
         self.frames.sort(key = lambda x: x.time)
         if self.running:
             self.movies[-1].endTime = self.frames[-1].time
-        for movie in self.movies:
-            if movie.endTime == '':
-                print('Warning: No end time for ' + movie.mp4_file)
+        #for movie in self.movies:
+        #    if movie.endTime == '':
+        #        print('Warning: No end time for ' + movie.mp4_file)
         # Create trials
         if self.running:
             end_time = dt.datetime.now()
