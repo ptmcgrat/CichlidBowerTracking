@@ -21,7 +21,7 @@ args = parser.parse_args()
 
 class DriveUpdater:
     def __init__(self, logfile):
-        self.lp = LP(logfile)
+        self.lp = LP(logfile, running = True)
 
         self.fileManager = FM(projectID = self.lp.projectID, analysisID = self.lp.analysisID)
         self.lastFrameTime = self.lp.frames[-1].time

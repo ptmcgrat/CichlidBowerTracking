@@ -64,40 +64,21 @@ class CichlidTracker:
         # 9: Await instructions
         print('Monitoring commands')
         self.running = False
-
+        self.resetting = False
         self.monitorCommands()
         
     def __del__(self):
         # Try to close out files and stop running Kinects
-        self.googleController.modifyPiGS('Command','None', ping = False)
+        #self.googleController.modifyPiGS('Command','None', ping = False)
         self.googleController.modifyPiGS('Status','Stopped', ping = False)
         self.googleController.modifyPiGS('Error','UnknownError', ping = False)
 
-        if self.running:
-            new_email = sendgrid.Mail(
-                from_email='themcgrathlab@gmail.com', 
-                subject= self.tankID + ' has stopped running', 
-                html_content= 'Check the Controller sheet'
-            )
-            new_email.add_personalization(self.personalization)
-
-            # Get a JSON-ready representation of the Mail object
-            # Send an HTTP POST request to /mail/send
-            response = self.sg.send(new_email)
-
-            current_temp = psutil.sensors_temperatures()['cpu_thermal'][0][1]
-            harddrive_use = psutil.disk_usage(self.fileManager.localMasterDir)[3]
-            cpu_use = psutil.cpu_percent()
-            ram_use = psutil.virtual_memory()[2]
-
-            self._print('UnknownExceptionExit: Temperature: ' + str(current_temp) + ',,HardDriveUsage: ' + str(harddrive_use) + ',,CPUUsage: ' + str(cpu_use) + ',,RAMUse: ' + str(ram_use))
-
-
+        self._print('UnknownExceptionExit: Temperature: ' + str(current_temp) + ',,HardDriveUsage: ' + str(harddrive_use) + ',,CPUUsage: ' + str(cpu_use) + ',,RAMUse: ' + str(ram_use))
 
         if self.piCamera:
             if self.camera.recording:
-                self.camera.stop_recording()
                 self._print('PiCameraStopped: Time=' + str(datetime.datetime.now()) + ',,File: Videos/' + str(self.videoCounter).zfill(4) + "_vid.h264")
+                self.camera.stop_recording()
 
 
         if self.device == 'realsense':
@@ -325,11 +306,14 @@ class CichlidTracker:
                     self._print(command)
                     self.processes.append(subprocess.Popen(command))
                     self.videoCounter += 1
-
+                elif not self._video_recording() and self.camera.recording:
+                    remaining_videos = [x for x in os.listdir(self.videoDirectory) if '.h264' in x]
+                    command = ['python3', 'unit_scripts/process_video.py', self.videoDirectory + remaining_videos[0]]
+                    command += [str(self.camera.framerate[0]), self.projectID, self.analysisID]
+                    self._print(command)
+                    self.processes.append(subprocess.Popen(command))
+ 
             # Capture a frame and background if necessary
-           
-                
-                
                 
        
             if self.device != 'None':
@@ -352,12 +336,21 @@ class CichlidTracker:
             except KeyError:
                 continue
             if command == 'TankResetStart':
-                self._print('TankResetStart: Time: ' + str(datetime.datetime.now()))
+                if not self.resetting:
+                    self._print('TankResetStart: Time: ' + str(datetime.datetime.now()))
+                else:
+                    self.googleController.modifyPiGS('Error', 'TankResetting Already in Progress', ping = False)
+                self.resetting = True
                 self.googleController.modifyPiGS('Command', 'None', ping = False)
+                self.googleController.modifyPiGS('Status', 'TankResetting', ping = False)
 
             elif command == 'TankResetStop':
-                self._print('TankResetStop: Time: ' + str(datetime.datetime.now()))
+                if not self.resetting:
+                    self.googleController.modifyPiGS('Error', 'TankResetStart must be run first', ping = False)
+                else:
+                    self._print('TankResetStop: Time: ' + str(datetime.datetime.now()))
                 self.googleController.modifyPiGS('Command', 'None', ping = False)
+                self.googleController.modifyPiGS('Status', 'Running', ping = False)
 
             elif command != 'None' and command is not None:
                 break
@@ -579,16 +572,16 @@ class CichlidTracker:
 
             
     def _uploadFiles(self):
-        self.googleController.modifyPiGS('Status', 'Finishing converting and uploading of videos')
+        remaining_videos = [x for x in os.listdir(self.videoDirectory) if '.h264' in x]
+        self.googleController.modifyPiGS('Status', 'Converting and uploading ' + str(len(remaining_videos)) + ' videos')
         for p in self.processes:
             p.communicate()
         
-        for movieFile in os.listdir(self.videoDirectory):
-            if '.h264' in movieFile:
-                command = ['python3', 'unit_scripts/process_video.py', self.videoDirectory + movieFile]
-                command += [str(self.camera.framerate[0]), self.projectID, self.analysisID]
-                self._print(command)
-                self.processes.append(subprocess.Popen(command))
+        for movieFile in remaining_videos:
+            command = ['python3', 'unit_scripts/process_video.py', self.videoDirectory + movieFile]
+            command += [str(self.camera.framerate[0]), self.projectID, self.analysisID]
+            self._print(command)
+            self.processes.append(subprocess.Popen(command))
 
         for p in self.processes:
             p.communicate()
@@ -618,6 +611,15 @@ class CichlidTracker:
             subprocess.call(['cp', self.projectDirectory + depthObjs[0].npy_file, prepDirectory + 'FirstDepth.npy'])
             subprocess.call(['cp', self.projectDirectory + depthObjs[-1].pic_file, prepDirectory + 'LastDepthRGB.jpg'])
             subprocess.call(['cp', self.projectDirectory + depthObjs[-1].npy_file, prepDirectory + 'LastDepth.npy'])
+
+            for trial_num,trial in enumerate(lp.trials):
+                subprocess.call(['cp', self.projectDirectory + trial.daylight_frames[0].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'FirstDepth.jpg'])
+                subprocess.call(['cp', self.projectDirectory + trial.daylight_frames[0].npy_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'FirstDepth.npy'])
+                subprocess.call(['cp', self.projectDirectory + trial.daylight_frames[-1].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastDepth.jpg'])
+                subprocess.call(['cp', self.projectDirectory + trial.daylight_frames[-1].npy_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastDepth.npy'])
+                subprocess.call(['cp', self.projectDirectory + trial.movies[0].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'FirstPi.jpg'])
+                subprocess.call(['cp', self.projectDirectory + trial.movies[-1].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastPi.jpg'])
+
 
             if not os.path.isdir(self.frameDirectory):
                 self.googleController.modifyPiGS('Status', 'Error: ' + self.frameDirectory + ' does not exist.')

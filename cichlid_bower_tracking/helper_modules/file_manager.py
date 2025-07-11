@@ -57,9 +57,9 @@ class FileManager():
         self.subjectID = subjectID
         self.dissectionTime = dissection_time
 
-    def setProjectID(self, projectID):
+    def setProjectID(self, projectID, print_issues = False):
         self.projectID = projectID
-        self._createProjectData(projectID)
+        self._createProjectData(projectID, print_issues = print_issues)
         if 'DissectionTime' in self.s_dt:
             self.dissectionTime = self.s_dt.loc[projectID]['DissectionTime']
         else:
@@ -67,6 +67,7 @@ class FileManager():
                 self.dissectionTime = self.lp.frames[-1].time
             except:
                 pass
+
     def getProjectStates(self):
         # Dictionary to hold row of data
         row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':False, 'ManualAnnotation': False, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
@@ -125,7 +126,7 @@ class FileManager():
         self.localSubjectDepthFile = self.localAnalysisDir + 'smoothedDepthData.npy'
         self.localSubjectDepthDataFrame = self.localAnalysisDir + 'smoothedDepthData.csv'
 
-    def _createProjectData(self, projectID):
+    def _createProjectData(self, projectID, print_issues = False):
 
         # Need information from AnalysisStates file to determine where project data is stored
         self.localProjectDir = self.localMasterDir + '__ProjectData/' + self.analysisID + '/' + projectID + '/'
@@ -165,9 +166,10 @@ class FileManager():
         self.localDepthCropFile = self.localAnalysisDir + 'DepthCrop.txt'
         self.localTransMFile = self.localAnalysisDir + 'TransMFile.npy'
         self.localVideoCropFile = self.localAnalysisDir + 'VideoCrop.txt'
-        
         self.localPrepSummaryFigure = self.localSummaryDir + 'PrepSummary.pdf'
         self.localOldVideoCropFile = self.localAnalysisDir + 'VideoPoints.npy'
+        self.logAnalysisFile = self.localSummaryDir + 'LogSummary.txt'
+        self.trialOverviewFile = self.localSummaryDir + 'TrialSummary.pdf'
 
         # Files created by depth preparer
         self.localSmoothDepthFile = self.localAnalysisDir + 'smoothedDepthData.npy'
@@ -212,7 +214,10 @@ class FileManager():
 
         try:
             self.downloadData(self.localLogfile)
-            self.lp = LP(self.localLogfile)
+            if print_issues:
+                self.lp = LP(self.localLogfile, print_issues = self.logAnalysisFile)
+            else:
+                self.lp = LP(self.localLogfile)
         except FileNotFoundError:
             #print('No logfile created yet for ' + projectID)
             pass 

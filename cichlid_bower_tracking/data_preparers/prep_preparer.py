@@ -34,15 +34,17 @@ class PrepPreparer:
         self.fileManager.uploadData(self.fileManager.localVideoCropFile)
         self.fileManager.uploadData(self.fileManager.localPrepSummaryFigure)
         self.fileManager.uploadData(self.fileManager.localPrepLogfile)
-
+        self.fileManager.uploadData(self.fileManager.logAnalysisFile)
+        self.fileManager.uploadData(self.fileManager.trialOverviewFile)
         if delete:
-            shutil.rmtree(self.localProjectDir)
+            shutil.rmtree(selåf.localProjectDir)
 
     def prepData(self):
         self._createLogFile()
         self._cropDepth()
         self._cropAndRegisterVideo()
         self._summarizePrep()
+        self._summarizeTrials()
 
     def _createLogFile(self):
         with open(self.fileManager.localPrepLogfile,'w') as f:
@@ -239,3 +241,52 @@ class PrepPreparer:
         fig.savefig(self.fileManager.localPrepSummaryFigure, dpi=300)
         fig.clf()
         #plt.show()
+
+    def _summarizeTrials(self):
+        lp = self.fileManager.lp
+        cmap = copy.copy(matplotlib.cm.get_cmap("jet"))
+        cmap.set_bad(color = 'black')
+
+        fig = plt.figure(figsize=(lp.num_trials*4, 24))
+        for i,trial in enumerate(lp.trials):
+            pic1 = cv2.imread(self.fileManager.localProjectDir + trial.daylight_frames[0].pic_file)
+            pic2 = cv2.imread(self.fileManager.localProjectDir + trial.daylight_frames[-1].pic_file)
+            pic3 = cv2.imread(self.fileManager.localProjectDir + trial.movies[0].pic_file)
+            pic4 = cv2.imread(self.fileManager.localProjectDir + trial.movies[-1].pic_file)
+            pic3 = cv2.warpPerspective(pic3, self.transM, (640, 480))
+            pic4 = cv2.warpPerspective(pic4, self.transM, (640, 480))
+
+            depth_first = np.load(self.fileManager.localProjectDir + trial.daylight_frames[0].npy_file)
+            depth_last = np.load(self.fileManager.localProjectDir + trial.daylight_frames[-1].npy_file)
+            depth_reset = np.load(self.fileManager.localProjectDir + trial.reset_frame.npy_file)
+
+            ax1 = fig.add_subplot(lp.num_trials,6,1 + 6*i)       
+            ax2 = fig.add_subplot(lp.num_trials,6,2 + 6*i)
+            ax3 = fig.add_subplot(lp.num_trials,6,3 + 6*i)
+            ax4 = fig.add_subplot(lp.num_trials,6,4 + 6*i)
+            ax5 = fig.add_subplot(lp.num_trials,6,5 + 6*i)
+            ax6 = fig.add_subplot(lp.num_trials,6,6 + 6*i)
+
+            ax1.imshow(pic1, cmap = 'gray')
+            ax1.add_patch(matplotlib.patches.Polygon(self.labeledDepthPoints, color="orange", fill = False, lw = 3.0))
+            ax1.set_title("Depth RGB -> start " + str(trial.daylight_frames[0].time.date()))
+            ax2.imshow(pic2, cmap = 'gray')
+            ax2.add_patch(matplotlib.patches.Polygon(self.labeledDepthPoints, color="orange", fill = False, lw = 3.0))
+            ax2.set_title("Depth RGB -> end " + str(trial.daylight_frames[-1].time.date()))
+            ax3.imshow(pic3, cmap = 'gray')
+            ax3.add_patch(matplotlib.patches.Polygon(self.labeledDepthPoints, color="orange", fill = False, lw = 3.0))
+            ax3.set_title("Video RGB -> start " + str(trial.movies[0].startTime.date()))
+            ax4.imshow(pic4, cmap = 'gray')
+            ax4.add_patch(matplotlib.patches.Polygon(self.labeledDepthPoints, color="orange", fill = False, lw = 3.0))
+            ax4.set_title("Video RGB -> end " + str(trial.movies[-1].startTime.date()))
+            ax5.imshow(depth_last - depth_first, cmap = cmap)
+            ax5.add_patch(matplotlib.patches.Polygon(self.labeledDepthPoints, color="orange", fill = False, lw = 3.0))
+            ax5.set_title("Total trial depth change image with depth crop")
+            ax6.imshow(depth_last - depth_reset, cmap = cmap)
+            ax6.add_patch(matplotlib.patches.Polygon(self.labeledDepthPoints, color="orange", fill = False, lw = 3.0))
+            ax6.set_title("Reset depth change image with depth crop")
+
+        fig.savefig(self.fileManager.trialOverviewFile, dpi=300)
+        fig.clf()
+        #plt.show()
+

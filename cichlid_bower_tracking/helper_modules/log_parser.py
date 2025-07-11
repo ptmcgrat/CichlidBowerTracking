@@ -9,7 +9,7 @@ class LogFormatError(Exception):
     pass
 
 class LogParser:    
-    def __init__(self, logfile, running = True):
+    def __init__(self, logfile, running = False, print_issues = False):
 
         
         self.logfile = logfile
@@ -18,7 +18,7 @@ class LogParser:
         self.malformed_file = []
 
         self.parse_log()
-        self.check_malformed()
+        self.check_malformed(print_issues = print_issues)
         self.height = 480 # This is a temporary fix to hardcode in these values
         self.width = 640
 
@@ -28,6 +28,7 @@ class LogParser:
         self.movies = []
         self.tankresetstart = []
         self.tankresetstop = []
+        self.restarts = []
         
         with open(self.logfile) as f:
             for line in f:
@@ -79,9 +80,15 @@ class LogParser:
                 if info_type == 'MasterRecordStop': 
                     self.master_stop = self._ret_data(line, ['Time'])[0]
 
+                if info_type == 'MasterRecordRestart':
+                    self.restarts.append(self._ret_data(line, ['Time'])[0])
+
         self.frames.sort(key = lambda x: x.time)
         if self.running:
             self.movies[-1].endTime = self.frames[-1].time
+        for movie in self.movies:
+            if movie.endTime == '':
+                print('Warning: No end time for ' + movie.mp4_file)
         # Create trials
         if self.running:
             end_time = dt.datetime.now()
@@ -97,12 +104,21 @@ class LogParser:
             self.num_trials = len(self.tankresetstop)
             self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies)]
             for j in range(self.num_trials - 1):
-                self.trials.append(Trial(self.tankresettop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
+                self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
+
+        daylight_frames = [x for x in self.frames if x.lof == True]
+        for frame in self.frames:
+            if not frame.lof:
+                if frame.time > daylight_frames[-1].time:
+                    frame.nearest_day = (daylight_frames[-1],daylight_frames[-1])
+                elif frame.time < daylight_frames[0].time:
+                    frame.nearest_day = (daylight_frames[0],daylight_frames[0])
+
 
         self.lastFrameCounter=len(self.frames)
         self.lastVideoCounter=len(self.movies)
     
-    def check_malformed(self, print = False):
+    def check_malformed(self, print_issues = False):
         try:
             self.master_start
         except:
@@ -111,6 +127,8 @@ class LogParser:
             self.master_stop
         except:
             self.malformed_file.append('No master stop information')
+            movie.endTime = movie.startTime.replace(hour = 18, minute = 0)
+
         for movie in self.movies:
             if movie.endTime == '':
                 self.malformed_file.append('No end time information for: ' + movie.h264_file)
@@ -119,15 +137,32 @@ class LogParser:
             self.tankresetstop
         except:
             self.malformed_file.append('No TankResetStartStopInformation')
+        else:
             if len(self.tankresetstart) != len(self.tankresetstop):
-                self.malformed_file.append('TankResetStarts != TankResetStops')
+                self.malformed_file.append('# of TankResetStarts != # of TankResetStops')
             else:
                 for start,stop in zip(self.tankresetstart,self.tankresetstop):
-                    if stop - start > dt.timedelta(hours = 3) or stop <= start:
+                    if stop - start > dt.timedelta(hours = 4) or stop <= start:
                         self.malformed_file.append('TimeDelta Unusual for tankresetstart and stop')
-        if print:
-            for mf in self.malformed_file:
-                print(mf)
+        
+        if len(self.restarts) > 0:
+            self.malformed_file.append('# of restarts: ' + str(len(self.restarts)))
+
+        for trial in self.trials:
+            for day_start,day_stop in trial.days:
+                expected_frames = int((day_stop.time - day_start.time).total_seconds()/60/5)
+                actual_frames = len([x for x in self.frames if x.time >= day_start.time and x.time <= day_stop.time])
+                if actual_frames/expected_frames < .75:
+                    self.malformed_file.append('Missing frames > 25% on day: ' + str(day_start.time.date()))
+
+        if print_issues:
+            if type(print_issues) == str:
+                with open(print_issues,'w') as f:
+
+                    for mf in self.malformed_file:
+                        print(mf)
+                        if type(print_issues) == str:
+                            print(mf,file = f)
 
     def _ret_data(self, line, data):
         out_data = []
@@ -235,6 +270,10 @@ class Trial:
         self.stopTime = stop_time
         self.resetTime = reset_time
         try:
+            self.reset_frame = [x for x in all_frames if x.time > reset_time][0]
+        except TypeError:
+            pdb.set_trace()
+        try:
             self.frames = [x for x in all_frames if x.time > start_time and x.time < stop_time]
             self.daylight_frames = [x for x in self.frames if x.lof == True]
         except IndexError:
@@ -264,7 +303,9 @@ class Trial:
             self.days = [x for x in days.values()]        
         except IndexError:
             pdb.set_trace()
-        self.num_rows = int((len(self.days) - 1)/ 10) + 2 # Also a row for the top
+
+        self.num_days = len(self.days)
+        self.num_rows = int((self.num_days - 1)/ 10) + 2 # Also a row for the top
         for frame in self.frames:
             if not frame.lof:
                 try:
