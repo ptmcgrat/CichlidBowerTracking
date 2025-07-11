@@ -203,6 +203,9 @@ class CichlidTracker:
 
 
         if command == 'New':
+            if not self._video_recording():
+                self._reinstructError('New command cannot be run during night time hours')
+
             # Project Directory should not exist. If it does, report error
             if os.path.exists(self.projectDirectory):
                 self._reinstructError('New command cannot be run if ouput directory already exists on the pi. Use Rewrite or Restart')
