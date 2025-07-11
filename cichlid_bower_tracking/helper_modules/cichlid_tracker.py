@@ -76,7 +76,7 @@ class CichlidTracker:
         self.googleController.modifyPiGS('Status','Stopped', ping = False)
         self.googleController.modifyPiGS('Error','UnknownError', ping = False)
 
-        self._print('UnknownExceptionExit: Temperature: ' + str(current_temp) + ',,HardDriveUsage: ' + str(harddrive_use) + ',,CPUUsage: ' + str(cpu_use) + ',,RAMUse: ' + str(ram_use))
+        self._print('UnknownExceptionExit: Time=' + str(datetime.datetime.now()))
 
         if self.piCamera:
             if self.camera.recording:
