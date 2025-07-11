@@ -1,5 +1,5 @@
 
-import platform, sys, os, shutil, datetime, subprocess, pdb, time, sendgrid, psutil, atexit
+import platform, sys, os, shutil, datetime, subprocess, pdb, time, sendgrid, psutil
 from cichlid_bower_tracking.helper_modules.file_manager import FileManager as FM
 from cichlid_bower_tracking.helper_modules.log_parser import LogParser as LP
 from cichlid_bower_tracking.helper_modules.googleController import GoogleController as GC
@@ -65,10 +65,12 @@ class CichlidTracker:
         print('Monitoring commands')
         self.running = False
         self.resetting = False
-        self.monitorCommands()
-     
-    @atexit.register    
-    def __del__(self):
+        #self.monitorCommands()
+    
+    def run(self):
+         self.monitorCommands()
+
+    def cleanup(self):
         # Try to close out files and stop running Kinects
         #self.googleController.modifyPiGS('Command','None', ping = False)
         self.googleController.modifyPiGS('Status','Stopped', ping = False)
@@ -89,6 +91,10 @@ class CichlidTracker:
                 pass
 
         self._closeFiles()
+
+    def __del__(self):
+        self.cleanup()
+        pass 
 
     def monitorCommands(self, delta = 60):
         # This function checks the master Controller Google Spreadsheet to determine if a command was issued (delta = seconds to recheck)
