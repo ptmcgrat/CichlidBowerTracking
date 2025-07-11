@@ -288,11 +288,11 @@ class Trial:
         try:
             self.movies = [x for x in all_movies if x.endTime > start_time and x.startTime < stop_time]
         except:
-            for movie in self.movies:
+            for movie in all_movies:
                 if movie.endTime == '':
                     movie.endTime = movie.startTime.replace(hour = 18, minute = 0)
+            self.movies = [x for x in all_movies if x.endTime > start_time and x.startTime < stop_time]
 
-            pdb.set_trace()
         days = {}
 
         days = {}
