@@ -152,6 +152,8 @@ class LogParser:
         for trial in self.trials:
             for day_start,day_stop in trial.days:
                 expected_frames = int((day_stop.time - day_start.time).total_seconds()/60/5)
+                if expected_frames == 0:
+                    continue
                 actual_frames = len([x for x in self.frames if x.time >= day_start.time and x.time <= day_stop.time])
                 if actual_frames/expected_frames < .75:
                     self.malformed_file.append('Missing frames > 25% on day: ' + str(day_start.time.date()))
