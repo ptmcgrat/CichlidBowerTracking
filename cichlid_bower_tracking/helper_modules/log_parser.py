@@ -98,7 +98,7 @@ class LogParser:
                 for j in range(self.num_trials-2):
                     self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
                 self.trials.append(Trial(self.tankresetstop[-1], end_time, None, self.frames, self.movies))
-            except KeyError:
+            except IndexError:
                 self.trials = [Trial(self.master_start, end_time, None, self.frames, self.movies)]
         else:
             self.num_trials = len(self.tankresetstop)
