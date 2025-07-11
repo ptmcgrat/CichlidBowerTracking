@@ -6,5 +6,5 @@ parser = argparse.ArgumentParser(usage='This command starts a script on a Raspbe
 args = parser.parse_args()
 	
 ct_obj = CT()
-atexit.register(ct_obj.cleanup_method)
+atexit.register(ct_obj.cleanup)
 ct_obj.run()
