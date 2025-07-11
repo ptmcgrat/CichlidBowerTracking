@@ -127,11 +127,12 @@ class LogParser:
             self.master_stop
         except:
             self.malformed_file.append('No master stop information')
-            movie.endTime = movie.startTime.replace(hour = 18, minute = 0)
 
         for movie in self.movies:
             if movie.endTime == '':
                 self.malformed_file.append('No end time information for: ' + movie.h264_file)
+                movie.endTime = movie.startTime.replace(hour = 18, minute = 0)
+
         try:
             self.tankresetstart
             self.tankresetstop
