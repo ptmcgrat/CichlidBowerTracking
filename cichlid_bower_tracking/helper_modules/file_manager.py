@@ -120,7 +120,32 @@ class FileManager():
                     row_data[analysis_type] = False
 
         return row_data
-    
+
+    def getProjectIDs(self, analysisType, projectIDs):
+        bad_projects = []
+        s_dt = self.s_dt
+
+        if projectIDs is not None:
+            if analysisType == 'AnalyzeStates':
+                projectIDs = s_dt.index.to_list()
+            elif analysisType == 'Prep':
+                projectIDs = s_dt[(s_dt.StartingFiles == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+            elif analysisType in ['Depth','Cluster']:
+                projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+            elif analysisType == 'AnnotateVideos':
+                projectIDs = s_dt[(s_dt.Cluster == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+            elif analysisType == 'TrainModel':
+                projectIDs = []
+            elif analysisType == 'ClassifyClusters':
+                projectIDs = s_dt[(s_dt.Cluster == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+        else:
+            for projectID  in projectIDs:
+                if projectID not in s_dt.index:
+                    bad_projects.append(projectIDs)
+        if len(bad_projects) > 0:
+            raise Exception('Unknown ProjectIDs: ' + ','.join(bad_projects))
+        return projectIDs
+        
     def _createSubjectData(self):
         self.localSubjectDir = self.localMasterDir + '__ProjectData/' + self.analysisID + '/' + self.subjectID + '/'
         self.localSubjectDepthFile = self.localAnalysisDir + 'smoothedDepthData.npy'

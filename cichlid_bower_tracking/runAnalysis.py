@@ -45,14 +45,18 @@ analysisID = args.AnalysisID
 # Identify projects to run analysis on
 fm_obj = FM(analysisID)
 s_dt = fm_obj.s_dt
+
+try:
+	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, args.ProjectIDs)
+except:
+	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, None)
+
+
 if 'RunAnalysis' not in fm_obj.s_dt:
 	s_dt['RunAnalysis'] = True
 
 if args.AnalysisType == 'AnalyzeStates':
-	projectIDs = s_dt.index.to_list()
-	for projectID, row in s_dt.loc[projectIDs].iterrows():
-		if projectID not in projectIDs:
-			continue
+	for projectID in projectIDs:
 		print('Determining state for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
 		fm_obj.setProjectID(projectID)
@@ -63,15 +67,11 @@ if args.AnalysisType == 'AnalyzeStates':
 				fm_obj.s_dt[k] = False
 			s_dt.loc[projectID, k] = v
 
-
 elif args.AnalysisType == 'Prep':
 	from data_preparers.prep_preparer import PrepPreparer as PrP
-	# projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.StartingFiles == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.StartingFiles == True) & (s_dt.RunAnalysis == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else projectIDs
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
-	for projectID, row in s_dt.loc[projectIDs].iterrows():
-		if projectID not in projectIDs:
-			continue
+	for projectID in projectIDs:
 		print('Running prep for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
 		fm_obj.setProjectID(projectID, print_issues = True)
@@ -85,39 +85,23 @@ elif args.AnalysisType == 'Prep':
 elif args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
 	from data_preparers.depth_preparer import DepthPreparer as DP
-	# projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
-	#pdb.set_trace()
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
-	# projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.Prep == True)].index.to_list()
+	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else projectIDs
+
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
 
-	for projectID, row in s_dt.loc[projectIDs].iterrows():
-		# if 's7' in projectID or 's6' in projectID:
-		# 	continue
-		if projectID in ('cvmc_s3_tr1_hybridbuilding','cvmc_s6_tr1_hybridbuilding','cvmc_s2_tr1_hybridbuilding','cvmc_s10_tr1_hybridbuilding','cvmc_s1_tr1_hybridbuilding','cvmc_s7_tr4_hybridbuilding','cvmc_s12_tr1_hybridbuilding','cvmc_s4_tr1_hybridbuilding','cvmc_s9_tr3_hybridbuilding','cvmc_s15_tr1_hybridbuilding') :
-			continue
-		if projectID not in projectIDs:
-			continue
+	for projectID in projectIDs:
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
 		fm_obj.setProjectID(projectID)
-		# pdb.set_trace()
 		dp_obj = DP(fm_obj)
-		#dp_obj.downloadProjectData()
 		dp_obj.validateInputData()
-		# pdb.set_trace()
-		#dp_obj.createSmoothedArray()
-		# pdb.set_trace()
+		dp_obj.createSmoothedArray()
 		dp_obj.createDepthFigures()
-		# pdb.set_trace()
-		#dp_obj.createRGBVideo()
-		# dp_obj.uploadProjectData(delete = False)
-		dp_obj.fileManager.uploadProjectData(dtype='Depth', delete=False)
+		dp_obj.uploadProjectData(delete = False)
+		#dp_obj.fileManager.uploadProjectData(dtype='Depth', delete=False)
 		s_dt.loc[projectID,'Depth'] = True
-	
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
-		pdb.set_trace()
 
 	writer = pypdf.PdfWriter()
 	for projectID in s_dt[(s_dt.Depth == True)].index.sort_values().to_list():
@@ -132,7 +116,6 @@ elif args.AnalysisType == 'Depth':
 	print('Finished analysis: ' + str(datetime.datetime.now()), flush = True)
 	print(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf')
 	fm_obj.uploadData(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf')
-
 
 elif args.AnalysisType == 'Cluster':
 	from data_preparers.cluster_preparer import ClusterPreparer as CP

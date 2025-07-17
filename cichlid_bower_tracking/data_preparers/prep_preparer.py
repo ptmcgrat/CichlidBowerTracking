@@ -249,16 +249,17 @@ class PrepPreparer:
 
         fig = plt.figure(figsize=(lp.num_trials*4, 24))
         for i,trial in enumerate(lp.trials):
-            pic1 = cv2.imread(self.fileManager.localProjectDir + trial.daylight_frames[0].pic_file)
-            pic2 = cv2.imread(self.fileManager.localProjectDir + trial.daylight_frames[-1].pic_file)
-            pic3 = cv2.imread(self.fileManager.localProjectDir + trial.movies[0].pic_file)
-            pic4 = cv2.imread(self.fileManager.localProjectDir + trial.movies[-1].pic_file)
+            pic1 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i) + 'FirstDepth.jpg')
+            pic2 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i) + 'LastDepth.jpg')
+            pic3 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i) + 'FirstPi.jpg')
+            pic4 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i) + 'LastPi.jpg')
+
             pic3 = cv2.warpPerspective(pic3, self.transM, (640, 480))
             pic4 = cv2.warpPerspective(pic4, self.transM, (640, 480))
 
-            depth_first = np.load(self.fileManager.localProjectDir + trial.daylight_frames[0].npy_file)
-            depth_last = np.load(self.fileManager.localProjectDir + trial.daylight_frames[-1].npy_file)
-            depth_reset = np.load(self.fileManager.localProjectDir + trial.reset_frame.npy_file)
+            depth_first = np.load(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i) + 'FirstDepth.npy')
+            depth_last = np.load(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i) + 'LastDepth.jpg')
+            depth_reset = np.load(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i) + 'ResetDepth.npy')
 
             ax1 = fig.add_subplot(lp.num_trials,6,1 + 6*i)       
             ax2 = fig.add_subplot(lp.num_trials,6,2 + 6*i)

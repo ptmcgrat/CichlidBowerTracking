@@ -361,6 +361,8 @@ class CichlidTracker:
                     self.googleController.modifyPiGS('Error', 'TankResetStart must be run first', ping = False)
                 else:
                     self._print('TankResetStop: Time: ' + str(datetime.datetime.now()))
+                    self.googleController.modifyPiGS('Error', '', ping = False)
+
                 self.resetting = False
                 self.googleController.modifyPiGS('Command', 'None', ping = False)
                 self.googleController.modifyPiGS('Status', 'Running', ping = False)
@@ -632,6 +634,7 @@ class CichlidTracker:
                 subprocess.call(['cp', self.projectDirectory + trial.daylight_frames[-1].npy_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastDepth.npy'])
                 subprocess.call(['cp', self.projectDirectory + trial.movies[0].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'FirstPi.jpg'])
                 subprocess.call(['cp', self.projectDirectory + trial.movies[-1].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastPi.jpg'])
+                subprocess.call(['cp', self.projectDirectory + trial.reset_frame.npy_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'ResetDepth.jpg'])
 
 
             if not os.path.isdir(self.frameDirectory):
