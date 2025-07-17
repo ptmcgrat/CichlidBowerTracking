@@ -93,7 +93,7 @@ class CichlidTracker:
         self._closeFiles()
 
     def __del__(self):
-        self.cleanup()
+        #self.cleanup()
         pass 
 
     def monitorCommands(self, delta = 60):
@@ -283,7 +283,8 @@ class CichlidTracker:
         if self.device != 'None':
             self._start_kinect()
             # Diagnose speed
-            self._diagnose_speed()
+            if command in ['New','Rewrite']:
+               self._diagnose_speed()
 
         # Capture data
         self.running = True
@@ -317,6 +318,7 @@ class CichlidTracker:
                     self.processes.append(subprocess.Popen(command))
                     self.videoCounter += 1
                 elif not self._video_recording() and self.camera.recording:
+                    pass
                     remaining_videos = [x for x in os.listdir(self.videoDirectory) if '.h264' in x]
                     command = ['python3', 'unit_scripts/process_video.py', self.videoDirectory + remaining_videos[0]]
                     command += [str(self.camera.framerate[0]), self.projectID, self.analysisID]
@@ -348,17 +350,18 @@ class CichlidTracker:
             if command == 'TankResetStart':
                 if not self.resetting:
                     self._print('TankResetStart: Time: ' + str(datetime.datetime.now()))
+                    self.googleController.modifyPiGS('Status', 'TankResetting', ping = False)
                 else:
                     self.googleController.modifyPiGS('Error', 'TankResetting Already in Progress', ping = False)
                 self.resetting = True
                 self.googleController.modifyPiGS('Command', 'None', ping = False)
-                self.googleController.modifyPiGS('Status', 'TankResetting', ping = False)
 
             elif command == 'TankResetStop':
                 if not self.resetting:
                     self.googleController.modifyPiGS('Error', 'TankResetStart must be run first', ping = False)
                 else:
                     self._print('TankResetStop: Time: ' + str(datetime.datetime.now()))
+                self.resetting = False
                 self.googleController.modifyPiGS('Command', 'None', ping = False)
                 self.googleController.modifyPiGS('Status', 'Running', ping = False)
 
