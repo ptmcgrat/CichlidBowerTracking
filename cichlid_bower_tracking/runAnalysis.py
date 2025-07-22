@@ -48,7 +48,7 @@ s_dt = fm_obj.s_dt
 
 try:
 	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, args.ProjectIDs)
-except:
+except AttributeError:
 	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, None)
 
 
@@ -68,8 +68,9 @@ if args.AnalysisType == 'AnalyzeStates':
 			s_dt.loc[projectID, k] = v
 
 elif args.AnalysisType == 'Prep':
+	import PyPDF2 as pypdf
 	from data_preparers.prep_preparer import PrepPreparer as PrP
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else projectIDs
+	
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
 	for projectID in projectIDs:
 		print('Running prep for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
@@ -81,11 +82,24 @@ elif args.AnalysisType == 'Prep':
 		prp_obj.prepData()
 		prp_obj.uploadProjectData(delete = False)
 		s_dt.loc[projectID,'Prep'] = True
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
+
+	writer = pypdf.PdfWriter()
+	for projectID in s_dt[(s_dt.Prep == True)].index.sort_values().to_list():
+		fm_obj.setProjectID(projectID)
+		fm_obj.downloadData(fm_obj.trialOverviewFile)
+		f = open(fm_obj.trialOverviewFile, 'rb')
+		reader = pypdf.PdfReader(f)
+		for page_number in range(len(reader.pages)):
+			writer.add_page(reader.pages[page_number])
+	with open(fm_obj.localAnalysisStatesDir + 'Collated_TrialPrepSummary.pdf', 'wb') as f:
+		writer.write(f)
+	fm_obj.uploadData(fm_obj.localAnalysisStatesDir + 'Collated_TrialPrepSummary.pdf')
 
 elif args.AnalysisType == 'Depth':
 	import PyPDF2 as pypdf
 	from data_preparers.depth_preparer import DepthPreparer as DP
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else projectIDs
 
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
 
@@ -184,5 +198,4 @@ elif args.AnalysisType == 'ClassifyClusters':
 		tdcp_obj.createSummaryFile()
 
 s_dt.to_csv(fm_obj.localSummaryFile, index = True)
-#pdb.set_trace()
 fm_obj.uploadData(fm_obj.localSummaryFile)

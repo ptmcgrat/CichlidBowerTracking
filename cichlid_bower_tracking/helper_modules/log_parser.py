@@ -119,6 +119,7 @@ class LogParser:
         self.lastVideoCounter=len(self.movies)
     
     def check_malformed(self, print_issues = False):
+        trial_issues = False
         try:
             self.master_start
         except:
@@ -138,14 +139,18 @@ class LogParser:
             self.tankresetstop
         except:
             self.malformed_file.append('No TankResetStartStopInformation')
+            trial_issues = True
         else:
             if len(self.tankresetstart) != len(self.tankresetstop):
                 self.malformed_file.append('# of TankResetStarts != # of TankResetStops')
+                trial_issues = True
+
             else:
                 for start,stop in zip(self.tankresetstart,self.tankresetstop):
                     if stop - start > dt.timedelta(hours = 4) or stop <= start:
                         self.malformed_file.append('TimeDelta Unusual for tankresetstart and stop')
-        
+                        trial_issues = True
+
         if len(self.restarts) > 0:
             self.malformed_file.append('# of restarts: ' + str(len(self.restarts)))
 
@@ -158,14 +163,16 @@ class LogParser:
                 if actual_frames/expected_frames < .75:
                     self.malformed_file.append('Missing frames > 25% on day: ' + str(day_start.time.date()))
 
-        if print_issues:
+        if type(print_issues) == str or print_issues is True:
             if type(print_issues) == str:
                 with open(print_issues,'w') as f:
-
                     for mf in self.malformed_file:
-                        print(mf)
-                        if type(print_issues) == str:
-                            print(mf,file = f)
+                        print(mf,file = f)
+            for mf in self.malformed_file:
+                print(mf)
+        
+            if trial_issues:
+                raise Exception
 
     def _ret_data(self, line, data):
         out_data = []

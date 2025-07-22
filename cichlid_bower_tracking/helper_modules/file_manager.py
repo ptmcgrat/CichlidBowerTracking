@@ -125,7 +125,7 @@ class FileManager():
         bad_projects = []
         s_dt = self.s_dt
 
-        if projectIDs is not None:
+        if projectIDs is  None:
             if analysisType == 'AnalyzeStates':
                 projectIDs = s_dt.index.to_list()
             elif analysisType == 'Prep':
@@ -145,7 +145,7 @@ class FileManager():
         if len(bad_projects) > 0:
             raise Exception('Unknown ProjectIDs: ' + ','.join(bad_projects))
         return projectIDs
-        
+
     def _createSubjectData(self):
         self.localSubjectDir = self.localMasterDir + '__ProjectData/' + self.analysisID + '/' + self.subjectID + '/'
         self.localSubjectDepthFile = self.localAnalysisDir + 'smoothedDepthData.npy'
@@ -240,11 +240,12 @@ class FileManager():
         try:
             self.downloadData(self.localLogfile)
             if print_issues:
+                self.createDirectory(self.localSummaryDir)
                 self.lp = LP(self.localLogfile, print_issues = self.logAnalysisFile)
             else:
                 self.lp = LP(self.localLogfile)
         except FileNotFoundError:
-            #print('No logfile created yet for ' + projectID)
+            print('No logfile created yet for ' + projectID)
             pass 
 
     def _createMLData(self):
