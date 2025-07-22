@@ -216,7 +216,7 @@ class PrepPreparer:
         cmap.set_bad(color = 'black')
 
         fig = plt.figure(figsize=(12, 12))
-        fig.suptitle(self.lp.projectID + ' Prep Summary')
+        fig.suptitle(self.fileManager.lp.projectID + ' Prep Summary')
         ax1 = fig.add_subplot(2,2,1)       
         ax2 = fig.add_subplot(2,2,2)
         ax3 = fig.add_subplot(2,2,3)
@@ -241,7 +241,7 @@ class PrepPreparer:
 
         fig.savefig(self.fileManager.localPrepSummaryFigure, dpi=300)
         fig.clf()
-        plt.show()
+        plt.close()
 
     def _summarizeTrials(self):
         lp = self.fileManager.lp
@@ -249,6 +249,8 @@ class PrepPreparer:
         cmap.set_bad(color = 'black')
 
         fig = plt.figure(figsize=(24,lp.num_trials*4))
+        fig.suptitle(self.fileManager.lp.projectID + ' Trial Summary')
+
         for i,trial in enumerate(lp.trials):
             pic1 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i+1) + 'FirstDepth.jpg')
             pic2 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i+1) + 'LastDepth.jpg')
@@ -291,5 +293,5 @@ class PrepPreparer:
 
         fig.savefig(self.fileManager.trialOverviewFile, dpi=300)
         fig.clf()
-        plt.show()
+        plt.close()
 
