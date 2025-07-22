@@ -216,6 +216,7 @@ class PrepPreparer:
         cmap.set_bad(color = 'black')
 
         fig = plt.figure(figsize=(12, 12))
+        fig.suptitle(self.lp.projectID + ' Prep Summary')
         ax1 = fig.add_subplot(2,2,1)       
         ax2 = fig.add_subplot(2,2,2)
         ax3 = fig.add_subplot(2,2,3)
