@@ -72,13 +72,19 @@ elif args.AnalysisType == 'Prep':
 	from data_preparers.prep_preparer import PrepPreparer as PrP
 	
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+	
+	print('Downloading all data')
 	for projectID in projectIDs:
-		print('Running prep for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+		print('Downloading data for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
 		fm_obj.setProjectID(projectID, print_issues = True)
 		prp_obj = PrP(fm_obj)
 		prp_obj.downloadProjectData()
 		prp_obj.validateInputData()
+
+	for projectID in projectIDs:
+		print('Running prep for: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+		fm_obj.setProjectID(projectID)
 		prp_obj.prepData()
 		prp_obj.uploadProjectData(delete = False)
 		s_dt.loc[projectID,'Prep'] = True
@@ -108,11 +114,11 @@ elif args.AnalysisType == 'Depth':
 
 		fm_obj.setProjectID(projectID)
 		dp_obj = DP(fm_obj)
+		dp_obj.downloadProjectData()
 		dp_obj.validateInputData()
 		dp_obj.createSmoothedArray()
 		dp_obj.createDepthFigures()
-		dp_obj.uploadProjectData(delete = False)
-		#dp_obj.fileManager.uploadProjectData(dtype='Depth', delete=False)
+		dp_obj.uploadProjectData(delete = True)
 		s_dt.loc[projectID,'Depth'] = True
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
