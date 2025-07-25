@@ -51,7 +51,6 @@ try:
 except AttributeError:
 	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, None)
 
-
 if 'RunAnalysis' not in fm_obj.s_dt:
 	s_dt['RunAnalysis'] = True
 

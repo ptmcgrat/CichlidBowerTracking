@@ -245,7 +245,7 @@ class FileManager():
             else:
                 self.lp = LP(self.localLogfile)
         except FileNotFoundError:
-            print('No logfile created yet for ' + projectID)
+            #print('No logfile created yet for ' + projectID)
             pass 
 
     def _createMLData(self):

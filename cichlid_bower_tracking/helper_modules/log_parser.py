@@ -128,6 +128,7 @@ class LogParser:
             self.master_stop
         except:
             self.malformed_file.append('No master stop information')
+            self.master_stop = self.frames[-1].time
 
         for movie in self.movies:
             if movie.endTime == '':
@@ -273,6 +274,7 @@ class MovieObj:
         self.baseName = self.mp4_file.split('/')[-1].replace('.mp4', '')
         self.height = resolution[1]
         self.width = resolution[0]
+        self.index = int(movie_file.split('_vid')[0].split('/')[-1]) - 1
 
 class Trial:
     def __init__(self, start_time, stop_time, reset_time, all_frames, all_movies):
@@ -305,9 +307,8 @@ class Trial:
         days = {}
 
         days = {}
-        days_index = {}
         for frame in self.daylight_frames:
-            frame.rel_day = (frame.time - self.daylight_frames[0].time).days
+            frame.rel_day = (frame.time - all_frames[-1].time.replace(hour = 0, minute = 0)).days
             try:
                 days[frame.time.date()] = (days[frame.time.date()][0],frame)
             except KeyError:
@@ -318,7 +319,10 @@ class Trial:
             self.days = [x for x in days.values()]        
         except IndexError:
             pdb.set_trace()
-
+        self.days_videos = []
+        for start,stop in self.days:
+            movie_idxs = [x.index for x in all_movies if x.endTime > start.time and x.startTime < stop.time]
+            self.days_videos.append(','.join([str(x) for x in movie_idxs]))
         self.num_days = len(self.days)
         self.num_rows = int((self.num_days - 1)/ 10) + 2 # Also a row for the top
         for frame in self.frames:

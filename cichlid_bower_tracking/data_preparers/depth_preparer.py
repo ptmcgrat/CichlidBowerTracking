@@ -2,14 +2,13 @@
 import scipy.signal
 import skvideo.io
 import numpy as np
-import pdb, os, sys, datetime, warnings, copy, subprocess
+import pdb, os, sys, datetime, warnings, copy, subprocess, shutil
 import matplotlib.pyplot as plt
 import matplotlib
 from PIL import Image,ImageDraw
 from helper_modules.depth_analyzer import DepthAnalyzer as DA
 from collections import OrderedDict
 from matplotlib import (cm, colors, gridspec, ticker)
-import seaborn as sns
 import pandas as pd 
 
 warnings.filterwarnings('ignore')
@@ -58,7 +57,7 @@ class DepthPreparer:
 
 	def uploadProjectData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
-		self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
+		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
 		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
 		self.fileManager.uploadData(self.fileManager.localDepthLogfile)
@@ -67,7 +66,7 @@ class DepthPreparer:
 
 			#self.uploadData(self.localPaceDir)
 		if delete:
-			shutil.rmtree(self.localProjectDir)
+			shutil.rmtree(self.fileManager.localProjectDir)
 
 	def createLogFile(self):
 		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
@@ -164,7 +163,10 @@ class DepthPreparer:
 				except IndexError:
 					pdb.set_trace()
 				except AttributeError:
-					pdb.set_trace()
+					if frame.time > self.lp.trials[-1].stopTime:
+						continue
+					else:
+						pdb.set_trace()
 		# Smooth data with savgol_filter
 		smoothDepthData = scipy.signal.savgol_filter(smoothDepthData, tunits, order, axis = 0, mode = 'mirror')
 		np.save(self.fileManager.localSmoothDepthFile, smoothDepthData)
@@ -217,12 +219,12 @@ class DepthPreparer:
 
 			#day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last')).sort_index(ascending = False)
 
-			num_days = min(trial.num_days,10)
+			num_days = min(trial.num_days,7)
 
 			v = 2.0
 
-			for j, (first_frame,last_frame) in enumerate(trial.days):
-				if j % trial.num_days == 0:
+			for j, (first_frame,last_frame) in enumerate(reversed(trial.days)):
+				if j % num_days == 0:
 					if j!=0:
 						cax = figDaily.add_subplot(midGrid[:, -1])
 						plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
@@ -233,9 +235,9 @@ class DepthPreparer:
 				current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
 				current_axs[0].imshow(self.da_obj.returnHeightChange(start_frame.time, last_frame.time, cropped=True), vmin=-v, vmax=v)
 				bowerVolume = self.da_obj.returnVolumeSummary(first_frame.time,last_frame.time).depthBowerVolume
-				current_axs[0].set_title(str(first_frame.rel_day) + ': ' + str(int(bowerVolume)))
-				current_axs[1].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v, vmax=v)
-				current_axs[2].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v, vmax=v)
+				current_axs[0].set_title(str(first_frame.time.month) + '/' + str(first_frame.time.day) + ':' + trial.days_videos[trial.num_days - j - 1])
+				current_axs[1].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v/2, vmax=v/2)
+				current_axs[2].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
 				[ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
 				[ax.set_adjustable('box') for ax in current_axs]
 
@@ -263,6 +265,7 @@ class DepthPreparer:
 		bIAx.set_xlabel('Hour')
 		bIAx.set_ylabel('Volume (cm3)')
 		figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
+		plt.close('all')
 
 	def createRGBVideo(self):
 		rawDepthData = np.load(self.fileManager.localRawDepthFile)
