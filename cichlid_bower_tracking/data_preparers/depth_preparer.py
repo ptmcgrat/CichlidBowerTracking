@@ -71,13 +71,13 @@ class DepthPreparer:
 		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
 		with open(self.fileManager.localDepthLogfile,'w') as f:
 			print('GitBranch: ' + self.fileManager.branch_name, file = f)
-			print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
-			print('NumpyVersion: ' + np.__version__, file = f)
-			print('Scikit-VideoVersion: ' + skvideo.__version__, file = f)
-			print('ScipyVersion: ' + scipy.__version__, file = f)
 			print('Username: ' + os.getenv('USER'), file = f)
 			print('Nodename: ' + os.uname().nodename, file = f)
 			print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
+
+            output = subprocess.run(['conda','list'], capture_output = True)
+            print(output.stdout.decode('utf-8'), file = f)
+
 
 	def createSmoothedArray(self, goodDataCutoff = 0.7, tunits = 71, order = 4, max_depth = 4, max_height = 8):
 		
@@ -189,7 +189,7 @@ class DepthPreparer:
 		gridDaily = gridspec.GridSpec(num_trials + total_rows + 1, 1)
 
 		current_grid_idx = 0
-		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
+		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','CastleVolume','PitVolume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
 
 			start_frame = trial.daylight_frames[0]

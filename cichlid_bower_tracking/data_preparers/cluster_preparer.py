@@ -57,7 +57,7 @@ class ClusterPreparer():
 			print('Nodename: ' + os.uname().nodename, file = f)
 			print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 			output = subprocess.run(['conda','list'], capture_output = True)
-            print(output.stdout.decode('utf-8'), file = f)
+			print(output.stdout.decode('utf-8'), file = f)
 
 
 	def runClusterAnalysis(self):
