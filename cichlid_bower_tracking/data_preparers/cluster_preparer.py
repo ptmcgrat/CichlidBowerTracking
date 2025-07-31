@@ -79,10 +79,10 @@ class ClusterPreparer():
 		command.extend(['--VideoID', self.videoObj.baseName])
 
 		if not os.path.isdir('CichlidActionDetection'):
-			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionDetection'])
+			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionDetection'], capture_output = True)
 
 		os.chdir('CichlidActionDetection')
-		subprocess.run(['git', 'pull'])
+		subprocess.run(['git', 'pull'], capture_output = True)
 		subprocess.run(command)
 		os.chdir('..')
 

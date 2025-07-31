@@ -158,6 +158,8 @@ elif args.AnalysisType == 'Cluster':
 		else:
 			videoIndices = range(range(len(fm_obj.lp.movies)))
 
+		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
+
 		for videoIndex in videoIndices:
 			
 			cp_obj = CP(fm_obj, int(videoIndex), workers)
