@@ -2,12 +2,11 @@
 import scipy.signal
 import skvideo.io
 import numpy as np
-import pdb, os, sys, datetime, warnings, copy, subprocess, shutil
+import pdb, os, sys, datetime, warnings, copy, subprocess, shutil, io
 import matplotlib.pyplot as plt
 import matplotlib
 from PIL import Image,ImageDraw
 from helper_modules.depth_analyzer import DepthAnalyzer as DA
-from collections import OrderedDict
 from matplotlib import (cm, colors, gridspec, ticker)
 import pandas as pd 
 
@@ -59,7 +58,7 @@ class DepthPreparer:
 		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
 		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
-		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
+		self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
 		self.fileManager.uploadData(self.fileManager.localDepthLogfile)
 		self.fileManager.uploadData(self.fileManager.localDailyDepthSummaryFigure)
 		#self.fileManager.uploadData(self.fileManager.localHourlyDepthSummaryFigure)
@@ -125,7 +124,8 @@ class DepthPreparer:
 							if len(x_interp) != 0: # Only interpolate if there is missing data
 								interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
 								dailyData[x_interp, i, j] = interp_data
-			
+				dailyData = scipy.signal.savgol_filter(dailyData, tunits, order, axis = 0, mode = 'mirror')
+
 		# Save interpolated data
 		np.save(self.fileManager.localInterpDepthFile, interpDepthData)
 
@@ -168,7 +168,6 @@ class DepthPreparer:
 					else:
 						pdb.set_trace()
 		# Smooth data with savgol_filter
-		smoothDepthData = scipy.signal.savgol_filter(smoothDepthData, tunits, order, axis = 0, mode = 'mirror')
 		np.save(self.fileManager.localSmoothDepthFile, smoothDepthData)
 
 	def createDepthFigures(self, hourlyDelta=2):
@@ -268,22 +267,54 @@ class DepthPreparer:
 		plt.close('all')
 
 	def createRGBVideo(self):
+		lp = self.fileManager.lp
 		rawDepthData = np.load(self.fileManager.localRawDepthFile)
 		smoothDepthData = np.load(self.fileManager.localSmoothDepthFile)
-		cmap = copy.copy(matplotlib.cm.get_cmap("jet"))
-		cmap.set_bad(color = 'black')
+		#cmap = copy.copy(matplotlib.cm.get_cmap("jet"))
+		#cmap.set_bad(color = 'black')
 
 		median_height = np.nanmedian(smoothDepthData)
+		matplotlib.use("Agg")
+
+
 
 		for i, frame in enumerate(self.fileManager.lp.frames):
 
+			trials = [(j+1,x) for (j,x) in enumerate(lp.trials) if frame.time >= x.startTime and frame.time <= x.stopTime]
+			trial = str(trials[0][0]) if len(trials) == 1 else 'None'
+			fig = plt.figure(figsize=(8, 8))
+			fig.suptitle('Trial ' + trial + ': ' + str(frame.time.ctime()))
+			ax1 = fig.add_subplot(2,2,1)       
+			ax2 = fig.add_subplot(2,2,2)
+			ax3 = fig.add_subplot(2,2,3)
+			ax4 = fig.add_subplot(2,2,4)
+
 			if i==0:
-				outMovie = skvideo.io.FFmpegWriter(self.fileManager.localRGBDepthVideo)
+				outMovie = skvideo.io.FFmpegWriter(self.fileManager.localRGBDepthVideo, outputdict={'-vcodec': 'libx264'})
 				#outMovie = cv2.VideoWriter(self.fileManager.localRGBDepthVideo, cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (depthRGB.shape[1],depthRGB.shape[0]))
-			picture = plt.imread(self.fileManager.localProjectDir + frame.pic_file)
+			depthRGB = plt.imread(self.fileManager.localProjectDir + frame.pic_file)
+			if len(trials) == 1:
+				start_index = trials[0][1].frames[0].index
+			else:
+				start_index = 0
+			ax1.imshow(depthRGB, cmap = 'gray')
+			ax2.imshow((rawDepthData[i] - rawDepthData[start_index]),vmin=-2, vmax=2)
+			ax3.imshow((rawDepthData[i]), vmin=median_height - 5, vmax=median_height + 5)
+			ax4.imshow((smoothDepthData[i]), vmin=median_height - 5, vmax=median_height + 5)
+			ax1.set_title('DepthRGB')
+			ax2.set_title('RawDepthChange: Med=' + str(frame.med) + ',,Std=' + str(frame.std) + ',,GP=' + str(frame.gp))
+			ax3.set_title('RawCurrentDepth')
+			ax4.set_title('SmoothedCurrentDepth')
+
+			fig.canvas.draw()
+
+			# Now we can save it to a numpy array.
+			data = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)
+			data = data.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+
 			#plt.text(x, y, s, bbox=dict(fill=False, edgecolor='red', linewidth=2))
-			first_smooth_depth_cmap = cmap(plt.Normalize(-5, 5)(smoothDepthData[i] - smoothDepthData[0]))
-			first_raw_depth_cmap = cmap(plt.Normalize(-5, 5)(rawDepthData[i] - rawDepthData[0]))
-			outMovie.writeFrame(np.hstack([picture,first_raw_depth_cmap[:,:,0:3]*255,first_smooth_depth_cmap[:,:,0:3]*255]))
+			outMovie.writeFrame(data[:,:,1:4])
 
 		outMovie.close()
+		plt.close('all')
+

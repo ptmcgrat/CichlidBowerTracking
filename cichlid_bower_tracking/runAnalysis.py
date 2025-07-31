@@ -117,6 +117,7 @@ elif args.AnalysisType == 'Depth':
 		dp_obj.validateInputData()
 		dp_obj.createSmoothedArray()
 		dp_obj.createDepthFigures()
+		dp_obj.createRGBVideo()
 		dp_obj.uploadProjectData(delete = True)
 		s_dt.loc[projectID,'Depth'] = True
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
@@ -138,7 +139,6 @@ elif args.AnalysisType == 'Depth':
 
 elif args.AnalysisType == 'Cluster':
 	from data_preparers.cluster_preparer import ClusterPreparer as CP
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Prep == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
 
 	if args.Workers is None:
@@ -153,8 +153,8 @@ elif args.AnalysisType == 'Cluster':
 
 		fm_obj.setProjectID(projectID)
 
-		if ':' in row.videoIDs:
-			videoIndices = row.videoIDs.split(': ')[1].split(',')
+		if ':' in row.videoIDsToRun:
+			videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 		else:
 			videoIndices = range(range(len(fm_obj.lp.movies)))
 

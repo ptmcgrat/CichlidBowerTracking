@@ -49,13 +49,14 @@ class PrepPreparer:
     def _createLogFile(self):
         with open(self.fileManager.localPrepLogfile,'w') as f:
             print('GitBranch: ' + self.fileManager.branch_name)
-            print('PythonVersion: ' + sys.version.replace('\n', ' '), file = f)
-            print('NumpyVersion: ' + np.__version__, file = f)
-            print('MatplotlibVersion: ' + matplotlib.__version__, file = f)
-            print('OpenCVVersion: ' + cv2.__version__, file = f)
             print('Username: ' + os.getenv('USER'), file = f)
             print('Nodename: ' + os.uname().nodename, file = f)
             print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
+
+            output = subprocess.run(['conda','list'], capture_output = True)
+            print(output.stdout.decode('utf-8'), file = f)
+
+
 
     def _click_event(self, event, x, y, flags, params):
         
