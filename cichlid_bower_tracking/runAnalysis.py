@@ -119,6 +119,8 @@ elif args.AnalysisType == 'Depth':
 		dp_obj.createDepthFigures()
 		dp_obj.createRGBVideo()
 		dp_obj.uploadProjectData(delete = True)
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
 		s_dt.loc[projectID,'Depth'] = True
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
@@ -158,6 +160,9 @@ elif args.AnalysisType == 'Cluster':
 		else:
 			videoIndices = range(range(len(fm_obj.lp.movies)))
 
+		already_run = [] if row.Cluster is False else row.Cluster.split(': ')[1].split(',')
+		videoIndices = [x for x in videoIndices if x not in already_run]
+		
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		for videoIndex in videoIndices:
@@ -166,8 +171,12 @@ elif args.AnalysisType == 'Cluster':
 			cp_obj.downloadProjectData()
 			cp_obj.validateInputData()
 			cp_obj.runClusterAnalysis()
-			cp_obj.uploadProjectData(delete = False)
-		s_dt.loc[projectID,'Cluster'] = True
+			cp_obj.uploadProjectData(delete = True)
+		
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
+
+		s_dt.loc[projectID,'Cluster'] = ': ' + ','.join([str(x) for x in videoIndices])
 
 elif args.AnalysisType == 'AnnotateVideos':
 	from cichlid_bower_tracking.data_preparers.manual_label_video_preparer import ManualLabelVideoPreparer as MLVP
