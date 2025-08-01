@@ -35,7 +35,7 @@ class FileManager():
             self.analysisID = analysisID
 
             self.downloadData(self.localSummaryFile)
-            self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0)
+            self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0, dtype={'Prep':bool,'Depth':bool,'Cluster': str})
             if 'DissectionTime' in self.s_dt:
                 self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
 
@@ -130,10 +130,12 @@ class FileManager():
                 projectIDs = s_dt.index.to_list()
             elif analysisType == 'Prep':
                 projectIDs = s_dt[(s_dt.StartingFiles == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
-            elif analysisType in ['Depth','Cluster']:
-                projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+            elif analysisType == 'Depth':
+                projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True) & (s_dt.Depth == False)].index.to_list()
+            elif analysisType == 'Cluster':
+                projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True)].index.to_list()
             elif analysisType == 'AnnotateVideos':
-                projectIDs = s_dt[(s_dt.Cluster == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+                projectIDs = s_dt[(s_dt.Cluster != False) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
             elif analysisType == 'TrainModel':
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':

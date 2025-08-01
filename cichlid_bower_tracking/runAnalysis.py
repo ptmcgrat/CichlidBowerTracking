@@ -162,7 +162,6 @@ elif args.AnalysisType == 'Cluster':
 
 		already_run = [] if row.Cluster is False else row.Cluster.split(': ')[1].split(',')
 		videoIndices = [x for x in videoIndices if x not in already_run]
-		
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		for videoIndex in videoIndices:
