@@ -38,7 +38,7 @@ class ClusterPreparer():
 		except FileNotFoundError:
 			print(self.videoObj.localVideoFile + ' not found on cloud. Trying h264 file')
 			self.fileManager.downloadData(self.videoObj.localh264File)
-			command = ['ffmpeg', '-r', str(self.videoObj.framerate), '-i', self.videoObj.localh264File, '-threads', str(self.workers), '-c:v', 'copy', '-r', str(videoObj.framerate), videoObj.localVideoFile]
+			command = ['ffmpeg', '-r', str(self.videoObj.framerate), '-i', self.videoObj.localh264File, '-threads', str(self.workers), '-c:v', 'copy', '-r', str(self.videoObj.framerate), self.videoObj.localVideoFile]
 			ffmpeg_output = subprocess.run(command, capture_output = True)
 			if ffmpeg_output.returncode != 0:
 				print(ffmpeg_output.stderr.decode('utf-8'))
