@@ -45,7 +45,7 @@ class ClusterPreparer():
 			assert os.path.isfile(self.videoObj.localVideoFile)
 			assert os.path.getsize(self.videoObj.localVideoFile) > os.path.getsize(self.videoObj.localh264File)
 			#self.fileManager.uploadData(self.videoObj.localVideoFile)
-			subprocess.run(['rm', '-f', self.videoObject.localh264File])
+			subprocess.run(['rm', '-f', self.videoObj.localh264File])
 
 
 
