@@ -44,7 +44,7 @@ class ClusterPreparer():
 				print(ffmpeg_output.stderr.decode('utf-8'))
 			assert os.path.isfile(self.videoObj.localVideoFile)
 			assert os.path.getsize(self.videoObj.localVideoFile) > os.path.getsize(self.videoObj.localh264File)
-			fileManager.uploadData(self.videoObj.localVideoFile)
+			self.fileManager.uploadData(self.videoObj.localVideoFile)
 			subprocess.run(['rm', '-f', self.videoObject.localh264File])
 
 
