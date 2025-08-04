@@ -174,7 +174,7 @@ elif args.AnalysisType == 'Cluster':
 
 			fm_obj = FM(analysisID, projectID)
 			s_dt = fm_obj.s_dt
-			if ':' not in row.Cluster:
+			if ':' in row.Cluster:
 				s_dt.loc[projectID,'Cluster'] = s_dt.loc[projectID,'Cluster'] + ',' + str(videoIndex)
 			else:
 				s_dt.loc[projectID,'Cluster'] = 'VideoIndices: ' + str(videoIndex)
