@@ -189,7 +189,7 @@ class DepthPreparer:
 		gridDaily = gridspec.GridSpec(num_trials + total_rows + 1, 1)
 
 		current_grid_idx = 0
-		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','CastleVolume','PitVolume'])
+		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
 
 			start_frame = trial.daylight_frames[0]
