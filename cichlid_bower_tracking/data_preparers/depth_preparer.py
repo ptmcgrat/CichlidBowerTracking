@@ -75,8 +75,8 @@ class DepthPreparer:
 			print('Nodename: ' + os.uname().nodename, file = f)
 			print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 
-            output = subprocess.run(['conda','list'], capture_output = True)
-            print(output.stdout.decode('utf-8'), file = f)
+			output = subprocess.run(['conda','list'], capture_output = True)
+			print(output.stdout.decode('utf-8'), file = f)
 
 
 	def createSmoothedArray(self, goodDataCutoff = 0.7, tunits = 71, order = 4, max_depth = 4, max_height = 8):
