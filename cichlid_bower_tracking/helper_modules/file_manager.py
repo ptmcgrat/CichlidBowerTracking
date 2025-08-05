@@ -43,6 +43,9 @@ class FileManager():
         self.createFiles(projectID, modelID, analysisID)
 
     def createFiles(self, projectID, modelID, analysisID):
+        self.localCredentialDir = self.localMasterDir + '__CredentialFiles/'
+        self.localCredentialSpreadsheet = self.localCredentialDir + 'SAcredentials_1.json'
+
         if projectID is not None:
             self.setProjectID(projectID)
         if modelID is not None:
@@ -51,6 +54,8 @@ class FileManager():
             self._createPiData()
         if analysisID is not None:
             self._createAnnotationData()
+        
+
         self._createParameters()
 
     def setSubjectID(self, subjectID, dissection_time):

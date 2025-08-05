@@ -16,6 +16,10 @@ class GoogleController:
 		self.googleErrorFile = googleErrorFile
 		self.g_lf = open(self.googleErrorFile, 'a', buffering = 1)
 
+	def getAllData(self, column_names = None):
+		data = self.pi_ws.get_all_values()
+		dt = pd.DataFrame(data[1:], columns = data[0])
+
 	def getPiGS(self, column_names):
 		# Make this compatible with both lists and also strings
 		if not isinstance(column_names, list):
@@ -139,6 +143,7 @@ class GoogleController:
 					continue
 			else:
 				self.all_data = data
+				self.dt = dt
 				time.sleep(2)
 		return False
 
