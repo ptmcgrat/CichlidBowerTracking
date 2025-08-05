@@ -169,6 +169,9 @@ class DriveUpdater:
         #plt.subplots_adjust(bottom = 0.15, left = 0.12, wspace = 0.24, hspace = 0.57)
         fig.subplots_adjust(left=0.2, hspace=0.4)
         plt.savefig(self.projectDirectory + self.lp.tankID + '.jpg')
+        fig.savefig(self.projectDirectory + 'CurrentBuild.pdf')
+        self.fileManager.uploadData(self.projectDirectory + 'CurrentBuild.pdf')
+
         #return self.graph_summary_fname
 
         fig = plt.figure(figsize=(3,3))
@@ -193,8 +196,6 @@ class DriveUpdater:
         fig.tight_layout()
 
         fig.savefig(self.projectDirectory + self.lp.tankID + '_2.jpg')
-        fig.savefig(self.projectDirectory + 'CurrentBuild.pdf')
-        self.fileManager.uploadData(self.projectDirectory + 'CurrentBuild.pdf')
         #Update PiStatus
         current_temp = psutil.sensors_temperatures()['cpu_thermal'][0][1]
         harddrive_use = psutil.disk_usage(self.fileManager.localMasterDir)[3]
