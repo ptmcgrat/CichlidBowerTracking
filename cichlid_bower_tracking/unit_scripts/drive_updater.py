@@ -193,7 +193,8 @@ class DriveUpdater:
         fig.tight_layout()
 
         fig.savefig(self.projectDirectory + self.lp.tankID + '_2.jpg')
-
+        fig.savefig(self.projectDirectory + 'CurrentBuild.pdf')
+        self.fileManager.uploadData(self.projectDirectory + 'CurrentBuild.pdf')
         #Update PiStatus
         current_temp = psutil.sensors_temperatures()['cpu_thermal'][0][1]
         harddrive_use = psutil.disk_usage(self.fileManager.localMasterDir)[3]
