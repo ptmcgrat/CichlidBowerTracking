@@ -127,7 +127,7 @@ class FileManager():
             row_data['Cluster'] = 'VideoIndices: '
             # Get additional files necessary for analysis based on videos
             for index,vid_obj in enumerate(self.lp.movies):
-                append = str(index)
+                append = str(index) + ','
                 vid_obj = self.returnVideoObject(index)
                 if vid_obj.localLabeledClustersFile not in allfiles:
                     append = ''
@@ -137,7 +137,7 @@ class FileManager():
                     append = ''
                 if vid_obj.localManualLabelFramesDir[:-1] + '.tar' not in allfiles:
                     append = ''
-                row_data['Cluster'] = 'VideoIndices: ' + append + ','
+                row_data['Cluster'] += append
             row_data['Cluster'].rstrip(',')
 
         pdb.set_trace()
