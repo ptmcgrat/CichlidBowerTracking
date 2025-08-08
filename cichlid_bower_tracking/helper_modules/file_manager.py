@@ -140,7 +140,6 @@ class FileManager():
                 row_data['Cluster'] += append
             row_data['Cluster'].rstrip(',')
 
-        pdb.set_trace()
         return row_data
 
     def getProjectIDs(self, analysisType, projectIDs):
