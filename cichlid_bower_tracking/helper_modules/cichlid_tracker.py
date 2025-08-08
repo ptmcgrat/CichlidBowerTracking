@@ -664,7 +664,7 @@ class CichlidTracker:
 
                 s_dt = pd.concat([s_dt,data])
 
-                s_dt.to_csv(self.fileManager.localSummaryFile, index = False)
+                s_dt.to_csv(self.fileManager.localSummaryFile, index = True)
                 self.fileManager.uploadData(self.fileManager.localSummaryFile)
 
             self.googleController.modifyPiGS('Error','UploadSuccessful, ready for delete')
