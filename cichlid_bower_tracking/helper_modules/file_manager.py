@@ -33,11 +33,7 @@ class FileManager():
                 outtext = subprocess.run(['rclone', 'lsf', self.localMasterAnalysisDir.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('/\n')
                 raise FileNotFoundError('Cant find '+ analysisID + '.csv.\nValid analysisIDs are: ' + ','.join(outtext))
             self.analysisID = analysisID
-
-            self.downloadData(self.localSummaryFile)
-            self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0, dtype={'Prep':bool,'Depth':bool,'Cluster': str})
-            if 'DissectionTime' in self.s_dt:
-                self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
+            self.readAnalysisFile()
 
         # Create filenames and parameters
         self.createFiles(projectID, modelID, analysisID)
@@ -59,9 +55,17 @@ class FileManager():
 
         self._createParameters()
 
-    def setSubjectID(self, subjectID, dissection_time):
-        self.subjectID = subjectID
-        self.dissectionTime = dissection_time
+    def readAnalysisFile(self):
+        self.downloadData(self.localSummaryFile)
+        self.s_dt = pd.read_csv(self.localSummaryFile, index_col = 0, dtype={'Prep':bool,'Depth':bool,'Cluster': str})
+        if 'DissectionTime' in self.s_dt:
+            self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
+          
+    def returnEmpty_s_dt(self):
+        data = {'projectID':'','RunAnalysis':False,'tankID':'','StartingFiles':False,'Prep':False,
+                'Cluster':False,'ManualAnnotation':False,'ClusterClassification':False,'Summary':False,
+                'videoIDs':'','videoIDsToRun':'','Notes':''}
+        return pd.DataFrame(data)
 
     def setProjectID(self, projectID, print_issues = False):
         self.projectID = projectID

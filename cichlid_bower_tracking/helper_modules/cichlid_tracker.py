@@ -183,6 +183,9 @@ class CichlidTracker:
 
         if command == 'UploadData':
 
+            if self.running:
+                self.googleController.modifyPiGS('Error', 'Project still running. Run Stop before uploading', ping = False)
+                return
             self.googleController.modifyPiGS('Command', 'None')
             self._uploadFiles()
             return
