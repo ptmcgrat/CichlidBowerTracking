@@ -135,7 +135,7 @@ class FileManager():
             if vid_obj.localManualLabelFramesDir[:-1] + '.tar' not in allfiles:
                 append = ''
             row_data['Cluster'] += append
-        row_data['Cluster'].rstrip(',')
+        row_data['Cluster'] = row_data['Cluster'].rstrip(',')
 
         if row_data['Cluster'] == 'VideoIndices: ':
             row_data['Cluster'] = ''            
