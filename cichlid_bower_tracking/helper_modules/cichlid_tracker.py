@@ -659,7 +659,7 @@ class CichlidTracker:
             
             self.fileManager.readAnalysisFile()
             s_dt = self.fileManager.s_dt
-            if self.projectID not in s_dt.projectID.index:
+            if self.projectID not in s_dt.index:
                 data = self.fileManager.returnEmpty_s_dt(projectID = self.projectID, tankID = self.tankID)
 
                 s_dt = pd.concat([s_dt,data])
