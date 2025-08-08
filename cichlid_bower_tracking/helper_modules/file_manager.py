@@ -45,6 +45,7 @@ class FileManager():
     def createFiles(self, projectID, modelID, analysisID):
         self.localCredentialDir = self.localMasterDir + '__CredentialFiles/'
         self.localCredentialSpreadsheet = self.localCredentialDir + 'SAcredentials_1.json'
+        self.localTankDir = self.localMasterDir + '__TankData/'
 
         if projectID is not None:
             self.setProjectID(projectID)
@@ -99,15 +100,10 @@ class FileManager():
         necessaryFiles['ManualAnnotation'] = [self.localManualClipsFile]
         necessaryFiles['ClusterClassification'] = [self.localAllLabeledClustersFile]
         necessaryFiles['Summary'] = [self.localSummaryDir]
-
-        # Get additional files necessary for analysis based on videos
+        
         for index,vid_obj in enumerate(self.lp.movies):
             vid_obj = self.returnVideoObject(index)
             necessaryFiles['StartingFiles'].append(vid_obj.localVideoFile)
-            necessaryFiles['Cluster'].append(vid_obj.localLabeledClustersFile)
-            necessaryFiles['Cluster'].append(vid_obj.localAllClipsDir[:-1] + '.tar')
-            necessaryFiles['Cluster'].append(vid_obj.localManualLabelClipsDir[:-1] + '.tar')
-            necessaryFiles['Cluster'].append(vid_obj.localManualLabelFramesDir[:-1] + '.tar')
 
         row_data['tankID'] = self.lp.tankID
         # Check if files exists
@@ -119,10 +115,31 @@ class FileManager():
             for af in analysis_files:
                 if af not in allfiles:
                     if '.mp4' in af:
-                        continue
+                        if af.replace('.mp4','h264') in allfiles:
+                            continue
                     if analysis_type == 'StartingFiles':
                         print('Missing file: ' + af)
                     row_data[analysis_type] = False
+
+        if row_data['Cluster'] == False:
+            row_data['Cluster'] = ''
+        else:
+            row_data['Cluster'] = 'VideoIndices: '
+            # Get additional files necessary for analysis based on videos
+            for index,vid_obj in enumerate(self.lp.movies):
+                append = str(index)
+                vid_obj = self.returnVideoObject(index)
+                if vid_obj.localLabeledClustersFile not in allfiles:
+                    append = ''
+                if vid_obj.localAllClipsDir[:-1] + '.tar' not in allfiles:
+                    append = ''
+                if vid_obj.localManualLabelClipsDir[:-1] + '.tar' not in allfiles:
+                    append = ''
+                if vid_obj.localManualLabelFramesDir[:-1] + '.tar' not in allfiles:
+                    append = ''
+                row_data['Cluster'] = 'VideoIndices: ' + append + ','
+            row_data['Cluster'].rstrip(',')
+
 
         return row_data
 

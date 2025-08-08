@@ -47,12 +47,9 @@ class ClusterPreparer():
 			#self.fileManager.uploadData(self.videoObj.localVideoFile)
 			subprocess.run(['rm', '-f', self.videoObj.localh264File])
 
-
-
 	def validateInputData(self):
 
 		assert os.path.exists(self.videoObj.localVideoFile)
-
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
 		assert os.path.exists(self.fileManager.localAnalysisDir)
 		assert os.path.exists(self.fileManager.localTempDir)
@@ -62,6 +59,7 @@ class ClusterPreparer():
 		assert os.path.exists(self.fileManager.localLogfileDir)
 
 	def createLogFile(self):
+		
 		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
 		# with open(self.fileManager.localClusterLogfile,'w') as f:
 		with open(self.videoObj.localLogfile,'w') as f:
@@ -71,7 +69,6 @@ class ClusterPreparer():
 			print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
 			output = subprocess.run(['conda','list'], capture_output = True)
 			print(output.stdout.decode('utf-8'), file = f)
-
 
 	def runClusterAnalysis(self):
 

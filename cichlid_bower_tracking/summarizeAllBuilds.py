@@ -16,16 +16,16 @@ writer = pypdf.PdfWriter()
 
 dt = googleController.dt
 for index, row in dt.iterrows():
-	pdb.set_trace()
 	if row.Status == 'Running':
 		fm_obj = FM(analysisID = row.AnalysisID, projectID = row.ProjectID)
-		fm_obj.downloadData(fm_obj.projectDirectory + 'CurrentBuild.pdf')
-		f = open(fm_obj.projectDirectory + 'CurrentBuild.pdf', 'rb')
+		fm_obj.downloadData(fm_obj.localProjectDir + 'CurrentBuild.pdf')
+		f = open(fm_obj.localProjectDir + 'CurrentBuild.pdf', 'rb')
 		reader = pypdf.PdfReader(f)
 		for page_number in range(len(reader.pages)):
 			writer.add_page(reader.pages[page_number])
-	
-with open(fm_obj.localAnalysisStatesDir + 'Collated_CurrentBuild.pdf', 'wb') as f:
+
+fm_obj.createDirectory(fm_obj.localTankDir)	
+with open(fm_obj.localTankDir + 'Collated_CurrentBuild.pdf', 'wb') as f:
 	writer.write(f)
 
-fm_obj.uploadData(fm_obj.localAnalysisStatesDir + 'Collated_CurrentBuild.pdf')
+fm_obj.uploadData(fm_obj.localTankDir + 'Collated_CurrentBuild.pdf')
