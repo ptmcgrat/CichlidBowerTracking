@@ -150,7 +150,7 @@ class LogParser:
                 for start,stop in zip(self.tankresetstart,self.tankresetstop):
                     if stop - start > dt.timedelta(hours = 4) or stop <= start:
                         self.malformed_file.append('TimeDelta Unusual for tankresetstart and stop')
-                        trial_issues = True
+                        #trial_issues = True
 
         if len(self.restarts) > 0:
             self.malformed_file.append('# of restarts: ' + str(len(self.restarts)))

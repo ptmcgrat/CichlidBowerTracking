@@ -60,10 +60,10 @@ if args.AnalysisType == 'AnalyzeStates':
 
 		fm_obj.setProjectID(projectID)
 		out_data = fm_obj.getProjectStates()
-
+		pdb.set_trace()
 		for k, v in out_data.items():
-			if k not in fm_obj.s_dt:
-				fm_obj.s_dt[k] = False
+			if k not in s_dt:
+				s_dt[k] = False
 			s_dt.loc[projectID, k] = v
 
 elif args.AnalysisType == 'Prep':
