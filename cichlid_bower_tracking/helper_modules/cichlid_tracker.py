@@ -654,12 +654,15 @@ class CichlidTracker:
             self.fileManager.uploadData(self.googleErrorFile)
             self.googleController.modifyPiGS('Error','UploadSuccessful, ready for delete')
             
-            self.fileManager.downloadData(self.fileManager.localSummaryFile)
-            s_dt = pd.read_csv(self.fileManager.localSummaryFile)
-
+            self.fileManager.readAnalysisFile()
+            s_dt = self.fileManager.s_dt
             if self.projectID not in s_dt.projectID.values:
-                s_dt.loc[len(s_dt.index)] = ['']*len(s_dt.columns)
-                s_dt.loc[len(s_dt.index) - 1,'projectID'] = self.projectID
+                data = self.fileManager.returnEmpty_s_dt()
+                data.loc[0,'projectID'] = self.projectID
+                data.loc[0,'tankID'] = self.tankID
+
+                s_dt = pd.concat([s_dt,data], ignore_index=True)
+
                 s_dt.to_csv(self.fileManager.localSummaryFile, index = False)
                 self.fileManager.uploadData(self.fileManager.localSummaryFile)
 
