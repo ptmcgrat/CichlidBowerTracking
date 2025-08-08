@@ -62,7 +62,7 @@ class FileManager():
             self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
           
     def returnEmpty_s_dt(self, projectID = '', tankID = ''):
-        data = {'RunAnalysis':False,'tankID':tankID,'StartingFiles':False,'Prep':False,'Depth':False
+        data = {'RunAnalysis':False,'tankID':tankID,'StartingFiles':False,'Prep':False,'Depth':False,
                 'Cluster':False,'ManualAnnotation':False,'ClusterClassification':False,'Summary':False,
                 'videoIDs':'','videoIDsToRun':'','Notes':''}
         my_index = pd.Index([projectID], name='projectID') 
