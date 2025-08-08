@@ -659,12 +659,10 @@ class CichlidTracker:
             
             self.fileManager.readAnalysisFile()
             s_dt = self.fileManager.s_dt
-            if self.projectID not in s_dt.projectID.values:
-                data = self.fileManager.returnEmpty_s_dt()
-                data.loc[0,'projectID'] = self.projectID
-                data.loc[0,'tankID'] = self.tankID
+            if self.projectID not in s_dt.projectID.index:
+                data = self.fileManager.returnEmpty_s_dt(projectID = self.projectID, tankID = self.tankID)
 
-                s_dt = pd.concat([s_dt,data], ignore_index=True)
+                s_dt = pd.concat([s_dt,data])
 
                 s_dt.to_csv(self.fileManager.localSummaryFile, index = False)
                 self.fileManager.uploadData(self.fileManager.localSummaryFile)

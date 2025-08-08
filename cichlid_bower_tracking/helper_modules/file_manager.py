@@ -61,11 +61,13 @@ class FileManager():
         if 'DissectionTime' in self.s_dt:
             self.s_dt['DissectionTime'] = pd.to_datetime(self.s_dt.DissectionTime)
           
-    def returnEmpty_s_dt(self):
-        data = {'projectID':'','RunAnalysis':False,'tankID':'','StartingFiles':False,'Prep':False,
+    def returnEmpty_s_dt(self, projectID = '', tankID = ''):
+        data = {'RunAnalysis':False,'tankID':tankID,'StartingFiles':False,'Prep':False,
                 'Cluster':False,'ManualAnnotation':False,'ClusterClassification':False,'Summary':False,
                 'videoIDs':'','videoIDsToRun':'','Notes':''}
-        return pd.DataFrame(data)
+        my_index = pd.Index([projectID], name='projectID') 
+
+        return pd.DataFrame(data, index = my_index)
 
     def setProjectID(self, projectID, print_issues = False):
         self.projectID = projectID
