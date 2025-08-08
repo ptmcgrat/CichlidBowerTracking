@@ -87,7 +87,7 @@ class FileManager():
         row_data['videoIDs'] = 'VideoIndices: ' + ','.join([str(x) for x in range(len(self.lp.movies))])
         # Get all files on Dropbox
         allfiles = []
-        for directory in [self.localProjectDir,self.localPrepDir,self.localVideoDir,self.localTroubleshootingDir,self.localAnalysisDir]:
+        for directory in [self.localProjectDir,self.localPrepDir,self.localVideoDir,self.localTroubleshootingDir,self.localAnalysisDir,self.localAllClipsDir, self.localManualLabelClipsDir, self.localManualLabelFramesDir]:
             outfiles = subprocess.run(['rclone','lsf',directory.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('\n')
             allfiles += [directory + x for x in outfiles]
 
