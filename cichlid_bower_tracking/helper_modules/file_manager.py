@@ -121,24 +121,24 @@ class FileManager():
                         print('Missing file: ' + af)
                     row_data[analysis_type] = False
 
-        if row_data['Cluster'] == False:
-            row_data['Cluster'] = ''
-        else:
-            row_data['Cluster'] = 'VideoIndices: '
-            # Get additional files necessary for analysis based on videos
-            for index,vid_obj in enumerate(self.lp.movies):
-                append = str(index) + ','
-                vid_obj = self.returnVideoObject(index)
-                if vid_obj.localLabeledClustersFile not in allfiles:
-                    append = ''
-                if vid_obj.localAllClipsDir[:-1] + '.tar' not in allfiles:
-                    append = ''
-                if vid_obj.localManualLabelClipsDir[:-1] + '.tar' not in allfiles:
-                    append = ''
-                if vid_obj.localManualLabelFramesDir[:-1] + '.tar' not in allfiles:
-                    append = ''
-                row_data['Cluster'] += append
-            row_data['Cluster'].rstrip(',')
+        row_data['Cluster'] = 'VideoIndices: '
+        # Get additional files necessary for analysis based on videos
+        for index,vid_obj in enumerate(self.lp.movies):
+            append = str(index) + ','
+            vid_obj = self.returnVideoObject(index)
+            if vid_obj.localLabeledClustersFile not in allfiles:
+                append = ''
+            if vid_obj.localAllClipsDir[:-1] + '.tar' not in allfiles:
+                append = ''
+            if vid_obj.localManualLabelClipsDir[:-1] + '.tar' not in allfiles:
+                append = ''
+            if vid_obj.localManualLabelFramesDir[:-1] + '.tar' not in allfiles:
+                append = ''
+            row_data['Cluster'] += append
+        row_data['Cluster'].rstrip(',')
+
+        if row_data['Cluster'] == 'VideoIndices: ':
+            row_data['Cluster'] = ''            
 
         return row_data
 
