@@ -91,7 +91,7 @@ class ClusterPreparer():
 		if not os.path.isdir('CichlidActionDetection'):
 			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionDetection'], capture_output = True)
 
-		print('Running CichlidActionDetection on: ' + self.videoObj.localVideoFile.replace(self.videoObj.localMasterDir, ''))
+		print('Running CichlidActionDetection on: ' + self.videoObj.localVideoFile.replace(self.localMasterDir, ''))
 		os.chdir('CichlidActionDetection')
 		subprocess.run(['git', 'pull'], capture_output = True)
 		subprocess.run(command)
