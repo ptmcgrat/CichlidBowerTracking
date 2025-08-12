@@ -173,10 +173,10 @@ elif args.AnalysisType == 'Cluster':
 
 			fm_obj = FM(analysisID, projectID)
 			s_dt = fm_obj.s_dt
-			if ':' in row.Cluster:
-				s_dt.loc[projectID,'Cluster'] = s_dt.loc[projectID,'Cluster'] + ',' + str(videoIndex)
-			else:
+			if row.Cluster != row.Cluster:
 				s_dt.loc[projectID,'Cluster'] = 'VideoIndices: ' + str(videoIndex)
+			else:
+				s_dt.loc[projectID,'Cluster'] = s_dt.loc[projectID,'Cluster'] + ',' + str(videoIndex)
 
 			s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 			fm_obj.uploadData(fm_obj.localSummaryFile)
