@@ -159,6 +159,7 @@ elif args.AnalysisType == 'Cluster':
 		else:
 			videoIndices = range(range(len(fm_obj.lp.movies)))
 
+		pdb.set_trace()
 		already_run = [] if ':' not in row.Cluster else row.Cluster.split(': ')[1].split(',')
 		videoIndices = [x for x in videoIndices if x not in already_run]
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
