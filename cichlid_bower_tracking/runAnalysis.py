@@ -157,7 +157,7 @@ elif args.AnalysisType == 'Cluster':
 		if row.videoIDsToRun == row.videoIDsToRun and ':' in row.videoIDsToRun:
 			videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 		else:
-			videoIndices = range(range(len(fm_obj.lp.movies)))
+			videoIndices = []
 
 		already_run = [] if row.Cluster != row.Cluster else row.Cluster.split(': ')[1].split(',')
 		videoIndices = [x for x in videoIndices if x not in already_run]
