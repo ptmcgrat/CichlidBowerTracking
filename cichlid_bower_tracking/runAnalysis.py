@@ -154,7 +154,7 @@ elif args.AnalysisType == 'Cluster':
 
 		fm_obj.setProjectID(projectID)
 
-		if ':' in row.videoIDsToRun:
+		if row.videoIDsToRun == row.videoIDsToRun and ':' in row.videoIDsToRun:
 			videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 		else:
 			videoIndices = range(range(len(fm_obj.lp.movies)))
