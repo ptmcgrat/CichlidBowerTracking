@@ -158,18 +158,18 @@ elif args.AnalysisType == 'Cluster':
 
 		fm_obj.setProjectID(projectID)
 
-		if row.videoIDsToRun == row.videoIDsToRun and ':' in row.videoIDsToRun:
-			videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
+		if row.videoIDsToRun == 'VideoIndices: ':
+			videoIndices = [] if row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
 		else:
-			videoIndices = []
+			videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 
-		already_run = [] if row.Cluster != row.Cluster else row.Cluster.split(': ')[1].split(',')
-		videoIndices = [x for x in videoIndices if x not in already_run]
+		already_run = [] if row.Cluster == 'VideoIndices: ' else row.Cluster.split(': ')[1].split(',')
+		videoIndices = [int(x) for x in videoIndices if x not in already_run]
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		for videoIndex in videoIndices:
 			
-			cp_obj = CP(fm_obj, int(videoIndex), workers)
+			cp_obj = CP(fm_obj, videoIndex, workers)
 			cp_obj.downloadProjectData()
 			cp_obj.validateInputData()
 			cp_obj.runClusterAnalysis()
@@ -177,10 +177,11 @@ elif args.AnalysisType == 'Cluster':
 
 			fm_obj = FM(analysisID, projectID)
 			s_dt = fm_obj.s_dt
-			if s_dt.loc[projectID,'Cluster'] != s_dt.loc[projectID,'Cluster']:
-				s_dt.loc[projectID,'Cluster'] = 'VideoIndices: ' + str(videoIndex)
+
+			if s_dt.loc[projectID,'Cluster'] == 'VideoIndices: ':
+				s_dt.loc[projectID,'Cluster'] +=  str(videoIndex)
 			else:
-				s_dt.loc[projectID,'Cluster'] = s_dt.loc[projectID,'Cluster'] + ',' + str(videoIndex)
+				s_dt.loc[projectID,'Cluster'] +=  ',' + str(videoIndex)
 
 			s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 			fm_obj.uploadData(fm_obj.localSummaryFile)
@@ -193,7 +194,11 @@ elif args.AnalysisType == 'AnnotateVideos':
 	for projectID, row in fm_obj.s_dt.iterrows():
 		if projectID not in projectIDs:
 			continue
-		if row.videoIDsToAnnotate == row.videoIDsToAnnotate and ':' in row.videoIDsToAnnotate:
+		print(projectID)
+		if row.videoIDsToAnnotate == 'VideoIndices: ':
+			print('Warning: No videos specified for this project. Skipping')
+			continue
+
 			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
