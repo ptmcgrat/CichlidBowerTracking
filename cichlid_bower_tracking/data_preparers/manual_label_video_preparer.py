@@ -48,7 +48,7 @@ class ManualLabelVideoPreparer():
 		self.fileManager.uploadData(self.fileManager.localLabeledClipsFile)
 
 		if delete:
-			shutil.rmtree(self.localProjectDir)
+			shutil.rmtree(self.fileManager.localProjectDir)
 			shutil.rmtree(self.fileManager.localLabeledClipsProjectDir)
 
 		return self.quit
@@ -96,7 +96,7 @@ class ManualLabelVideoPreparer():
 
 			if info == ord('q'):
 				self.quit = True
-				return
+				return annotatedClips
 
 			if info == ord('k'):
 				index += 1

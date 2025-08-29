@@ -198,7 +198,7 @@ elif args.AnalysisType == 'AnnotateVideos':
 		if row.videoIDsToAnnotate == 'VideoIndices: ':
 			print('Warning: No videos specified for this project. Skipping')
 			continue
-
+		else:
 			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
@@ -210,6 +210,7 @@ elif args.AnalysisType == 'AnnotateVideos':
 		quit = mlv_obj.uploadProjectData(delete = True)
 		
 		s_dt.loc[projectID,'ManualAnnotation'] = labeled_videos
+		pdb.set_trace()
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
 

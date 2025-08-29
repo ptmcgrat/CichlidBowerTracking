@@ -167,7 +167,7 @@ class FileManager():
             elif analysisType == 'Cluster':
                 projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True)].index.to_list()
             elif analysisType == 'AnnotateVideos':
-                projectIDs = s_dt[(s_dt.Cluster == s_dt.Cluster) & (s_dt.RunAnalysis == True) & (s_dt.ManualAnnotation < clip_number)].index.to_list()
+                projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt.ManualAnnotation < clip_number)].index.to_list()
             elif analysisType == 'TrainModel':
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':
