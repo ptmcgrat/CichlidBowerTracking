@@ -14,7 +14,7 @@ class ManualLabelVideoPreparer():
 	def __init__(self, fileManager, initials, number, videoIndices):
 
 		self.__version__ = '1.0.0'
-
+		self.quit = False
 		self.fileManager = fileManager
 		self.initials = initials
 		self.number = number
@@ -25,52 +25,60 @@ class ManualLabelVideoPreparer():
 
 	def downloadProjectData(self):
 		self.fileManager.createDirectory(self.fileManager.localMasterDir)
-        self.fileManager.createDirectory(self.fileManager.localAnalysisDir)
-        if self.fileManager.checkFileExists(self.localLabeledClipsProjectDir + 'tar'):
-        	self.fileManger.downloadData(self.localLabeledClipsProjectDir, tarred = True)
-        self.fileManger.downloadData(self.fileManager.localLabeledClipsFile)
-        for video in V
-
+		self.fileManager.createDirectory(self.fileManager.localAnalysisDir)
+		if self.fileManager.checkFileExists(self.fileManager.localLabeledClipsProjectDir + '.tar'):
+			self.fileManger.downloadData(self.fileManager.localLabeledClipsProjectDir, tarred = True)
+		else:
+			self.fileManager.createDirectory(self.fileManager.localLabeledClipsProjectDir)
+		self.fileManager.downloadData(self.fileManager.localLabeledClipsFile)
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			self.fileManager.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
 
 	def validateInputData(self):
 
-		assert os.path.exists(self.fileManager.localManualLabelClipsDir)
-		assert os.path.exists(self.fileManager.localNewLabeledClipsDir)
+		assert os.path.exists(self.fileManager.localLabeledClipsProjectDir)
 		assert os.path.exists(self.fileManager.localLabeledClipsFile)
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			assert os.path.exists(videoObj.localManualLabelClipsDir)
 	
 	def uploadProjectData(self, delete = False):
-        self.uploadAndMerge(self.localNewLabeledVideosFile, self.localLabeledClipsFile, ID = 'LID')
-        self.uploadAndMerge(self.localNewLabeledClipsDir, self.localLabeledClipsProjectDir, tarred = True)
-                # pdb.set_trace()
+		self.fileManager.uploadData(self.fileManager.localLabeledClipsProjectDir, tarred = True)
+		self.fileManager.uploadData(self.fileManager.localLabeledClipsFile)
 
-        if delete:
-            shutil.rmtree(self.localProjectDir)
+		if delete:
+			shutil.rmtree(self.localProjectDir)
+			shutil.rmtree(self.fileManager.localLabeledClipsProjectDir)
 
+		return self.quit
 
 	def labelVideos(self):
 
 		# Read in annotations and create csv file for all annotations with the same user and projectID
-		previouslyLabeled_dt = pd.read_csv(self.fileManager.localLabeledClipsFile, index_col = 'LID')
-		newlyLabeled_dt = pd.DataFrame(columns =previouslyLabeled_dt.columns)
-		newlyLabeled_dt.index.name = 'LID'
-
+		labeled_dt = pd.read_csv(self.fileManager.localLabeledClipsFile, index_col = 'LID')
+		
+		projectIDs = labeled_dt['ClipName'].str.split('__').str[0]
+		annotatedClips = projectIDs[projectIDs == self.fileManager.projectID].shape[0]
 		# Identify clips that can be labeled
-		clips = [x for x in os.listdir(self.fileManager.localManualLabelClipsDir) if 'ManualLabel.mp4' in x]
+		clips = []
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			clips += [videoObj.localManualLabelClipsDir + x for x in os.listdir(videoObj.localManualLabelClipsDir) if 'ManualLabel.mp4' in x]
 
 		print(self.commands_help)
 		
-		annotatedClips = 0 # Keep track of all the new clips that have been labeled
 		random.shuffle(clips) # Shuffle the clips so that it's a random sample
 
 		index = 0
 		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
 			f = clips[index] # Get current clip
-
-			if not previouslyLabeled_dt.loc[previouslyLabeled_dt.ClipName == f]['ManualLabel'].empty:
-				print('Skipping ' + f + ' since it is already labeled', file = sys.stderr)
+			clip_name = self.fileManager.projectID + '__' + f.split('/')[-1].replace('_ManualLabel.mp4','')
+			if clip_name in labeled_dt.ClipName:
+				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
 				continue
 	
-			cap = cv2.VideoCapture(self.fileManager.localManualLabelClipsDir + f) # Open video object and display it
+			cap = cv2.VideoCapture(f) # Open video object and display it
 	
 			while(True):
 				ret, frame = cap.read()
@@ -87,6 +95,7 @@ class ManualLabelVideoPreparer():
 					break
 
 			if info == ord('q'):
+				self.quit = True
 				return
 
 			if info == ord('k'):
@@ -97,20 +106,19 @@ class ManualLabelVideoPreparer():
 				index = index - 1
 				continue
 
-			clip_name = self.fileManager.projectID + '__' + f.replace('_ManualLabel.mp4','')
-
-			if clip_name in newlyLabeled_dt.ClipName:
-				newlyLabeled_dt.loc[newlyLabeled_dt.ClipName == clip_name,'ManualLabel'] = chr(info)
+			if clip_name in labeled_dt.ClipName:
+				labeled_dt.loc[newlyLabeled_dt.ClipName == clip_name,'ManualLabel'] = chr(info)
 			else:
-				newlyLabeled_dt.loc[len(newlyLabeled_dt)] = [clip_name, chr(info), self.initials, str(datetime.datetime.now())] # Create new annotation
+				labeled_dt.loc[len(labeled_dt)] = [clip_name, chr(info), self.initials, str(datetime.datetime.now())] # Create new annotation
 
-			newlyLabeled_dt.to_csv(self.fileManager.localNewLabeledVideosFile, sep = ',')
+			labeled_dt.to_csv(self.fileManager.localLabeledClipsFile, sep = ',')
 
 			# subprocess.run(['mv', self.fileManager.localManualLabelClipsDir + f.replace('_ManualLabel',''), self.fileManager.localNewLabeledClipsDir])
-			shutil.move(self.fileManager.localManualLabelClipsDir + f.replace('_ManualLabel',''), self.fileManager.localNewLabeledClipsDir) #changed for windows
+			shutil.move(f.replace('_ManualLabel',''), self.fileManager.localLabeledClipsProjectDir + clip_name + '.mp4') #changed for windows
 			annotatedClips += 1
 			index += 1
 
 			if annotatedClips >= self.number:
 				break
+
 		return annotatedClips

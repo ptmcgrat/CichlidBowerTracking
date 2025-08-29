@@ -81,11 +81,12 @@ class FileManager():
 
     def getProjectStates(self):
         # Dictionary to hold row of data
-        row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':False, 'ManualAnnotation': False, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
+        row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':'', 'ManualAnnotation':0, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
 
         #print('Checking project ' + self.projectID + ': ', end = '')
         try:
             self.downloadData(self.localLogfile)
+            self.downloadData(self.localLabeledClipsFile)
         except FileNotFoundError:
             return row_data
         self.lp = LP(self.localLogfile)
@@ -145,13 +146,18 @@ class FileManager():
         if row_data['Cluster'] == 'VideoIndices: ':
             row_data['Cluster'] = ''            
 
+        labeled_dt = pd.read_csv(self.localLabeledClipsFile, index_col = 'LID')
+        
+        labeled_dt['ProjectID'] = labeled_dt['ClipName'].str.split('__').str[0]
+        row_data['ManualAnnotation'] = len(labeled_dt[labeled_dt.ProjectID == self.projectID])
+
         return row_data
 
-    def getProjectIDs(self, analysisType, projectIDs):
+    def getProjectIDs(self, analysisType, projectIDs, clip_number = 0):
         bad_projects = []
         s_dt = self.s_dt
 
-        if projectIDs is  None:
+        if projectIDs is None:
             if analysisType == 'AnalyzeStates':
                 projectIDs = s_dt[s_dt.RunAnalysis == True].index.to_list()
             elif analysisType == 'Prep':
@@ -161,7 +167,7 @@ class FileManager():
             elif analysisType == 'Cluster':
                 projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True)].index.to_list()
             elif analysisType == 'AnnotateVideos':
-                projectIDs = s_dt[(s_dt.Cluster != False) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+                projectIDs = s_dt[(s_dt.Cluster == s_dt.Cluster) & (s_dt.RunAnalysis == True) & (s_dt.ManualAnnotation < clip_number)].index.to_list()
             elif analysisType == 'TrainModel':
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':
@@ -254,11 +260,8 @@ class FileManager():
         # Files created by manual labelerer  preparers
         self.localNewLabeledFramesFile = self.localTempDir + 'NewLabeledFrames.csv'
         self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
-        self.localNewLabeledVideosFile = self.localTempDir + 'NewLabeledVideos.csv'
-        self.localNewLabeledClipsDir = self.localTempDir + 'NewLabeledClips/'
 
-
-        #self.localLabeledClipsProjectDir = self.localLabeledClipsDir + projectID + '/'
+        self.localLabeledClipsProjectDir = self.localLabeledClipsDir + projectID + '/'
         #self.localLabeledFramesProjectDir = self.localBoxedFishDir + projectID + '/'
 
         # Files created by summary preparer
@@ -765,11 +768,12 @@ class FileManager():
                 subprocess.run(['mv', local_data + nfile, master_file])
             self.uploadData(master_file, tarred = True)
 
-    def checkFileExists(self, local_data):
+    def checkFileExists(self, local_data, tarred = False):
         relative_name = local_data.rstrip('/').split('/')[-1]
         local_path = local_data.split(relative_name)[0]
         cloud_path = local_path.replace(self.localMasterDir, self.cloudMasterDir)
-
+        if tarred:
+            relative_name += '.tar'
         output = subprocess.run(['rclone', 'lsf', cloud_path], capture_output = True, encoding = 'utf-8')
         remotefiles = [x.rstrip('/') for x in output.stdout.split('\n')]
         # pdb.set_t race()

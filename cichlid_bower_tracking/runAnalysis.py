@@ -22,7 +22,7 @@ cluster.add_argument('AnalysisID', type=str, help='The AnalysisID you want to an
 cluster.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
 cluster.add_argument('--Workers', type=int, help='Number of workers')
 
-ma = subparser.add_parser('ManualAnnotation', description = 'Manually annotate sand manipulation videos into 10 categories')
+ma = subparser.add_parser('AnnotateVideos', description = 'Manually annotate sand manipulation videos into 10 categories')
 ma.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 ma.add_argument('Initials', type=str, help='Initials of person annotating the videos')
 ma.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
@@ -47,9 +47,13 @@ fm_obj = FM(analysisID)
 s_dt = fm_obj.s_dt
 
 try:
-	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, args.ProjectIDs)
+	number = args.Number
 except AttributeError:
-	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, None)
+	number = 0
+try:
+	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, args.ProjectIDs, number)
+except AttributeError:
+	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, None, number)
 
 if 'RunAnalysis' not in fm_obj.s_dt:
 	s_dt['RunAnalysis'] = True
@@ -183,25 +187,34 @@ elif args.AnalysisType == 'Cluster':
 
 
 elif args.AnalysisType == 'AnnotateVideos':
-	from cichlid_bower_tracking.data_preparers.manual_label_video_preparer import ManualLabelVideoPreparer as MLVP
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
+	from data_preparers.manual_label_video_preparer import ManualLabelVideoPreparer as MLVP
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
 
 	for projectID, row in fm_obj.s_dt.iterrows():
 		if projectID not in projectIDs:
 			continue
+		if row.videoIDsToAnnotate == row.videoIDsToAnnotate and ':' in row.videoIDsToAnnotate:
+			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
+		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
+
 		fm_obj.setProjectID(projectID)
-		mlv_obj = MLVP(fm_obj, args.Initials, args.Number)
+		mlv_obj = MLVP(fm_obj, args.Initials, args.Number, videoIndices)
 		mlv_obj.downloadProjectData()
 		mlv_obj.validateInputData()
-		mlv_obj.labelVideos()
-	s_dt.loc[projectID,'AnnotateVideos'] = True
+		labeled_videos = mlv_obj.labelVideos()
+		quit = mlv_obj.uploadProjectData(delete = True)
+		
+		s_dt.loc[projectID,'AnnotateVideos'] = labeled_videos
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
+
+		if quit:
+			break
 
 elif args.AnalysisType == 'TrainModel':
 	from cichlid_bower_tracking.data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
 	if (s_dt.AnnotateVideos == False).sum() != 0:
 		print('Warning: You are training a model even though all projects have not been annotated')
-
 	tdm_obj = TDMP(fm_obj, modelID)
 	tdm_obj.validateInputData()
 	tdm_obj.create3DModel()
