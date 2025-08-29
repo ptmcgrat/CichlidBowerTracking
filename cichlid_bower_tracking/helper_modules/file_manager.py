@@ -43,13 +43,13 @@ class FileManager():
         self.localCredentialSpreadsheet = self.localCredentialDir + 'SAcredentials_1.json'
         self.localTankDir = self.localMasterDir + '__TankData/'
 
+        self._createAnnotationData()
         if projectID is not None:
             self.setProjectID(projectID)
         if modelID is not None:
             self._createMLData(modelID)
         if self.system == 'pi':
             self._createPiData()
-        self._createAnnotationData()
         
 
         self._createParameters()
