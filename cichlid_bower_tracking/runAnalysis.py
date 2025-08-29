@@ -204,7 +204,7 @@ elif args.AnalysisType == 'AnnotateVideos':
 		labeled_videos = mlv_obj.labelVideos()
 		quit = mlv_obj.uploadProjectData(delete = True)
 		
-		s_dt.loc[projectID,'AnnotateVideos'] = labeled_videos
+		s_dt.loc[projectID,'ManualAnnotation'] = labeled_videos
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
 
