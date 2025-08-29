@@ -11,24 +11,26 @@ class ManualLabelVideoPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, initials, number):
+	def __init__(self, fileManager, initials, number, videoIndices):
 
 		self.__version__ = '1.0.0'
 
 		self.fileManager = fileManager
 		self.initials = initials
 		self.number = number
-
+		self.videoIndices = videoIndices
 		# 10 categories of annotation plus quit and skip commands
 		self.commands = ['c','f','p','t','b','m','s','x','o','d','q','k','r']
 		self.commands_help = "Type 'c': BuildScoop; 'f': FeedScoop; 'p': BuildSpit; 't': FeedSpit; 'b': BuildMultiple; 'm': FeedMultiple; s': Spawn; 'x': Reflection; 'o': FishOther; 'd': DropSand; 'q': quit; 'k': skip; 'r': redo"
 
 	def downloadProjectData(self):
-		self.fileManager.createDirectory(self.fileManger.localMasterDir)
-        self.fileManager.createDirectory(self.fileManger.localAnalysisDir)
-        self.fileManager.createDirectory(self.fileManger.localNewLabeledClipsDir)
-        self.fileManger.downloadData(self.fileManger.localManualLabelClipsDir, tarred_subdirs = True)
-        self.fileManager.downloadData(self.fileManger.localLabeledClipsFile)
+		self.fileManager.createDirectory(self.fileManager.localMasterDir)
+        self.fileManager.createDirectory(self.fileManager.localAnalysisDir)
+        if self.fileManager.checkFileExists(self.localLabeledClipsProjectDir + 'tar'):
+        	self.fileManger.downloadData(self.localLabeledClipsProjectDir, tarred = True)
+        self.fileManger.downloadData(self.fileManager.localLabeledClipsFile)
+        for video in V
+
 
 	def validateInputData(self):
 

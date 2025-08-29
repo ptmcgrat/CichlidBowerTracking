@@ -1,7 +1,7 @@
 import subprocess,pdb,shutil
 from helper_modules.file_manager import FileManager as FM
 
-fm_obj = FM('YHMC_Mapping')
+fm_obj = FM('YH_MC_Parentals')
 s_dt = fm_obj.s_dt
 
 projectIDs = s_dt[(s_dt.StartingFiles == True)].index.to_list()

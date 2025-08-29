@@ -49,8 +49,7 @@ class FileManager():
             self._createMLData(modelID)
         if self.system == 'pi':
             self._createPiData()
-        if analysisID is not None:
-            self._createAnnotationData()
+        self._createAnnotationData()
         
 
         self._createParameters()
@@ -154,7 +153,7 @@ class FileManager():
 
         if projectIDs is  None:
             if analysisType == 'AnalyzeStates':
-                projectIDs = s_dt.index.to_list()
+                projectIDs = s_dt[s_dt.RunAnalysis == True].index.to_list()
             elif analysisType == 'Prep':
                 projectIDs = s_dt[(s_dt.StartingFiles == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
             elif analysisType == 'Depth':
@@ -272,7 +271,10 @@ class FileManager():
                 self.createDirectory(self.localSummaryDir)
                 self.lp = LP(self.localLogfile, print_issues = self.logAnalysisFile)
             else:
-                self.lp = LP(self.localLogfile)
+                try:
+                    self.lp = LP(self.localLogfile)
+                except:
+                    print('Issue with Logfile')
         except FileNotFoundError:
             #print('No logfile created yet for ' + projectID)
             pass 
@@ -304,7 +306,6 @@ class FileManager():
     def _createAnnotationData(self):
         self.localAnnotationDir = self.localMasterDir + '__AnnotatedData/'
         self.local3DVideosDir = self.localAnnotationDir + 'LabeledVideos/'
-
 
         self.localLabeledClipsFile = self.local3DVideosDir + 'ManualLabels.csv'
         self.localLabeledClipsDir = self.local3DVideosDir + 'Clips/'
@@ -552,8 +553,6 @@ class FileManager():
         videoObj.localManualLabelClipsPrefix = self.localManualLabelClipsDir + self.lp.projectID + '_' + videoObj.baseName
         videoObj.localIntensityFile = self.localSummaryDir + videoObj.baseName + '_intensity.pdf'
         videoObj.localTempDir = self.localTempDir + videoObj.baseName + '/'
-        videoObj.nManualLabelClips = int(self.nManualLabelClips/len(self.lp.movies))
-        videoObj.nManualLabelFrames = int(self.nManualLabelFrames/len(self.lp.movies))
         videoObj.localLogfile = self.localLogfileDir + 'ClusterLog_' + str(index) + '.txt'
 
         self.createDirectory(videoObj.localTempDir)

@@ -24,9 +24,9 @@ cluster.add_argument('--Workers', type=int, help='Number of workers')
 
 ma = subparser.add_parser('ManualAnnotation', description = 'Manually annotate sand manipulation videos into 10 categories')
 ma.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+ma.add_argument('Initials', type=str, help='Initials of person annotating the videos')
 ma.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
-ma.add_argument('--Number', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
-ma.add_argument('--Initials', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
+ma.add_argument('--Number', type=int, nargs='+', help='Optional argment to specify how many videos per project to annotate', default = 100)
 
 train = subparser.add_parser('TrainModel', description = 'Train a 3D Resnet to automatically classify sand manipulation events using annotated data')
 train.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
@@ -192,6 +192,7 @@ elif args.AnalysisType == 'AnnotateVideos':
 			continue
 		fm_obj.setProjectID(projectID)
 		mlv_obj = MLVP(fm_obj, args.Initials, args.Number)
+		mlv_obj.downloadProjectData()
 		mlv_obj.validateInputData()
 		mlv_obj.labelVideos()
 	s_dt.loc[projectID,'AnnotateVideos'] = True
