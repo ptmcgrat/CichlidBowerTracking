@@ -62,8 +62,8 @@ class FileManager():
           
     def returnEmpty_s_dt(self, projectID = '', tankID = ''):
         data = {'RunAnalysis':False,'tankID':tankID,'StartingFiles':False,'Prep':False,'Depth':False,
-                'Cluster':False,'ManualAnnotation':False,'ClusterClassification':False,'Summary':False,
-                'videoIDs':'','videoIDsToRun':'','Notes':''}
+                'Cluster':'VideoIndices: ','ManualAnnotation':0,'ClusterClassification':False,'Summary':False,
+                'videoIDs':'VideoIndices: ','videoIDsToRun':'VideoIndices: ', 'videoIDsToAnnotate':'VideoIndices: ','Notes':''}
         my_index = pd.Index([projectID], name='projectID') 
 
         return pd.DataFrame(data, index = my_index)
