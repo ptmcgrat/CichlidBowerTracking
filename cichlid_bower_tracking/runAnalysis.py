@@ -26,7 +26,7 @@ ma = subparser.add_parser('AnnotateVideos', description = 'Manually annotate san
 ma.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 ma.add_argument('Initials', type=str, help='Initials of person annotating the videos')
 ma.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
-ma.add_argument('--Number', type=int, nargs='+', help='Optional argment to specify how many videos per project to annotate', default = 100)
+ma.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
 
 train = subparser.add_parser('TrainModel', description = 'Train a 3D Resnet to automatically classify sand manipulation events using annotated data')
 train.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
