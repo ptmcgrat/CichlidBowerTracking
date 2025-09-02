@@ -37,7 +37,7 @@ class ManualLabelVideoPreparer():
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
 				self.fileManager.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
 		if self.dtype == 'Frames':
-        	if not os.path.exists(self.fileManager.localLabeledFramesDir):
+			if not os.path.exists(self.fileManager.localLabeledFramesDir):
 				if self.fileManager.checkFileExists(self.fileManager.localLabeledFramesDir + '.tar'):
 					self.fileManger.downloadData(self.fileManager.localLabeledFramesDir, tarred = True)
 				else:
