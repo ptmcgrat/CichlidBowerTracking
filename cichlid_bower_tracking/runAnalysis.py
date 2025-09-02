@@ -22,11 +22,15 @@ cluster.add_argument('AnalysisID', type=str, help='The AnalysisID you want to an
 cluster.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
 cluster.add_argument('--Workers', type=int, help='Number of workers')
 
-ma = subparser.add_parser('AnnotateVideos', description = 'Manually annotate sand manipulation videos into 10 categories')
+ma = subparser.add_parser('AnnotateVideos', description = 'Manually annotate sand manipulation videos into 10 categories. Restricts videos to VideoIDsToAnnotate column.')
 ma.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 ma.add_argument('Initials', type=str, help='Initials of person annotating the videos')
-ma.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
+ma.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to.')
 ma.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
+
+cfas = subparser.add_parser('CreateFrameAnnotationSet', description = 'Create folder of frames to upload into CVAT. Restricts videos to VideoIDsToAnnotate column.')
+cfas.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+cfas.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
 
 train = subparser.add_parser('TrainModel', description = 'Train a 3D Resnet to automatically classify sand manipulation events using annotated data')
 train.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
@@ -203,19 +207,41 @@ elif args.AnalysisType == 'AnnotateVideos':
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		fm_obj.setProjectID(projectID)
-		mlv_obj = MLVP(fm_obj, args.Initials, args.Number, videoIndices)
+		mlv_obj = MLVP(fm_obj, args.Number, videoIndices, 'Videos')
 		mlv_obj.downloadProjectData()
 		mlv_obj.validateInputData()
-		labeled_videos = mlv_obj.labelVideos()
+		labeled_videos = mlv_obj.labelVideos(args.Initials)
 		quit = mlv_obj.uploadProjectData(delete = True)
 		
 		s_dt.loc[projectID,'ManualAnnotation'] = labeled_videos
-		pdb.set_trace()
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
 
 		if quit:
 			break
+
+elif args.AnalysisType == 'CreateFrameAnnotationSet':
+	from data_preparers.manual_label_video_preparer import ManualLabelVideoPreparer as MLVP
+	for projectID, row in fm_obj.s_dt.iterrows():
+		if projectID not in projectIDs:
+			continue
+		print(projectID)
+		if row.videoIDsToAnnotate == 'VideoIndices: ':
+			print('Warning: No videos specified for this project. Skipping')
+			continue
+		else:
+			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
+		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
+
+		fm_obj.setProjectID(projectID)
+		mlv_obj = MLVP(fm_obj, args.Number, videoIndices, 'Frames')
+		mlv_obj.downloadProjectData()
+		mlv_obj.validateInputData()
+		labeled_videos = mlv_obj.sortFrames()
+		quit = mlv_obj.uploadProjectData(just_delete = True)
+
+	quit = mlv_obj.uploadProjectData(full_delete = True)
+
 
 elif args.AnalysisType == 'TrainModel':
 	from cichlid_bower_tracking.data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP

@@ -11,14 +11,14 @@ class ManualLabelVideoPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, initials, number, videoIndices):
+	def __init__(self, fileManager, number, videoIndices, dtype = 'Videos'):
 
 		self.__version__ = '1.0.0'
 		self.quit = False
 		self.fileManager = fileManager
-		self.initials = initials
 		self.number = number
 		self.videoIndices = videoIndices
+		self.dtype = dtype
 		# 10 categories of annotation plus quit and skip commands
 		self.commands = ['c','f','p','t','b','m','s','x','o','d','q','k','r']
 		self.commands_help = "Type 'c': BuildScoop; 'f': FeedScoop; 'p': BuildSpit; 't': FeedSpit; 'b': BuildMultiple; 'm': FeedMultiple; s': Spawn; 'x': Reflection; 'o': FishOther; 'd': DropSand; 'q': quit; 'k': skip; 'r': redo"
@@ -26,34 +26,67 @@ class ManualLabelVideoPreparer():
 	def downloadProjectData(self):
 		self.fileManager.createDirectory(self.fileManager.localMasterDir)
 		self.fileManager.createDirectory(self.fileManager.localAnalysisDir)
-		if self.fileManager.checkFileExists(self.fileManager.localLabeledClipsProjectDir + '.tar'):
-			self.fileManger.downloadData(self.fileManager.localLabeledClipsProjectDir, tarred = True)
-		else:
-			self.fileManager.createDirectory(self.fileManager.localLabeledClipsProjectDir)
-		self.fileManager.downloadData(self.fileManager.localLabeledClipsFile)
-		for videoIndex in self.videoIndices:
-			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			self.fileManager.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
+		
+		if self.dtype == 'Videos':
+			if self.fileManager.checkFileExists(self.fileManager.localLabeledClipsProjectDir + '.tar'):
+				self.fileManger.downloadData(self.fileManager.localLabeledClipsProjectDir, tarred = True)
+			else:
+				self.fileManager.createDirectory(self.fileManager.localLabeledClipsProjectDir)
+			self.fileManager.downloadData(self.fileManager.localLabeledClipsFile)
+			for videoIndex in self.videoIndices:
+				videoObj = self.fileManager.returnVideoObject(videoIndex)
+				self.fileManager.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
+		if self.dtype == 'Frames':
+        	if not os.path.exists(self.fileManager.localLabeledFramesDir):
+				if self.fileManager.checkFileExists(self.fileManager.localLabeledFramesDir + '.tar'):
+					self.fileManger.downloadData(self.fileManager.localLabeledFramesDir, tarred = True)
+				else:
+					self.fileManager.createDirectory(self.fileManager.localLabeledFramesDir)
+			self.fileManager.downloadData(self.fileManager.localLabeledFramesFile)
+			for videoIndex in self.videoIndices:
+				videoObj = self.fileManager.returnVideoObject(videoIndex)
+				self.fileManager.downloadData(videoObj.localManualLabelFramesDir, tarred = True)
 
 	def validateInputData(self):
+		if self.dtype == 'Videos':
+			assert os.path.exists(self.fileManager.localLabeledClipsProjectDir)
+			assert os.path.exists(self.fileManager.localLabeledClipsFile)
+			for videoIndex in self.videoIndices:
+				videoObj = self.fileManager.returnVideoObject(videoIndex)
+				assert os.path.exists(videoObj.localManualLabelClipsDir)
+		if self.dtype == 'Frames':
+			assert os.path.exists(self.fileManager.localLabeledFramesDir)
+			assert os.path.exists(self.fileManager.localLabeledFramesFile)
+			for videoIndex in self.videoIndices:
+				videoObj = self.fileManager.returnVideoObject(videoIndex)
+				assert os.path.exists(videoObj.localManualLabelFramesDir)
 
-		assert os.path.exists(self.fileManager.localLabeledClipsProjectDir)
-		assert os.path.exists(self.fileManager.localLabeledClipsFile)
-		for videoIndex in self.videoIndices:
-			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			assert os.path.exists(videoObj.localManualLabelClipsDir)
 	
-	def uploadProjectData(self, delete = False):
-		self.fileManager.uploadData(self.fileManager.localLabeledClipsProjectDir, tarred = True)
-		self.fileManager.uploadData(self.fileManager.localLabeledClipsFile)
+	def uploadProjectData(self, delete = False, full_delete = False, just_delete = False):
 
-		if delete:
+		if self.dtype == 'Videos':
+
+			self.fileManager.uploadData(self.fileManager.localLabeledClipsProjectDir, tarred = True)
+			self.fileManager.uploadData(self.fileManager.localLabeledClipsFile)
+
+		if self.dtype == 'Frames':
+			if not just_delete:
+				self.fileManager.uploadData(self.fileManager.localLabeledFramesDir, tarred = True)
+				self.fileManager.uploadData(self.fileManager.localLabeledFramesFile)
+
+		if delete or just_delete:
 			shutil.rmtree(self.fileManager.localProjectDir)
 			shutil.rmtree(self.fileManager.localLabeledClipsProjectDir)
 
+		if full_delete:
+			shutil.rmtree(self.fileManager.localLabeledFramesDir)
+			shutil.rmtree(self.fileManager.localLabeledFramesFile)
+
 		return self.quit
 
-	def labelVideos(self):
+	def labelVideos(self, initials):
+		
+		self.initials = initials
 
 		# Read in annotations and create csv file for all annotations with the same user and projectID
 		labeled_dt = pd.read_csv(self.fileManager.localLabeledClipsFile, index_col = 'LID')
@@ -122,3 +155,31 @@ class ManualLabelVideoPreparer():
 				break
 
 		return annotatedClips
+
+	def sortFrames(self):
+		# Read in annotations and create csv file for all annotations with the same user and projectID
+		labeled_dt = pd.read_csv(self.fileManager.localLabeledFramesFile, index_col = 'FID')
+		annotatedFrames = labeled_dt[labeled_dt.ProjectID == self.fileManager.projectID].shape[0]
+
+		frames = []
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			frames += [videoObj.localManualLabelFramesDir + x for x in os.listdir(videoObj.localManualLabelFramesDir)]
+
+		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
+			f = clips[index] # Get current clip
+			frames_name = self.fileManager.projectID + '__' + f.split('/')[-1]
+			if clip_name in labeled_dt.FrameName:
+				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
+				continue
+
+			labeled_dt.loc[len(labeled_dt)] = [self.fileManager.analysisID, self.fileManager.projectID, frame_name, '', ''] # Create new annotation
+			shutil.move(f, self.fileManager.localLabeledFramesDir + clip_name) #changed for windows
+			annotatedFrames += 1
+			index += 1
+			
+			labeled_dt.to_csv(self.fileManager.localLabeledFramesFile, sep = ',')
+
+			if annotatedClips >= self.number:
+				break
+		return annotatedFrames

@@ -2,10 +2,6 @@ import os, subprocess, pdb, platform, shutil
 from helper_modules.log_parser import LogParser as LP
 import pandas as pd 
 
-
-
-# config_file_path = '/Users/pkolipaka3/.config/rclone/rclone.conf'
-
 class FileManager():
     def __init__(self, analysisID = None, projectID = None, modelID = None, rcloneRemote = 'ptm_dropbox:/', masterDir = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/', check = False):
         # Identify directory for temporary local files
@@ -143,9 +139,7 @@ class FileManager():
             row_data['Cluster'] += append
         row_data['Cluster'] = row_data['Cluster'].rstrip(',')
 
-        if row_data['Cluster'] == 'VideoIndices: ':
-            row_data['Cluster'] = ''            
-
+        
         labeled_dt = pd.read_csv(self.localLabeledClipsFile, index_col = 'LID')
         
         labeled_dt['ProjectID'] = labeled_dt['ClipName'].str.split('__').str[0]
@@ -240,7 +234,12 @@ class FileManager():
         self.localDailyDepthSummaryFigure = self.localSummaryDir + 'DailyDepthSummary.pdf'
         self.localHourlyDepthSummaryFigure = self.localSummaryDir + 'HourlyDepthSummary.pdf'
 
-        self.localManualClipsFile = self.localAnalysisDir + 'ClustersManualLabels.csv'
+        # Created by manual label video preparer
+        self.localLabeledClipsProjectDir = self.localLabeledClipsDir + projectID + '/'
+
+     # Files created by manual labelerer  preparers
+        self.localNewLabeledFramesFile = self.localAnalysisDir + 'NewLabeledFrames.csv'
+        self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
 
         # Files created by cluster classifier preparer
         self.localTempClassifierDir = self.localProjectDir + 'TempClassifier/'
@@ -251,22 +250,6 @@ class FileManager():
         self.localAllFishDetectionsFile = self.localAnalysisDir + 'AllDetectionsFish.csv'
         self.localAllTracksSummaryFile = self.localAnalysisDir + 'AllSummarizedTracks.csv'
         
-        #created by cluster_track_association_preparer_new
-        
-        
-        #created by add_fish_sex_preparer.
-        self.localAllFishSexFile = self.localAnalysisDir + 'AllFishSex.csv'
-        
-        # Files created by manual labelerer  preparers
-        self.localNewLabeledFramesFile = self.localTempDir + 'NewLabeledFrames.csv'
-        self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
-
-        self.localLabeledClipsProjectDir = self.localLabeledClipsDir + projectID + '/'
-        #self.localLabeledFramesProjectDir = self.localBoxedFishDir + projectID + '/'
-
-        # Files created by summary preparer
-
-        # miscellaneous files
 
         try:
             self.downloadData(self.localLogfile)
@@ -309,9 +292,14 @@ class FileManager():
     def _createAnnotationData(self):
         self.localAnnotationDir = self.localMasterDir + '__AnnotatedData/'
         self.local3DVideosDir = self.localAnnotationDir + 'LabeledVideos/'
+        self.localObjectDetectionDir = self.localAnnotationDir + 'ObjectDetection/'
 
         self.localLabeledClipsFile = self.local3DVideosDir + 'ManualLabels.csv'
         self.localLabeledClipsDir = self.local3DVideosDir + 'Clips/'
+
+        self.localLabeledFramesFile = self.localObjectDetectionDir + 'ManualLabels.csv'
+        self.localLabeledFramesDir = self.localObjectDetectionDir + 'Frames/'
+
 
     def downloadProjectData(self, dtype, videoIndex = None):
 
