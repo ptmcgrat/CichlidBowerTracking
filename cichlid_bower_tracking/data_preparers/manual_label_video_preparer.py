@@ -75,9 +75,12 @@ class ManualLabelVideoPreparer():
 				self.fileManager.uploadData(self.fileManager.localLabeledFramesFile)
 
 		if delete or just_delete:
-			shutil.rmtree(self.fileManager.localProjectDir)
-			shutil.rmtree(self.fileManager.localLabeledClipsProjectDir)
-
+			try:
+				shutil.rmtree(self.fileManager.localProjectDir)
+				shutil.rmtree(self.fileManager.localLabeledClipsProjectDir)
+			except FileNotFoundError:
+				pass
+				
 		if full_delete:
 			shutil.rmtree(self.fileManager.localLabeledFramesDir)
 			shutil.rmtree(self.fileManager.localLabeledFramesFile)
