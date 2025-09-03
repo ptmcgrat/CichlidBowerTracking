@@ -110,8 +110,9 @@ class ManualLabelVideoPreparer():
 		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
 			f = clips[index] # Get current clip
 			clip_name = self.fileManager.projectID + '__' + f.split('/')[-1].replace('_ManualLabel.mp4','')
-			if clip_name in labeled_dt.ClipName:
+			if clip_name in labeled_dt.ClipName.values:
 				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
+				index += 1
 				continue
 	
 			cap = cv2.VideoCapture(f) # Open video object and display it
@@ -142,7 +143,7 @@ class ManualLabelVideoPreparer():
 				index = index - 1
 				continue
 
-			if clip_name in labeled_dt.ClipName:
+			if clip_name in labeled_dt.ClipName.values:
 				labeled_dt.loc[newlyLabeled_dt.ClipName == clip_name,'ManualLabel'] = chr(info)
 			else:
 				labeled_dt.loc[len(labeled_dt)] = [clip_name, chr(info), self.initials, str(datetime.datetime.now())] # Create new annotation
@@ -177,6 +178,7 @@ class ManualLabelVideoPreparer():
 			frame_name = self.fileManager.projectID + '__' + f.split('/')[-1]
 			if frame_name in labeled_dt.ClipName.values:
 				print('Skipping ' + frame_name + ' since it is already labeled', file = sys.stderr)
+				index += 1
 				continue
 
 			labeled_dt.loc[len(labeled_dt)] = [self.fileManager.analysisID, self.fileManager.projectID, frame_name, '', ''] # Create new annotation
