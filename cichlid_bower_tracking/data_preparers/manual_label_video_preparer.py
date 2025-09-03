@@ -166,6 +166,7 @@ class ManualLabelVideoPreparer():
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			frames += [videoObj.localManualLabelFramesDir + x for x in os.listdir(videoObj.localManualLabelFramesDir)]
 
+		index = 0
 		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
 			f = clips[index] # Get current clip
 			frames_name = self.fileManager.projectID + '__' + f.split('/')[-1]
