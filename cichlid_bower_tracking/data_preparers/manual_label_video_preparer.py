@@ -80,10 +80,10 @@ class ManualLabelVideoPreparer():
 				shutil.rmtree(self.fileManager.localLabeledClipsProjectDir)
 			except FileNotFoundError:
 				pass
-				
+
 		if full_delete:
 			shutil.rmtree(self.fileManager.localLabeledFramesDir)
-			shutil.rmtree(self.fileManager.localLabeledFramesFile)
+			os.remove(self.fileManager.localLabeledFramesFile)
 
 		return self.quit
 
