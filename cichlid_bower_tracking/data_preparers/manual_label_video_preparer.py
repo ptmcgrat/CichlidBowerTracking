@@ -167,8 +167,8 @@ class ManualLabelVideoPreparer():
 			frames += [videoObj.localManualLabelFramesDir + x for x in os.listdir(videoObj.localManualLabelFramesDir)]
 
 		index = 0
-		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
-			f = clips[index] # Get current clip
+		while index < len(frames): # We use a while loop so we can reannotate a clip if a mistake is made
+			f = frames[index] # Get current clip
 			frames_name = self.fileManager.projectID + '__' + f.split('/')[-1]
 			if clip_name in labeled_dt.FrameName:
 				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
@@ -181,6 +181,6 @@ class ManualLabelVideoPreparer():
 			
 			labeled_dt.to_csv(self.fileManager.localLabeledFramesFile, sep = ',')
 
-			if annotatedClips >= self.number:
+			if annotatedFrames >= self.number:
 				break
 		return annotatedFrames
