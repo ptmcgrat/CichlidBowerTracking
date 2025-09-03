@@ -169,7 +169,7 @@ class ManualLabelVideoPreparer():
 		index = 0
 		while index < len(frames): # We use a while loop so we can reannotate a clip if a mistake is made
 			f = frames[index] # Get current clip
-			frames_name = self.fileManager.projectID + '__' + f.split('/')[-1]
+			frame_name = self.fileManager.projectID + '__' + f.split('/')[-1]
 			if frame_name in labeled_dt.ClipName:
 				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
 				continue
