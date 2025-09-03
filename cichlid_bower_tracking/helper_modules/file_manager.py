@@ -299,7 +299,7 @@ class FileManager():
         self.localLabeledClipsFile = self.local3DVideosDir + 'ManualLabels.csv'
         self.localLabeledClipsDir = self.local3DVideosDir + 'Clips/'
 
-        self.localLabeledFramesFile = self.localObjectDetectionDir + 'ManualLabels.csv'
+        self.localLabeledFramesFile = self.localObjectDetectionDir + 'AnnotatedFrames.csv'
         self.localLabeledFramesDir = self.localObjectDetectionDir + 'Frames/'
 
 
