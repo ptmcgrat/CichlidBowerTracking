@@ -99,7 +99,7 @@ class FileManager():
         necessaryFiles['Prep'] = [self.localDepthCropFile,self.localTransMFile,self.localVideoCropFile]
         necessaryFiles['Depth'] = [self.localSmoothDepthFile]
         necessaryFiles['Cluster'] = [self.localAllClipsDir, self.localManualLabelClipsDir, self.localManualLabelFramesDir]
-        necessaryFiles['ManualAnnotation'] = [self.localManualClipsFile]
+        necessaryFiles['ManualAnnotation'] = [self.localLabeledClipsFile]
         necessaryFiles['ClusterClassification'] = [self.localAllLabeledClustersFile]
         necessaryFiles['Summary'] = [self.localSummaryDir]
         
@@ -264,7 +264,7 @@ class FileManager():
                 except:
                     print('Issue with Logfile')
         except FileNotFoundError:
-            #print('No logfile created yet for ' + projectID)
+            print('No logfile created yet for ' + projectID)
             pass 
 
     def _createMLData(self):
@@ -528,7 +528,11 @@ class FileManager():
     def returnVideoObject(self, index):
         self._createParameters()
 
-        videoObj = self.lp.movies[index]
+        try:
+            videoObj = self.lp.movies[index]
+        except AttributeError:
+            pdb.set_trace()
+            
         videoObj.localVideoFile = self.localProjectDir + videoObj.mp4_file
         videoObj.localh264File = self.localProjectDir + videoObj.h264_file
         videoObj.localHMMFile = self.localTroubleshootingDir + videoObj.baseName + '.hmm'
