@@ -264,7 +264,7 @@ class FileManager():
                 except:
                     print('Issue with Logfile')
         except FileNotFoundError:
-            print('No logfile created yet for ' + projectID)
+            #print('No logfile created yet for ' + projectID)
             pass 
 
     def _createMLData(self):
@@ -532,7 +532,7 @@ class FileManager():
             videoObj = self.lp.movies[index]
         except AttributeError:
             pdb.set_trace()
-            
+
         videoObj.localVideoFile = self.localProjectDir + videoObj.mp4_file
         videoObj.localh264File = self.localProjectDir + videoObj.h264_file
         videoObj.localHMMFile = self.localTroubleshootingDir + videoObj.baseName + '.hmm'
