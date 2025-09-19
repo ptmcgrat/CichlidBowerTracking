@@ -77,7 +77,7 @@ class FileManager():
 
     def getProjectStates(self):
         # Dictionary to hold row of data
-        row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':'', 'ManualAnnotation':0, 'ClusterClassification':False, 'Summary': False, 'videoIDs':'', 'Notes': ''}
+        row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':'', 'ManualAnnotation':0, 'ClusterClassification':False, 'Summary': False, 'videoIDs':''}
 
         #print('Checking project ' + self.projectID + ': ', end = '')
         try:
