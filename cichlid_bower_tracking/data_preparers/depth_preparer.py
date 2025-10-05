@@ -166,6 +166,7 @@ class DepthPreparer:
 					if frame.time > self.lp.trials[-1].stopTime:
 						continue
 					else:
+						continue
 						pdb.set_trace()
 		# Smooth data with savgol_filter
 		np.save(self.fileManager.localSmoothDepthFile, smoothDepthData)
