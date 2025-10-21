@@ -37,16 +37,16 @@ class ManualLabelVideoPreparer():
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
 				self.fileManager.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
 		
-		if self.dtype == 'Frames':
-			if not os.path.exists(self.fileManager.localLabeledFramesDir):
-				if self.fileManager.checkFileExists(self.fileManager.localLabeledFramesDir + '.tar'):
-					self.fileManger.downloadData(self.fileManager.localLabeledFramesDir, tarred = True)
+		if self.dtype == 'DLC':
+			if not os.path.exists(self.fileManager.localLabeledDLCClipsDir):
+				if self.fileManager.checkFileExists(self.fileManager.localLabeledDLCClipsDir):
+					self.fileManger.downloadData(self.fileManager.localLabeledDLCClipsDir)
 				else:
-					self.fileManager.createDirectory(self.fileManager.localLabeledFramesDir)
-			self.fileManager.downloadData(self.fileManager.localLabeledFramesFile)
+					self.fileManager.createDirectory(self.fileManager.localLabeledDLCClipsDir)
+			#self.fileManager.downloadData(self.fileManager.localLabeledFramesFile)
 			for videoIndex in self.videoIndices:
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
-				self.fileManager.downloadData(videoObj.localManualLabelFramesDir, tarred = True)
+				self.fileManager.downloadData(videoObj.localVideoFile)
 
 	def validateInputData(self):
 		if self.dtype == 'Videos':
@@ -55,12 +55,12 @@ class ManualLabelVideoPreparer():
 			for videoIndex in self.videoIndices:
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
 				assert os.path.exists(videoObj.localManualLabelClipsDir)
-		if self.dtype == 'Frames':
-			assert os.path.exists(self.fileManager.localLabeledFramesDir)
-			assert os.path.exists(self.fileManager.localLabeledFramesFile)
+		if self.dtype == 'DLC':
+			assert os.path.exists(self.fileManager.localLabeledDLCClipsDir)
+			#assert os.path.exists(self.fileManager.localLabeledFramesFile)
 			for videoIndex in self.videoIndices:
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
-				assert os.path.exists(videoObj.localManualLabelFramesDir)
+				assert os.path.exists(videoObj.localVideoFile)
 
 	
 	def uploadProjectData(self, delete = False, full_delete = False, just_delete = False):
@@ -70,15 +70,14 @@ class ManualLabelVideoPreparer():
 			self.fileManager.uploadData(self.fileManager.localLabeledClipsProjectDir, tarred = True)
 			self.fileManager.uploadData(self.fileManager.localLabeledClipsFile)
 
-		if self.dtype == 'Frames':
+		if self.dtype == 'DLC':
 			if not just_delete:
-				self.fileManager.uploadData(self.fileManager.localLabeledFramesDir, tarred = True)
-				self.fileManager.uploadData(self.fileManager.localLabeledFramesFile)
-
+				self.fileManager.uploadData(self.fileManager.localLabeledDLCClipsDir)
+				
 		if delete or just_delete:
 			try:
 				shutil.rmtree(self.fileManager.localProjectDir)
-				shutil.rmtree(self.fileManager.localLabeledClipsProjectDir)
+				shutil.rmtree(self.fileManager.localLabeledDLCClipsDir)
 			except FileNotFoundError:
 				pass
 
@@ -161,34 +160,23 @@ class ManualLabelVideoPreparer():
 
 		return annotatedClips
 
-	def sortFrames(self):
-		# Read in annotations and create csv file for all annotations with the same user and projectID
-		labeled_dt = pd.read_csv(self.fileManager.localLabeledFramesFile, index_col = 'FID')
-		annotatedFrames = labeled_dt[labeled_dt.ProjectID == self.fileManager.projectID].shape[0]
-
-		frames = []
+	def createDLCVideos(self):
+		
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			frames += [videoObj.localManualLabelFramesDir + x for x in os.listdir(videoObj.localManualLabelFramesDir)]
+			cap = cv2.VideoCapture(videoObj.localVideoFile)
+			out_file = self.fileManager.localLabeledDLCClipsDir + videoObj.localDLCVideoFile
+			outAll = cv2.VideoWriter(out_file, cv2.VideoWriter_fourcc(*"mp4v"), videoObj.framerate, (videoObj.height, videoObj.width))
+
+			cap.set(cv2.CAP_PROP_POS_FRAMES, int(videoObj.framerate*(3600*max(0,11 - videoObj.startTime.hour))))
+
+			for i in range(int(videoObj.framerate*30*60)):
+				ret, frame = cap.read()
+				if ret:
+					outAll.write(frame)
+				else:
+					print('VideoError: BadFrame')
+
+			outAll.release()
 		
-		random.shuffle(frames) # Shuffle the clips so that it's a random sample
-
-		index = 0
-		while index < len(frames): # We use a while loop so we can reannotate a clip if a mistake is made
-			f = frames[index] # Get current clip
-			frame_name = self.fileManager.projectID + '__' + f.split('/')[-1]
-			if frame_name in labeled_dt.ClipName.values:
-				print('Skipping ' + frame_name + ' since it is already labeled', file = sys.stderr)
-				index += 1
-				continue
-
-			labeled_dt.loc[len(labeled_dt)] = [self.fileManager.analysisID, self.fileManager.projectID, frame_name, '', ''] # Create new annotation
-			shutil.move(f, self.fileManager.localLabeledFramesDir + frame_name) #changed for windows
-			annotatedFrames += 1
-			index += 1
 			
-			labeled_dt.to_csv(self.fileManager.localLabeledFramesFile, sep = ',')
-
-			if annotatedFrames >= self.number:
-				break
-		return annotatedFrames

@@ -138,12 +138,17 @@ class FileManager():
                 append = ''
             row_data['Cluster'] += append
         row_data['Cluster'] = row_data['Cluster'].rstrip(',')
-
         
         labeled_dt = pd.read_csv(self.localLabeledClipsFile, index_col = 'LID')
         
         labeled_dt['ProjectID'] = labeled_dt['ClipName'].str.split('__').str[0]
         row_data['ManualAnnotation'] = len(labeled_dt[labeled_dt.ProjectID == self.projectID])
+
+        remotefiles = self.getCloudFiles(self.localLabeledDLCClipsDir)
+        if len([x for x in remotefiles if self.projectID in x]) == 3:
+            row_data['DLCVideos'] = True
+        else:
+            row_data['DLCVideos'] = False
 
         return row_data
 
@@ -162,8 +167,8 @@ class FileManager():
                 projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True)].index.to_list()
             elif analysisType == 'AnnotateVideos':
                 projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt.ManualAnnotation < clip_number)].index.to_list()
-            elif analysisType == 'CreateFrameAnnotationSet':
-                projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt.FramesCollected < clip_number)].index.to_list()
+            elif analysisType == 'DLCVideos':
+                projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt.DLCVideos == False)].index.to_list()
             elif analysisType == 'TrainModel':
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':
@@ -301,6 +306,7 @@ class FileManager():
 
         self.localLabeledFramesFile = self.localObjectDetectionDir + 'AnnotatedFrames.csv'
         self.localLabeledFramesDir = self.localObjectDetectionDir + 'Frames/'
+        self.localLabeledDLCClipsDir = self.localObjectDetectionDir + 'DLCClips/'
 
 
     def downloadProjectData(self, dtype, videoIndex = None):
@@ -510,6 +516,7 @@ class FileManager():
             if delete:
                 shutil.rmtree(self.localProjectDir)
                 #os.remove(self.localYolov5WeightsFile)
+        
         elif dtype == 'AddFishSex':
             if not no_upload:
                 self.uploadData(self.localAllFishSexFile)
@@ -535,6 +542,7 @@ class FileManager():
 
         videoObj.localVideoFile = self.localProjectDir + videoObj.mp4_file
         videoObj.localh264File = self.localProjectDir + videoObj.h264_file
+        videoObj.localDLCVideoFile = self.lp.projectID + '__' + videoObj.baseName + '__' + 'DLC.mp4'
         videoObj.localHMMFile = self.localTroubleshootingDir + videoObj.baseName + '.hmm'
         videoObj.localRawCoordsFile = self.localTroubleshootingDir + videoObj.baseName + '_rawCoords.npy'
         videoObj.localLabeledCoordsFile = self.localTroubleshootingDir + videoObj.baseName + '_labeledCoords.npy'
@@ -775,6 +783,13 @@ class FileManager():
             return True
         else:
             return False
+
+    def getCloudFiles(self, local_data):
+        local_path = local_data.rstrip('/')
+        cloud_path = local_path.replace(self.localMasterDir, self.cloudMasterDir)
+        output = subprocess.run(['rclone', 'lsf', cloud_path], capture_output = True, encoding = 'utf-8')
+        remotefiles = [x.rstrip('/') for x in output.stdout.split('\n')]
+        return remotefiles
 
     def deleteCloudData(self, local_data):
         if self.checkFileExists(local_data):

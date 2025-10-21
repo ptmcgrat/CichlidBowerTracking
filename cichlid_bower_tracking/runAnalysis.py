@@ -220,7 +220,7 @@ elif args.AnalysisType == 'AnnotateVideos':
 		if quit:
 			break
 
-elif args.AnalysisType == 'CreateFrameAnnotationSet':
+elif args.AnalysisType == 'DLCVideos':
 	from data_preparers.manual_label_video_preparer import ManualLabelVideoPreparer as MLVP
 	for projectID, row in fm_obj.s_dt.iterrows():
 		if projectID not in projectIDs:
@@ -231,16 +231,21 @@ elif args.AnalysisType == 'CreateFrameAnnotationSet':
 			continue
 		else:
 			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
+		if len(videoIndices) != 3:
+			print('Warning: Need to specify three and exactly three videos. Skipping')
+			continue
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		fm_obj.setProjectID(projectID)
-		mlv_obj = MLVP(fm_obj, args.Number, videoIndices, 'Frames')
+		mlv_obj = MLVP(fm_obj, args.Number, videoIndices, 'DLC')
 		mlv_obj.downloadProjectData()
 		mlv_obj.validateInputData()
-		labeled_videos = mlv_obj.sortFrames()
-		quit = mlv_obj.uploadProjectData(just_delete = True)
+		mlv_obj.createDLCVideos()
+		mlv_obj.uploadProjectData(delete = True)
 
-	quit = mlv_obj.uploadProjectData(full_delete = True)
+		s_dt.loc[projectID,'DLCVideos'] = True
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
 
 
 elif args.AnalysisType == 'TrainModel':
