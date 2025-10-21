@@ -28,9 +28,9 @@ ma.add_argument('Initials', type=str, help='Initials of person annotating the vi
 ma.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to.')
 ma.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
 
-cfas = subparser.add_parser('CreateFrameAnnotationSet', description = 'Create folder of frames to upload into CVAT. Restricts videos to VideoIDsToAnnotate column.')
+cfas = subparser.add_parser('DLCVideos', description = 'Create video clips to upload into DLC for annotation.')
 cfas.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
-cfas.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
+#cfas.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
 
 train = subparser.add_parser('TrainModel', description = 'Train a 3D Resnet to automatically classify sand manipulation events using annotated data')
 train.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
