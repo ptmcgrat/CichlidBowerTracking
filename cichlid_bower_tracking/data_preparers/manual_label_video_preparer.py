@@ -164,12 +164,11 @@ class ManualLabelVideoPreparer():
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			cap = cv2.VideoCapture(videoObj.localVideoFile)
 			out_file = self.fileManager.localLabeledDLCClipsDir + videoObj.localDLCVideoFile
-			outAll = cv2.VideoWriter(out_file, cv2.VideoWriter_fourcc(*"mp4v"), videoObj.framerate, (videoObj.height, videoObj.width))
+			outAll = cv2.VideoWriter(out_file, cv2.VideoWriter_fourcc(*"mp4v"), videoObj.framerate, (videoObj.width, videoObj.height))
 
 			cap.set(cv2.CAP_PROP_POS_FRAMES, int(videoObj.framerate*(3600*max(0,11 - videoObj.startTime.hour))))
 
 			for i in range(int(videoObj.framerate*30*60)):
-				pdb.set_trace()
 				ret, frame = cap.read()
 				if ret:
 					outAll.write(frame)
