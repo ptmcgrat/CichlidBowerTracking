@@ -72,6 +72,7 @@ class ManualLabelVideoPreparer():
 
 		if self.dtype == 'DLC':
 			for videoIndex in self.videoIndices:
+				videoObj = self.fileManager.returnVideoObject(videoIndex)
 				self.fileManager.uploadData(self.fileManager.localLabeledDLCClipsDir + videoObj.localDLCVideoFile)
 				
 		if delete or just_delete:
