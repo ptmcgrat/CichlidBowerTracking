@@ -237,7 +237,7 @@ elif args.AnalysisType == 'DLCVideos':
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		fm_obj.setProjectID(projectID)
-		mlv_obj = MLVP(fm_obj, args.Number, videoIndices, 'DLC')
+		mlv_obj = MLVP(fm_obj, None, videoIndices, 'DLC')
 		mlv_obj.downloadProjectData()
 		mlv_obj.validateInputData()
 		mlv_obj.createDLCVideos()
