@@ -169,6 +169,7 @@ class ManualLabelVideoPreparer():
 			cap.set(cv2.CAP_PROP_POS_FRAMES, int(videoObj.framerate*(3600*max(0,11 - videoObj.startTime.hour))))
 
 			for i in range(int(videoObj.framerate*30*60)):
+				pdb.set_trace()
 				ret, frame = cap.read()
 				if ret:
 					outAll.write(frame)
