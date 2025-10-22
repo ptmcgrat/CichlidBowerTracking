@@ -40,7 +40,7 @@ class ManualLabelVideoPreparer():
 		if self.dtype == 'DLC':
 			if not os.path.exists(self.fileManager.localLabeledDLCClipsDir):
 				if self.fileManager.checkFileExists(self.fileManager.localLabeledDLCClipsDir):
-					self.fileManger.downloadData(self.fileManager.localLabeledDLCClipsDir)
+					self.fileManager.downloadData(self.fileManager.localLabeledDLCClipsDir)
 				else:
 					self.fileManager.createDirectory(self.fileManager.localLabeledDLCClipsDir)
 			#self.fileManager.downloadData(self.fileManager.localLabeledFramesFile)
@@ -71,8 +71,8 @@ class ManualLabelVideoPreparer():
 			self.fileManager.uploadData(self.fileManager.localLabeledClipsFile)
 
 		if self.dtype == 'DLC':
-			if not just_delete:
-				self.fileManager.uploadData(self.fileManager.localLabeledDLCClipsDir)
+			for videoIndex in self.videoIndices:
+				self.fileManager.uploadData(self.fileManager.localLabeledDLCClipsDir + videoObj.localDLCVideoFile)
 				
 		if delete or just_delete:
 			try:
@@ -81,9 +81,6 @@ class ManualLabelVideoPreparer():
 			except FileNotFoundError:
 				pass
 
-		if full_delete:
-			shutil.rmtree(self.fileManager.localLabeledFramesDir)
-			os.remove(self.fileManager.localLabeledFramesFile)
 
 		return self.quit
 
