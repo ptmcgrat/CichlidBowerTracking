@@ -57,7 +57,7 @@ class DepthAnalyzer:
 		self.depth_data = self.depth_data[i0:i1 + 1]
 		self.lp.frames = self.lp.frames[i0:i1+1]
 
-	def returnBowerLocations(self, t0, t1, cropped=True, force_window=False):
+	def returnBowerLocations(self, t0, t1, thresh = None, cropped=True, force_window=False):
 		# Returns 2D numpy array using thresholding and minimum size data to identify bowers
 		# Pits = -1, Castle = 1, No bower = 0
 
@@ -81,6 +81,8 @@ class DepthAnalyzer:
 		else:  # 1.5 days or more
 			totalThreshold = self.fileManager.totalDepthThreshold
 			minPixels = self.fileManager.totalMinPixels
+		if thresh is not None:
+			totalThreshold = thresh
 
 		tCastle = np.where(totalHeightChange >= totalThreshold, True, False)
 		tCastle = morphology.remove_small_objects(tCastle, minPixels).astype(int)
@@ -149,7 +151,7 @@ class DepthAnalyzer:
 
 		return change
 
-	def returnVolumeSummary(self, t0, t1):
+	def returnVolumeSummary(self, t0, t1, thresh = None):
 		# calculate various summary statistics for the depth change from t0 to t1
 
 		# Check times are good
@@ -158,7 +160,7 @@ class DepthAnalyzer:
 		pixelLength = self.fileManager.pixelLength
 		bowerIndex_pixels = int(self.goodPixels * self.fileManager.bowerIndexFraction)
 
-		bowerLocations = self.returnBowerLocations(t0, t1)
+		bowerLocations = self.returnBowerLocations(t0, t1, thresh)
 
 
 		heightChange = self.returnHeightChange(t0, t1)

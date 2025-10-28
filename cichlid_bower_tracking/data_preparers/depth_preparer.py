@@ -9,6 +9,7 @@ from PIL import Image,ImageDraw
 from helper_modules.depth_analyzer import DepthAnalyzer as DA
 from matplotlib import (cm, colors, gridspec, ticker)
 import pandas as pd 
+from skimage import morphology
 
 warnings.filterwarnings('ignore')
 
@@ -111,7 +112,10 @@ class DepthPreparer:
 			# Loop through each day and interpolate missing data
 			for start_f,stop_f in trial.days:
 				dailyData = interpDepthData[start_f.index:stop_f.index+1] # Create view of numpy array just creating a single day during the daytime
+				median_height = np.nanmedian(dailyData)
+				dailyData[(dailyData > median_height + 10) | (dailyData < median_height - 10)] = np.nan
 				goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
+
 
 				# Process each pixel
 				for i in range(dailyData.shape[1]):
@@ -124,6 +128,22 @@ class DepthPreparer:
 							if len(x_interp) != 0: # Only interpolate if there is missing data
 								interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
 								dailyData[x_interp, i, j] = interp_data
+				
+				for i in range(dailyData.shape[0]):
+					good_data = np.where(~np.isnan(dailyData[i]), True, False)
+					good_data = morphology.remove_small_objects(good_data, 100).astype(int)
+					dailyData[i][~good_data] = np.nan
+					for j in range(dailyData.shape[1]):
+						x_interp, = np.where(np.isnan(dailyData[i,j,:])) # Indices with missing data
+						x_good, = np.where(~np.isnan(dailyData[i,j,:])) # Indices with good data
+						if len(x_interp) != 0 and len(x_good)/dailyData.shape[2] > .5: # Only interpolate if there is missing data
+							interp_data = np.interp(x_interp, x_good, dailyData[i, j, x_good], left = np.nan, right = np.nan)
+							#if np.nansum(interp_data) > 0.0001:
+							#	pdb.set_trace()
+
+							dailyData[i, j, x_interp] = interp_data
+
+
 				dailyData = scipy.signal.savgol_filter(dailyData, tunits, order, axis = 0, mode = 'mirror')
 
 		# Save interpolated data
@@ -198,7 +218,7 @@ class DepthPreparer:
 			reset_frame = trial.reset_frame
 			#totalChangeData = vars(self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time, self.lp.frames[last_index].time))
 
-			topGrid = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gridDaily[current_grid_idx])
+			topGrid = gridspec.GridSpecFromSubplotSpec(1, 3, subplot_spec=gridDaily[current_grid_idx])
 
 			# Show picture of total depth change
 			topAx1 = figDaily.add_subplot(topGrid[0])
@@ -209,13 +229,20 @@ class DepthPreparer:
 			topAx1.tick_params(colors=[0, 0, 0, 0])
 			plt.colorbar(topAx1_ax, ax=topAx1)
 
-			# Show picture of pit and castle mask
+			# Show picture of reset depth change
 			topAx2 = figDaily.add_subplot(topGrid[1])
 			topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(reset_frame.time, last_frame.time, cropped = False), vmin = -3, vmax = 3)
 			bowerVolume = self.da_obj.returnVolumeSummary(reset_frame.time,last_frame.time).depthBowerVolume
 			topAx2.set_title('Reset Depth Change ('+ str(int(bowerVolume)) + 'cm3)')
 			topAx2.tick_params(colors=[0, 0, 0, 0])
 			plt.colorbar(topAx2_ax, ax=topAx2)
+
+			# Show picture of reset depth change
+			topAx3 = figDaily.add_subplot(topGrid[2])
+			data = [self.da_obj.returnVolumeSummary(reset_frame.time,last_frame.time,thresh = x) for x in [.1,.5,1,1.5,2,2.5,3]]
+			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthCastleVolume for x in data], '-o', color = 'yellow', label = 'Castle volume')
+			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthPitVolume for x in data], '-o', color = 'blue', label = 'Pit volume')
+			topAx3.set_title('Pit/castle volume by threshold')
 
 			#day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last')).sort_index(ascending = False)
 
@@ -247,7 +274,7 @@ class DepthPreparer:
 				for k in range(8,20):
 					start = day_stamp + datetime.timedelta(hours=k)
 					stop = day_stamp + datetime.timedelta(hours=k+1)
-					if stop < first_frame.time or start > last_frame.time:
+					if start < first_frame.time or stop > last_frame.time:
 						continue
 					volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
 					hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(num_trials - i),start.replace(minute = 30),volume]
