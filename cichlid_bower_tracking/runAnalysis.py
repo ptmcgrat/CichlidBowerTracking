@@ -133,7 +133,7 @@ elif args.AnalysisType == 'Depth':
 		fm_obj.uploadData(fm_obj.localSummaryFile)
 
 	writer = pypdf.PdfWriter()
-	for projectID in s_dt[(s_dt.Depth == True)].index.sort_values().to_list():
+	for projectID in s_dt[(s_dt.Depth == True)].index.to_list():
 		fm_obj.setProjectID(projectID)
 		fm_obj.downloadData(fm_obj.localDailyDepthSummaryFigure)
 		f = open(fm_obj.localDailyDepthSummaryFigure, 'rb')
