@@ -9,7 +9,7 @@ class ThreeDModelPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, projects, modelID, gpu):
+	def __init__(self, fileManager, projects, modelIDs, gpu):
 
 		self.__version__ = '1.0.0'
 
@@ -17,7 +17,7 @@ class ThreeDModelPreparer():
 		
 		self.projects = projects
 		self.gpu = gpu
-		self.modelID = modelID
+		self.modelIDs = modelIDs
 
 	def validateInputData(self):
 		
@@ -49,7 +49,7 @@ class ThreeDModelPreparer():
 			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/VideoClassifier'])
 
 		#command = "source activate CichlidActionClassification; " + ' ' .join(command)
-		command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
+		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
 		os.chdir('VideoClassifier')
 		subprocess.run(['git', 'pull'])
 		subprocess.run('bash -c \"' + command + '\"', shell = True)
