@@ -45,6 +45,8 @@ class ThreeDModelPreparer():
 		command.extend(['--Input_videos_directory', self.fileManager.localLabeledClipsDir])
 		command.extend(['--ML_labels', self.fileManager.localVideoProjectsFile])
 		command.extend(['--Results_directory', self.fileManager.local3DModelTempDir])
+		command.extend(['--Log', self.localModelCondaVersionsFile])
+		
 		command.extend(['--gpu', str(0)])
 		
 
