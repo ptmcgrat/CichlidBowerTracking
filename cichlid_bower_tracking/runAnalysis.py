@@ -162,13 +162,12 @@ elif args.AnalysisType == 'Cluster':
 
 		fm_obj.setProjectID(projectID)
 
-		if row.videoIDsToRun == 'VideoIndices: ':
-			videoIndices = [] if row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
-		else:
-			videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
+		videoIndices = [] if row.videoIDsToRun != row.videoIDsToRun or row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
 
 		already_run = [] if row.Cluster == 'VideoIndices: ' else row.Cluster.split(': ')[1].split(',')
+		
 		videoIndices = [int(x) for x in videoIndices if x not in already_run]
+		
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		for videoIndex in videoIndices:
@@ -199,7 +198,7 @@ elif args.AnalysisType == 'AnnotateVideos':
 		if projectID not in projectIDs:
 			continue
 		print(projectID)
-		if row.videoIDsToAnnotate == 'VideoIndices: ':
+		if row.videoIDsToAnnotate == 'VideoIndices: ' or row.videoIDsToAnnotate != row.videoIDsToAnnotate:
 			print('Warning: No videos specified for this project. Skipping')
 			continue
 		else:
@@ -249,9 +248,7 @@ elif args.AnalysisType == 'DLCVideos':
 
 
 elif args.AnalysisType == 'TrainModel':
-	from cichlid_bower_tracking.data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
-	if (s_dt.AnnotateVideos == False).sum() != 0:
-		print('Warning: You are training a model even though all projects have not been annotated')
+	from data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
 	tdm_obj = TDMP(fm_obj, modelID)
 	tdm_obj.validateInputData()
 	tdm_obj.create3DModel()

@@ -239,7 +239,7 @@ class DepthPreparer:
 
 			# Show picture of reset depth change
 			topAx3 = figDaily.add_subplot(topGrid[2])
-			data = [self.da_obj.returnVolumeSummary(reset_frame.time,last_frame.time,thresh = x) for x in [.1,.5,1,1.5,2,2.5,3]]
+			data = [self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time,thresh = x) for x in [.1,.5,1,1.5,2,2.5,3]]
 			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthCastleVolume for x in data], '-o', color = 'yellow', label = 'Castle volume')
 			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthPitVolume for x in data], '-o', color = 'blue', label = 'Pit volume')
 			topAx3.set_title('Pit/castle volume by threshold')
