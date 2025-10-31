@@ -45,7 +45,7 @@ class ThreeDModelPreparer():
 		command.extend(['--Videos_directory', self.fileManager.localLabeledClipsDir])
 		command.extend(['--Videos_file', self.fileManager.localVideoProjectsFile])
 		command.extend(['--Results_directory', self.fileManager.local3DModelTempDir])
-		command.extend(['--gpu', str(self.gpu)])
+		command.extend(['--gpu', str(0)])
 		
 
 		if not os.path.isdir('VideoClassifier'):
