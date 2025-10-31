@@ -15,7 +15,7 @@ class ThreeDModelPreparer():
 
 		self.fileManager = fileManager
 
-	def downloadData(self):		
+	def downloadProjectData(self):		
 		self.fileManager.createDirectory(self.fileManager.local3DModelDir)
 		self.fileManager.createDirectory(self.fileManager.local3DModelTempDir)
 

@@ -249,6 +249,7 @@ elif args.AnalysisType == 'DLCVideos':
 elif args.AnalysisType == 'TrainModel':
 	from data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
 	tdm_obj = TDMP(fm_obj)
+	tdm_obj.downloadProjectData()
 	tdm_obj.validateInputData()
 	tdm_obj.create3DModel()
 
