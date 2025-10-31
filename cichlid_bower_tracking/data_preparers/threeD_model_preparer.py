@@ -44,7 +44,9 @@ class ThreeDModelPreparer():
 		command = ['python3', 'TrainModel.py']
 		command.extend(['--Input_videos_directory', self.fileManager.localLabeledClipsDir])
 		command.extend(['--ML_labels', self.fileManager.localVideoProjectsFile])
-		command.extend(['--Results_directory', self.fileManager.local3DModelTempDir])
+		command.extend(['--Results_directory', self.fileManager.local3DModelDir])
+		command.extend(['--Temporary_clips_directory', self.fileManager.local3DModelTempDir])
+		
 		command.extend(['--Log', self.fileManager.localModelCondaVersionsFile])
 		
 		command.extend(['--gpu', str(0)])
