@@ -34,7 +34,6 @@ cfas.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analy
 
 train = subparser.add_parser('TrainModel', description = 'Train a 3D Resnet to automatically classify sand manipulation events using annotated data')
 train.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
-train.add_argument('--ModelIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
 
 cc = subparser.add_parser('ClassifyClusters', description='Use created ML model to classify clusters for each project')
 cc.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
@@ -249,7 +248,7 @@ elif args.AnalysisType == 'DLCVideos':
 
 elif args.AnalysisType == 'TrainModel':
 	from data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
-	tdm_obj = TDMP(fm_obj, args.ModelIDs)
+	tdm_obj = TDMP(fm_obj)
 	tdm_obj.validateInputData()
 	tdm_obj.create3DModel()
 
