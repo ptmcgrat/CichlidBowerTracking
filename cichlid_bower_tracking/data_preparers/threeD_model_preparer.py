@@ -14,7 +14,13 @@ class ThreeDModelPreparer():
 		self.__version__ = '1.0.0'
 
 		self.fileManager = fileManager
-		
+
+	def downloadData(self):		
+		self.fileManager.createDirectory(self.fileManager.local3DModelDir)
+		self.fileManager.createDirectory(self.fileManager.local3DModelTempDir)
+
+		self.fileManager.downloadData(self.fileManager.localLabeledClipsDir)
+		self.fileManager.downloadData(self.fileManager.localLabeledClipsFile)
 
 	def validateInputData(self):
 		
