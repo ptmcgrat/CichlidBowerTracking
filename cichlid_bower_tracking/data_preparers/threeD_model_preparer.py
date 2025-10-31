@@ -49,11 +49,11 @@ class ThreeDModelPreparer():
 		
 
 		if not os.path.isdir('VideoClassifier'):
-			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/VideoClassifier'])
+			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification'])
 
 		#command = "source activate CichlidActionClassification; " + ' ' .join(command)
 		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
-		os.chdir('VideoClassifier')
+		os.chdir('CichlidActionClassification')
 		subprocess.run(['git', 'pull'])
 		subprocess.run('bash -c \"' + command + '\"', shell = True)
 		os.chdir('..')
