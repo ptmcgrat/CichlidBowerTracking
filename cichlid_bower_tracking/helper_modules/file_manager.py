@@ -286,6 +286,7 @@ class FileManager():
         self.localVideoModelFile = self.local3DModelDir + 'model.pth'
         self.localVideoClassesFile = self.local3DModelDir + 'classInd.txt'
         self.localModelCommandsFile = self.local3DModelDir + 'commands.log'
+        self.localModelCondaVersionsFile = self.local3DModelDir + 'CondaVersions.log'
         self.localVideoProjectsFile = self.local3DModelDir + 'videoToProject.csv'
         self.localVideoLabels = self.local3DModelDir + 'confusionMatrix.csv'
 
