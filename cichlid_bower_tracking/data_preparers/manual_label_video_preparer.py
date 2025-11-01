@@ -144,7 +144,7 @@ class ManualLabelVideoPreparer():
 			if clip_name in labeled_dt.ClipName.values:
 				labeled_dt.loc[newlyLabeled_dt.ClipName == clip_name,'ManualLabel'] = chr(info)
 			else:
-				labeled_dt.loc[len(labeled_dt)] = [clip_name, chr(info), self.initials, str(datetime.datetime.now())] # Create new annotation
+				labeled_dt.loc[len(labeled_dt)] = [self.fileManager.analysisID, clip_name, chr(info), self.initials, str(datetime.datetime.now())] # Create new annotation
 
 			labeled_dt.to_csv(self.fileManager.localLabeledClipsFile, sep = ',')
 
