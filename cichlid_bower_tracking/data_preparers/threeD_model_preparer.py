@@ -38,7 +38,7 @@ class ThreeDModelPreparer():
 		#if self.projects is not None:
 		#	dt.loc[~dt.ProjectID.isin(self.projects),'Dataset'] = 'Validate'
 		dt['ClipName'] = dt.ClipName + '.mp4'
-		dt = dt.rename(columns = {'ClipName':'VideoFile', 'ManualLabel':'Label'})
+		#dt = dt.rename(columns = {'ClipName':'VideoFile', 'ManualLabel':'Label'})
 		dt.to_csv(self.fileManager.localVideoProjectsFile)
 
 		command = ['python3', 'TrainModel.py']
