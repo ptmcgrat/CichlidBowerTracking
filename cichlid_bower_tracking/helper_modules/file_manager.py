@@ -42,7 +42,8 @@ class FileManager():
         self._createAnnotationData()
         if projectID is not None:
             self.setProjectID(projectID)
-        self._createMLData()
+        if analysisID is not None:
+            self._createMLData()
         if self.system == 'pi':
             self._createPiData()
         
