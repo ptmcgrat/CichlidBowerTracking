@@ -3,10 +3,12 @@ import os, pdb
 import pandas as pd
 
 fm_obj = FM()
-fm_obj.downloadData(self.fileManager.localLabeledClipsDir, tarred_subdirs = True)
-fm_obj.downloadData(self.fileManager.localLabeledClipsFile)
+fm_obj.downloadData(fm_obj.fileManager.localLabeledClipsDir, tarred_subdirs = True)
+fm_obj.downloadData(fm_obj.fileManager.localLabeledClipsFile)
 
-dt = pd.read_csv(self.fileManager.localLabeledClipsFile)
+dt = pd.read_csv(fm_obj.fileManager.localLabeledClipsFile)
 
 for index,row in dt.iterrows():
-	pdb.set_trace()
+	video_file_path = os.path.join(fm_obj.inputVideosDir,row.ClipName)
+	if not os.path.exists(video_file_path):
+		pdb.set_trace()
