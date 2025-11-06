@@ -9,6 +9,6 @@ fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 dt = pd.read_csv(fm_obj.localLabeledClipsFile)
 
 for index,row in dt.iterrows():
-	video_file_path = os.path.join(fm_obj.inputVideosDir,row.ClipName)
+	video_file_path = os.path.join(fm_obj.localLabeledClipsDir,row.ClipName)
 	if not os.path.exists(video_file_path):
 		pdb.set_trace()
