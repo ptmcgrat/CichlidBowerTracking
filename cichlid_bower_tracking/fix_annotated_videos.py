@@ -3,12 +3,19 @@ import os, pdb
 import pandas as pd
 
 fm_obj = FM()
-fm_obj.downloadData(fm_obj.localLabeledClipsDir, tarred_subdirs = True)
-fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 
+fm_obj.getCloudFiles(fm_obj.localLabeledClipsDir)
+projects = [x for x in fm_obj.getCloudFiles(fm_obj.localLabeledClipsDir) if x[0] != '.']
+
+fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 dt = pd.read_csv(fm_obj.localLabeledClipsFile)
 dt['VideoExists'] = True
-clips = os.listdir('/home/student/Temp/CichlidAnalyzer/__AnnotatedData/LabeledVideos/Clips/')
+
+for project in projects:
+	fm_obj.downloadData(fm_obj.localLabeledClipsDir + project, tarred=True)
+	clips = os.listdir(fm_obj.localLabeledClipsDir + project)
+	pdb.set_trace()
+
 
 for index,row in dt.iterrows():
 	filename = row.ClipName + '.mp4'
