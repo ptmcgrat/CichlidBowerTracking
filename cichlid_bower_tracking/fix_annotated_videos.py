@@ -36,7 +36,7 @@ for project in projects:
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'Fix'
 			else:
 				if row.AnalysisID == 'OriginalSetup':
-					continue
+					dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
 				fm_obj = FM(analysisID = row.AnalysisID, projectID = row.ProjectID)
 				video_index = int(filename.split('__')[1].split('_vid')[0]) - 1
 				videoObj = fm_obj.returnVideoObject(video_index)
