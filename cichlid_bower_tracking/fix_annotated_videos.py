@@ -10,11 +10,16 @@ projects = [x.replace('.tar','') for x in fm_obj.getCloudFiles(fm_obj.localLabel
 fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 dt = pd.read_csv(fm_obj.localLabeledClipsFile)
 dt['VideoExists'] = True
+dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 
 for project in projects:
 	fm_obj.downloadData(fm_obj.localLabeledClipsDir + project, tarred=True)
 	clips = os.listdir(fm_obj.localLabeledClipsDir + project)
-	pdb.set_trace()
+	for index,row in dt[dt.ProjectID == project].iterrows():
+		filename = row.ClipName + '.mp4'
+		video_file_path = fm_obj.localLabeledClipsDir + project + '/' + filename
+		if not os.path.exists(video_file_path):
+			pdb.set_trace()
 
 
 for index,row in dt.iterrows():
