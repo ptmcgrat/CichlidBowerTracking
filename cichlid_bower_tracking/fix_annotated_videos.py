@@ -26,9 +26,13 @@ for project in projects:
 			elif len(other) == 2:
 				for o in other:
 					if o[0] == '.':
-						subprocess.run(['rm','-f',fm_obj.localLabeledClipsDir + project + '/' + o])
+						out = subprocess.run(['rm','-f',fm_obj.localLabeledClipsDir + project + '/' + o], capture_output = True, decode = 'utf-8')
+						if out.returncode != 0:
+							pdb.set_trace()
 					else:
-						subprocess.run(['mv','-f',fm_obj.localLabeledClipsDir + project + '/' + o, video_file_path])
+						out = subprocess.run(['mv','-f',fm_obj.localLabeledClipsDir + project + '/' + o, video_file_path], capture_output = True, decode = 'utf-8')
+						if out.returncode != 0:
+							pdb.set_trace()
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'Fix'
 			else:
 				if row.AnalysisID == 'OriginalSetup':
