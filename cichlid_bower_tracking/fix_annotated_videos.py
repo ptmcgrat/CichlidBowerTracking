@@ -5,7 +5,7 @@ import pandas as pd
 fm_obj = FM()
 
 fm_obj.getCloudFiles(fm_obj.localLabeledClipsDir)
-projects = [x for x in fm_obj.getCloudFiles(fm_obj.localLabeledClipsDir) if x[0] != '.']
+projects = [x for x in fm_obj.getCloudFiles(fm_obj.localLabeledClipsDir) if len(x) >0 and x[0] != '.']
 
 fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 dt = pd.read_csv(fm_obj.localLabeledClipsFile)
