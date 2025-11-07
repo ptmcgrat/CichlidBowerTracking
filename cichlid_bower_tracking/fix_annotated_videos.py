@@ -1,5 +1,5 @@
 from helper_modules.file_manager import FileManager as FM
-import os, pdb
+import os, pdb, subprocess
 import pandas as pd
 
 fm_obj = FM()
@@ -13,7 +13,7 @@ dt['VideoExists'] = 'True'
 dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 
 for project in projects:
-	fm_obj.downloadData(fm_obj.localLabeledClipsDir + project, tarred=True)
+	#fm_obj.downloadData(fm_obj.localLabeledClipsDir + project, tarred=True)
 	clips = os.listdir(fm_obj.localLabeledClipsDir + project)
 	for index,row in dt[dt.ProjectID == project].iterrows():
 		filename = row.ClipName + '.mp4'
@@ -24,6 +24,11 @@ for project in projects:
 			if len(other) == 1:
 				pdb.set_trace()
 			elif len(other) == 2:
+				for o in other:
+					if o[0] == '.':
+						subprocess.run(['rm','-f',fm_obj.localLabeledClipsDir + project + '/' + other])
+					else:
+						subprocess.run(['mv','-f',fm_obj.localLabeledClipsDir + project + '/' + other, video_file_path])
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'Fix'
 			else:
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
