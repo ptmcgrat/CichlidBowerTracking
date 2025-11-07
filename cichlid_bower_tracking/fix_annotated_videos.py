@@ -12,7 +12,7 @@ dt = pd.read_csv(fm_obj.localLabeledClipsFile)
 dt['VideoExists'] = True
 
 for project in projects:
-	fm_obj.downloadData(fm_obj.localLabeledClipsDir + project, tarred=True)
+	fm_obj.downloadData(fm_obj.localLabeledClipsDir + project.replace('.tar',''), tarred=True)
 	clips = os.listdir(fm_obj.localLabeledClipsDir + project)
 	pdb.set_trace()
 
