@@ -24,6 +24,8 @@ for project in projects:
 			if len(other) > 0:
 				continue
 			else:
+				if row.AnalysisID == 'YH_MC_Parentals':
+					pdb.set_trace()
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = False
 
 pdb.set_trace()
