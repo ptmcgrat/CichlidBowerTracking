@@ -38,8 +38,11 @@ for project in projects:
 				if row.AnalysisID == 'OriginalSetup':
 					continue
 				fm_obj = FM(analysisID = row.AnalysisID, projectID = row.ProjectID)
-				if not os.path.exists(fm_obj.localLabeledClipsProjectDir):
-					fm_obj.downloadData(fm_obj.localLabeledClipsProjectDir, tarred = True)
+				video_index = int(filename.split('__')[1].split('_vid')[0]) - 1
+				videoObj = fm_obj.returnVideoObject(video_index)
+				if not os.path.exists(videoObj.localManualLabelClipsDir):
+					fm_obj.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
+				project_clips = os.listdir(videoObj.localManualLabelClipsDir)
 				pdb.set_trace()
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
 print(dt.groupby(['AnalysisID','VideoExists']).count())
