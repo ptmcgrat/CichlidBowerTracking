@@ -21,7 +21,9 @@ for project in projects:
 		if filename not in clips:
 			best_guess = filename.split('vid')[-1]
 			other = [x for x in clips if best_guess in x]
-			if len(other) > 0:
+			if len(other) == 1:
+				pdb.set_trace()
+			elif len(other) == 2:
 				continue
 			else:
 				if row.AnalysisID == 'YH_MC_Parentals':
