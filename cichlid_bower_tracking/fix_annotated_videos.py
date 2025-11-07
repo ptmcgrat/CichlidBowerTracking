@@ -19,15 +19,14 @@ for project in projects:
 		filename = row.ClipName + '.mp4'
 		video_file_path = fm_obj.localLabeledClipsDir + project + '/' + filename
 		if filename not in clips:
-			pdb.set_trace()
+			best_guess = filename.split('vid')[-1]
+			other = [x for x in clips if best_guess in x]
+			if len(other) > 0:
+				pdb.set_trace()
+			else:
+				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = False
 		else:
 			print('found')
 
+pdb.set_trace()
 
-for index,row in dt.iterrows():
-	filename = row.ClipName + '.mp4'
-	video_file_path = os.path.join(fm_obj.localLabeledClipsDir, filename)
-	if not os.path.exists(video_file_path):
-		best_guess = filename.split('vid')[-1]
-		other = [x for x in clips if best_guess in x]
-		pdb.set_trace()
