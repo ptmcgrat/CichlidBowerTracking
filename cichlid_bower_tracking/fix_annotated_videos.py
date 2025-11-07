@@ -22,11 +22,9 @@ for project in projects:
 			best_guess = filename.split('vid')[-1]
 			other = [x for x in clips if best_guess in x]
 			if len(other) > 0:
-				pdb.set_trace()
+				continue
 			else:
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = False
-		else:
-			print('found')
 
 pdb.set_trace()
 
