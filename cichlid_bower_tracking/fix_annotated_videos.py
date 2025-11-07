@@ -18,8 +18,10 @@ for project in projects:
 	for index,row in dt[dt.ProjectID == project].iterrows():
 		filename = row.ClipName + '.mp4'
 		video_file_path = fm_obj.localLabeledClipsDir + project + '/' + filename
-		if not os.path.exists(video_file_path):
+		if filename not in clips:
 			pdb.set_trace()
+		else:
+			print('found')
 
 
 for index,row in dt.iterrows():
