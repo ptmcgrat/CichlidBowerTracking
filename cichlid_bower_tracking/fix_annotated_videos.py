@@ -26,9 +26,9 @@ for project in projects:
 			elif len(other) == 2:
 				for o in other:
 					if o[0] == '.':
-						subprocess.run(['rm','-f',fm_obj.localLabeledClipsDir + project + '/' + other])
+						subprocess.run(['rm','-f',fm_obj.localLabeledClipsDir + project + '/' + o])
 					else:
-						subprocess.run(['mv','-f',fm_obj.localLabeledClipsDir + project + '/' + other, video_file_path])
+						subprocess.run(['mv','-f',fm_obj.localLabeledClipsDir + project + '/' + o, video_file_path])
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'Fix'
 			else:
 				if row.AnalysisID == 'OriginalSetup':
