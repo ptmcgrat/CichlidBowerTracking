@@ -9,7 +9,7 @@ projects = [x.replace('.tar','') for x in fm_obj.getCloudFiles(fm_obj.localLabel
 
 fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 dt = pd.read_csv(fm_obj.localLabeledClipsFile)
-dt['VideoExists'] = True
+dt['VideoExists'] = 'True'
 dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 
 for project in projects:
@@ -24,11 +24,9 @@ for project in projects:
 			if len(other) == 1:
 				pdb.set_trace()
 			elif len(other) == 2:
-				continue
+				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'Fix'
 			else:
-				if row.AnalysisID == 'YH_MC_Parentals':
-					pdb.set_trace()
-				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = False
+				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
 
 pdb.set_trace()
 
