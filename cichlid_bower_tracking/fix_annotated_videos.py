@@ -40,9 +40,7 @@ for project in projects:
 				fm_obj = FM(analysisID = row.AnalysisID, projectID = row.ProjectID)
 				if not os.path.exists(fm_obj.localLabeledClipsProjectDir):
 					fm_obj.downloadData(fm_obj.localLabeledClipsProjectDir, tarred = True)
-					if os.path.exists(fm_obj.localLabeledClipsProjectDir + filename):
-						pdb.set_trace()
-
+				pdb.set_trace()
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
 print(dt.groupby(['AnalysisID','VideoExists']).count())
 print(dt[dt.AnalysisID == 'YH_MC_Parentals'].groupby(['ProjectID','VideoExists']).count())
