@@ -13,6 +13,8 @@ dt['VideoExists'] = 'True'
 dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 
 for project in projects:
+	fm_obj.uploadData(fm_obj.localLabeledClipsDir + project, tarred=True)
+	continue
 	#fm_obj.downloadData(fm_obj.localLabeledClipsDir + project, tarred=True)
 	clips = os.listdir(fm_obj.localLabeledClipsDir + project)
 	for index,row in dt[dt.ProjectID == project].iterrows():
