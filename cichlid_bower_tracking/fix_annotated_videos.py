@@ -43,7 +43,13 @@ for project in projects:
 				if not os.path.exists(videoObj.localManualLabelClipsDir):
 					fm_obj.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
 				project_clips = os.listdir(videoObj.localManualLabelClipsDir)
-				pdb.set_trace()
+				new_name = filename.replace(row.ProjectID + '__','')
+				if new_name in project_clips:
+					out = subprocess.run(['mv','-f',videoObj.localManualLabelClipsDir + new_name, video_file_path], capture_output = True, decode = 'utf-8')
+					if out.returncode != 0:
+						pdb.set_trace()
+					continue
+
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
 print(dt.groupby(['AnalysisID','VideoExists']).count())
 print(dt[dt.AnalysisID == 'YH_MC_Parentals'].groupby(['ProjectID','VideoExists']).count())
