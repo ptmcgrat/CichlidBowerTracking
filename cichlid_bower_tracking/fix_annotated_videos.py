@@ -31,7 +31,14 @@ for project in projects:
 						subprocess.run(['mv','-f',fm_obj.localLabeledClipsDir + project + '/' + other, video_file_path])
 				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'Fix'
 			else:
-				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
+				fm_obj = FM(analysisID = row.AnalysisID, projectID = row.ProjectID)
+				if not os.path.exists(fm_obj.localLabeledClipsProjectDir):
+					fm_obj.downloadData(fm_obj.localLabeledClipsProjectDir, tarred = True)
+					if os.path.exists(fm_obj.localLabeledClipsProjectDir + filename):
+						pdb.set_trace()
 
+				dt.loc[dt.ClipName == row.ClipName,'VideoExists'] = 'False'
+print(dt.groupby(['AnalysisID','VideoExists']).count())
+print(dt[dt.AnalysisID == 'YH_MC_Parentals'].groupby(['ProjectID','VideoExists']).count())
 pdb.set_trace()
 
