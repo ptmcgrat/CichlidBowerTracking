@@ -62,7 +62,7 @@ class ThreeDModelPreparer():
 		subprocess.run(command)
 		os.chdir('..')
 		
-		with open(os.path.join(self.fileManager.local3DModelTempDir,'val.log')) as f:
+		with open(os.path.join(self.fileManager.local3DModelDir,'val.log')) as f:
 			print('Epoch\tAccuracy')
 			for line in f:
 				try:
@@ -77,11 +77,11 @@ class ThreeDModelPreparer():
 				except ValueError:
 					continue
 			# Move files
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'val.log'), self.fileManager.local3DModelDir)
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'save_' + str(epoch) + '.pth'), self.fileManager.localVideoModelFile)
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localVideoLabels)
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'project_data_' + str(epoch) + '.csv'), self.fileManager.local3DModelDir + 'ProjectAccuracy.csv')
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'TrainingLog.txt'), self.fileManager.localModelCommandsFile)
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'VideoSplit.csv'), self.fileManager.localVideoProjectsFile)
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'MissingVideos.csv'), self.fileManager.local3DModelDir)
-			shutil.copy(os.path.join(self.fileManager.local3DModelTempDir,'classInd.txt'), self.fileManager.local3DModelDir)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'val.log'), self.fileManager.local3DModelDir)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'save_' + str(epoch) + '.pth'), self.fileManager.localVideoModelFile)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localVideoLabels)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'project_data_' + str(epoch) + '.csv'), self.fileManager.local3DModelDir + 'ProjectAccuracy.csv')
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'TrainingLog.txt'), self.fileManager.localModelCommandsFile)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'VideoSplit.csv'), self.fileManager.localVideoProjectsFile)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'MissingVideos.csv'), self.fileManager.local3DModelDir)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'classInd.txt'), self.fileManager.local3DModelDir)
