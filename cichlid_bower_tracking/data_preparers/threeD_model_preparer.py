@@ -38,7 +38,7 @@ class ThreeDModelPreparer():
 		#	dt.loc[~dt.ProjectID.isin(self.projects),'Dataset'] = 'Validate'
 		dt['ClipName'] = dt.ClipName + '.mp4'
 		#dt = dt.rename(columns = {'ClipName':'VideoFile', 'ManualLabel':'Label'})
-		dt = dt[dt.AnalysisID != 'Single_nuc_1']
+		dt = dt[(dt.AnalysisID != 'Single_nuc_1') & (dt.AnalysisID != 'OriginalSetup')]
 		dt.to_csv(self.fileManager.localVideoProjectsFile)
 
 		command = ['python3', 'TrainModel.py']
@@ -77,11 +77,11 @@ class ThreeDModelPreparer():
 				except ValueError:
 					continue
 			# Move files
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'val.log'), self.fileManager.local3DModelDir)
+			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'val.log'), self.fileManager.local3DModelDir)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'save_' + str(epoch) + '.pth'), self.fileManager.localVideoModelFile)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localVideoLabels)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'project_data_' + str(epoch) + '.csv'), self.fileManager.local3DModelDir + 'ProjectAccuracy.csv')
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'TrainingLog.txt'), self.fileManager.localModelCommandsFile)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'VideoSplit.csv'), self.fileManager.localVideoProjectsFile)
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'MissingVideos.csv'), self.fileManager.local3DModelDir)
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'classInd.txt'), self.fileManager.local3DModelDir)
+			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'MissingVideos.csv'), self.fileManager.local3DModelDir)
+			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'classInd.txt'), self.fileManager.local3DModelDir)
