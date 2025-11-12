@@ -233,7 +233,6 @@ elif args.AnalysisType == 'DLCVideos':
 			print('Warning: Cannot run more than 3 videos. Randomly picking 3')
 			videoIndices = random.sample(videoIndices, 3)
 
-			continue
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		fm_obj.setProjectID(projectID)
