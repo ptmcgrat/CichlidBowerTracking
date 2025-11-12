@@ -229,8 +229,10 @@ elif args.AnalysisType == 'DLCVideos':
 			continue
 		else:
 			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
-		if len(videoIndices) != 3:
-			print('Warning: Need to specify three and exactly three videos. Skipping')
+		if len(videoIndices) > 3:
+			print('Warning: Cannot run more than 3 videos. Randomly picking 3')
+			videoIndices = random.sample(videoIndices, 3)
+
 			continue
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
