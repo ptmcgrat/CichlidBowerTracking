@@ -1,4 +1,4 @@
-import argparse, datetime, pdb, multiprocessing
+import argparse, datetime, pdb, multiprocessing, random
 from helper_modules.file_manager import FileManager as FM
 
 # Create arguments for the script
