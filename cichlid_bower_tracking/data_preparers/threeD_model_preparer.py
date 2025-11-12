@@ -9,11 +9,12 @@ class ThreeDModelPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager):
+	def __init__(self, fileManager, exclude):
 
 		self.__version__ = '1.0.0'
 
 		self.fileManager = fileManager
+		self.exclude = exclude
 
 	def downloadProjectData(self):		
 		self.fileManager.createDirectory(self.fileManager.local3DModelDir)
@@ -38,7 +39,8 @@ class ThreeDModelPreparer():
 		#	dt.loc[~dt.ProjectID.isin(self.projects),'Dataset'] = 'Validate'
 		dt['ClipName'] = dt.ClipName + '.mp4'
 		#dt = dt.rename(columns = {'ClipName':'VideoFile', 'ManualLabel':'Label'})
-		dt = dt[(dt.AnalysisID != 'Single_nuc_1')]
+		if self.exclude is not None:
+			dt = dt[~dt.AnalysisID.isin(self.exclude)]
 		dt.to_csv(self.fileManager.localVideoProjectsFile)
 
 		command = ['python3', 'TrainModel.py']

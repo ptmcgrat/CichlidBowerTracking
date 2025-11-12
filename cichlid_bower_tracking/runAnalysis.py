@@ -30,7 +30,7 @@ ma.add_argument('--Number', type=int, help='Optional argment to specify how many
 
 cfas = subparser.add_parser('DLCVideos', description = 'Create video clips to upload into DLC for annotation.')
 cfas.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
-#cfas.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
+cfas.add_argument('--Exclude', type=str, nargs='+', help='The Analysis IDs to exclude', default = 100)
 
 train = subparser.add_parser('TrainModel', description = 'Train a 3D Resnet to automatically classify sand manipulation events using annotated data')
 train.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
@@ -249,7 +249,7 @@ elif args.AnalysisType == 'DLCVideos':
 
 elif args.AnalysisType == 'TrainModel':
 	from data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
-	tdm_obj = TDMP(fm_obj)
+	tdm_obj = TDMP(fm_obj, args.Exclude)
 	tdm_obj.downloadProjectData()
 	tdm_obj.validateInputData()
 	tdm_obj.create3DModel()
