@@ -30,10 +30,10 @@ ma.add_argument('--Number', type=int, help='Optional argment to specify how many
 
 cfas = subparser.add_parser('DLCVideos', description = 'Create video clips to upload into DLC for annotation.')
 cfas.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
-cfas.add_argument('--Exclude', type=str, nargs='+', help='The Analysis IDs to exclude', default = 100)
 
 train = subparser.add_parser('TrainModel', description = 'Train a 3D Resnet to automatically classify sand manipulation events using annotated data')
 train.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+train.add_argument('--Exclude', type=str, nargs='+', help='The Analysis IDs to exclude', default = 100)
 
 cc = subparser.add_parser('ClassifyClusters', description='Use created ML model to classify clusters for each project')
 cc.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
