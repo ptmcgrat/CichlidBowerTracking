@@ -42,7 +42,8 @@ try:
 	assert os.path.isfile(args.VideoFile.replace('.h264', '.mp4'))
 	assert os.path.getsize(args.VideoFile.replace('.h264','.mp4')) > os.path.getsize(args.VideoFile)
 except:
-	logPrinter('mp4 file does not exist or not the right size')
+	logPrinter('mp4 file does not exist or not the right size. Uploading h264')
+	fileManager.uploadData(args.VideoFile)
 	raise Exception
 
 # Sync with cloud (will return error if something goes wrong)
