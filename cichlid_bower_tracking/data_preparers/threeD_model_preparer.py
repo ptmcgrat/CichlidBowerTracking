@@ -79,11 +79,21 @@ class ThreeDModelPreparer():
 				except ValueError:
 					continue
 			# Move files
-			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'val.log'), self.fileManager.local3DModelDir)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'save_' + str(epoch) + '.pth'), self.fileManager.localVideoModelFile)
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localVideoLabels)
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'project_data_' + str(epoch) + '.csv'), self.fileManager.local3DModelDir + 'ProjectAccuracy.csv')
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'TrainingLog.txt'), self.fileManager.localModelCommandsFile)
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'VideoSplit.csv'), self.fileManager.localVideoProjectsFile)
-			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'MissingVideos.csv'), self.fileManager.local3DModelDir)
-			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'classInd.txt'), self.fileManager.local3DModelDir)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localModelConfusionFile)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_accuracy.csv'), self.fileManager.localModelProjectAccuracy)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.localModelDataBreakdown)
+
+    def uploadProjectData(self, delete = True):
+        self.fileManager.uploadData(self.fileManager.localModelDataSummary)
+        self.fileManager.uploadData(self.fileManager.localModelCondaVersionsFile)
+        self.fileManager.uploadData(self.fileManager.localModelCommandsFile)
+        self.fileManager.uploadData(self.fileManager.localVideoModelFile)
+        self.fileManager.uploadData(self.fileManager.localVideoModelFile)
+        self.fileManager.uploadData(self.fileManager.localModelConfusionFile)
+        self.fileManager.uploadData(self.fileManager.localModelProjectAccuracy)
+        
+        if delete:
+            shutil.rmtree(self.fileManager.local3DModelDir)
+
+  
