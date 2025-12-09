@@ -253,6 +253,8 @@ elif args.AnalysisType == 'TrainModel':
 	tdm_obj.downloadProjectData()
 	tdm_obj.validateInputData()
 	tdm_obj.create3DModel()
+	tdm_obj.uploadData(delete = False)
+	
 
 elif args.AnalysisType == 'ClassifyClusters':
 	from cichlid_bower_tracking.data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP

@@ -84,7 +84,7 @@ class ThreeDModelPreparer():
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_accuracy.csv'), self.fileManager.localModelProjectAccuracy)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.localModelDataBreakdown)
 
-    def uploadProjectData(self, delete = True):
+    def uploadData(self, delete = True):
         self.fileManager.uploadData(self.fileManager.localModelDataSummary)
         self.fileManager.uploadData(self.fileManager.localModelCondaVersionsFile)
         self.fileManager.uploadData(self.fileManager.localModelCommandsFile)
