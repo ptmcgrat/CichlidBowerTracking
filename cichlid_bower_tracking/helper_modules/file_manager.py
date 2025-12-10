@@ -284,12 +284,14 @@ class FileManager():
         self.local3DModelDir = self.localMLDir + 'VideoModels/' + self.analysisID + '/'
         self.local3DModelTempDir = self.local3DModelDir + 'Temp/'
 
-        self.localVideoModelFile = self.local3DModelDir + 'model.pth'
-        self.localVideoClassesFile = self.local3DModelDir + 'classInd.txt'
-        self.localModelCommandsFile = self.local3DModelDir + 'commands.log'
+        self.localModelDataSummary = self.local3DModelDir + 'DataSummaryByAnalysisID.csv'
         self.localModelCondaVersionsFile = self.local3DModelDir + 'CondaVersions.log'
-        self.localVideoProjectsFile = self.local3DModelDir + 'videoToProject.csv'
-        self.localVideoLabels = self.local3DModelDir + 'confusionMatrix.csv'
+        self.localModelCommandsFile = self.local3DModelDir + 'commands.log'
+        self.localModelDataBreakdown = self.local3DModelDir + 'dataBreakdown.json'
+
+        self.localVideoModelFile = self.local3DModelDir + 'model.pth'
+        self.localModelConfusionFile = self.local3DModelDir + 'confusionMatrix.csv'
+        self.localModelProjectAccuracy = self.local3DModelDir + 'projectAccuracy.csv'
 
     def _createPiData(self):
         self.localCredentialDir = self.localMasterDir + '__CredentialFiles/'
