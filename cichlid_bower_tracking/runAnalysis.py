@@ -250,8 +250,8 @@ elif args.AnalysisType == 'DLCVideos':
 elif args.AnalysisType == 'TrainModel':
 	from data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
 	tdm_obj = TDMP(fm_obj, args.Exclude)
-	tdm_obj.downloadProjectData()
-	tdm_obj.validateInputData()
+	#tdm_obj.downloadProjectData()
+	#tdm_obj.validateInputData()
 	tdm_obj.create3DModel()
 	tdm_obj.uploadData(delete = False)
 	
