@@ -284,6 +284,8 @@ class FileManager():
         self.local3DModelDir = self.localMLDir + 'VideoModels/' + self.analysisID + '/'
         self.local3DModelTempDir = self.local3DModelDir + 'Temp/'
 
+        self.localVideoProjectsFile = self.local3DModelDir + 'videoToProject.csv'
+
         self.localModelDataSummary = self.local3DModelDir + 'DataSummaryByAnalysisID.csv'
         self.localModelCondaVersionsFile = self.local3DModelDir + 'CondaVersions.log'
         self.localModelCommandsFile = self.local3DModelDir + 'commands.log'
