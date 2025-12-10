@@ -82,14 +82,14 @@ class ThreeDModelPreparer():
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'save_' + str(epoch) + '.pth'), self.fileManager.localVideoModelFile)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localModelConfusionFile)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_accuracy.csv'), self.fileManager.localModelProjectAccuracy)
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.localModelDataBreakdown)
+			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.fileManager.localModelDataBreakdown)
 
 	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localModelDataSummary)
 		self.fileManager.uploadData(self.fileManager.localModelCondaVersionsFile)
 		self.fileManager.uploadData(self.fileManager.localModelCommandsFile)
 		self.fileManager.uploadData(self.fileManager.localVideoModelFile)
-		self.fileManager.uploadData(self.fileManager.localVideoModelFile)
+		self.fileManager.uploadData(self.fileManager.localModelDataBreakdown)
 		self.fileManager.uploadData(self.fileManager.localModelConfusionFile)
 		self.fileManager.uploadData(self.fileManager.localModelProjectAccuracy)
 		
