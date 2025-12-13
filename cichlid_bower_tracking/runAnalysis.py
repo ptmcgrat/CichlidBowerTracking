@@ -258,15 +258,25 @@ elif args.AnalysisType == 'TrainModel':
 
 elif args.AnalysisType == 'ClassifyClusters':
 	from cichlid_bower_tracking.data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP
-	projectIDs = args.ProjectIDs if args.ProjectIDs is not None else s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster == True) & (s_dt[args.AnalysisType] == False)].index.to_list()
-	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))
+	
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
+		if projectID not in projectIDs:
+			continue
+		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 
-	for projectID, row in fm_obj.s_dt.iterrows():
+		fm_obj.setProjectID(projectID)
 
-		tdcp_obj = TDCP(self.fileManager, modelID)
+		videoIndices = [] if row.videoIDsToRun != row.videoIDsToRun or row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
+		
+		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
+
+		tdcp_obj = TDCP(self.fileManager, videoIndices)
+		tdcp_obj.downloadData()
 		tdcp_obj.validateInputData()
 		tdcp_obj.predictLabels()
 		tdcp_obj.createSummaryFile()
+		tdcp_obj.uploadData()
+
 
 s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 fm_obj.uploadData(fm_obj.localSummaryFile)

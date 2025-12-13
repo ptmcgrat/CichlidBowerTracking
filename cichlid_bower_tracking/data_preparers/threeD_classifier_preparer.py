@@ -11,77 +11,68 @@ class ThreeDClassifierPreparer:
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager):
+	def __init__(self, fileManager, videoIndices):
 		self.__version__ = '1.0.0'
 
 		self.fileManager = fileManager
-		self.videos =[]
+		self.videoIndices = videoIndices
 	
+	def downloadData(self):
+		self.fileManager.downloadData(self.fileManager.localModelCommandsFile)
+		self.fileManager.downloadData(self.fileManager.localVideoModelFile)
+		self.fileManager.downloadData(self.fileManager.localModelDataBreakdown)
+		
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			self.fileManager.downloadData(videoObj.localAllClipsDir, tarred = True)
+			self.fileManager.downloadData(videoObj.localLabeledClustersFile)
 
 	def validateInputData(self):
-		assert os.path.exists(self.fileManager.localAllClipsDir) # Clips
 		assert os.path.exists(self.fileManager.localVideoModelFile) # Model
-		assert os.path.exists(self.fileManager.localVideoClassesFile) # Classes
+		assert os.path.exists(self.fileManager.localModelDataBreakdown) # Classes
 		assert os.path.exists(self.fileManager.localModelCommandsFile) # Commands
 
-
-		# df = pd.read_csv(self.fileManager.localSummaryFile)
-		
-		# videos = list(range(len(self.fileManager.lp.movies)))
-		self.fileManager.s_dt.columns = [c.replace(' ', '_') for c in self.fileManager.s_dt.columns]
-		# pdb.set_trace()
-		row =self.fileManager.s_dt.loc[self.fileManager.projectID]
-		# pdb.set_trace()
-		videos = row['VideoIDs_new'].split(': ')[1].split(',')
-		# videos_new = row['VideoIDs_new_added'].split(': ')[1].split(',')
-		# pdb.set_tr/ace()
-		self.videos =  list(map(int, videos))
-		# self.videos_new = list(map(int, videos_new))
-		# videos = self.fileManager.s_dt['Video']
-		
-		for videoIndex in self.videos:
+		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			pdb.set_trace()
+			assert os.path.exists(videoObj.localAllClipsDir, tarred = True)
 			assert os.path.exists(videoObj.localLabeledClustersFile)
-
 
 	def predictLabels(self):
 
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			data = {}
+			data['VideoFile'] = [x for x in os.listdir(videoObj.localAllClipsDir) if '.mp4' in x]
+			data['ProjectID'] = self.fileManager.projectID
+			data['Label'] = 'x' # Doesn't matter what you put in here
+			dt = pd.DataFrame(data)
+			dt.to_csv(self.fileManager.localVideoProjectsFile)
 
-		# Create mapping from videos to projectID
+			# Run command
+			command = ['python3', 'ClassifyVideos.py']
+			command.extend(['--Input_videos_directory', videoObj.localAllClipsDir])
+			command.extend(['--Results_directory', self.fileManager.local3DModelDir])
+			command.extend(['--Temporary_clips_directory', videoObj.localAllClipsDir])
 
-		with open(self.fileManager.localVideoProjectsFile, 'w') as f:
-			print('Location,ManualLabel,ProjectID,ClipName,MeanID', file = f)
-
-			for videofile in [x for x in os.listdir(self.fileManager.localAllClipsDir) if '.mp4' in x]:
-				clipname = self.fileManager.projectID+'__'+videofile.replace(".mp4", "")
-				match = re.match(r'(.*?)__(\d+_vid)', clipname)
-				mean_ID = match.group(1) + ':' + match.group(2)
-				print(videofile + ',,' + self.fileManager.projectID+','+clipname+','+mean_ID, file = f)
-				# pdb.set_trace()
-
-		# Run command
-		command = ['python3', 'ClassifyVideos.py']
-		command.extend(['--Input_videos_directory', self.fileManager.localAllClipsDir])
-		command.extend(['--Videos_to_project_file', self.fileManager.localVideoProjectsFile])
-		command.extend(['--Trained_model', self.fileManager.localVideoModelFile])
-		command.extend(['--Training_options', self.fileManager.localModelCommandsFile])
-		command.extend(['--Trained_categories', self.fileManager.localVideoClassesFile])
-		command.extend(['--Temporary_output_directory', self.fileManager.localTempClassifierDir])
-		command.extend(['--Output_file', self.fileManager.localAnalysisDir + 'output.csv'])
+			command.extend(['--Videos_to_project_file', self.fileManager.localVideoProjectsFile])
+			command.extend(['--Trained_model', self.fileManager.localVideoModelFile])
+			command.extend(['--Training_options', self.fileManager.localModelCommandsFile])
+			command.extend(['--Trained_categories', self.fileManager.localVideoClassesFile])
+			command.extend(['--Temporary_output_directory', videoObj.localAllClipsDir])
+			command.extend(['--Output_file', videoObj.localAllClipsDir + 'output.csv'])
 
 		print(' '.join(command))
 
 
-		if not os.path.isdir('/home/pkolipaka3@ad.gatech.edu/Desktop/Prerana/CichlidActionClassification'):
-			subprocess.run(['git', 'clone', 'https://github.com/ptmcgrat/CichlidActionClassification.git'])
+
+		if not os.path.isdir('CichlidActionClassification'):
+			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification'])
 
 		#command = "source activate CichlidActionClassification; " + ' ' .join(command)
-		# command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
-		command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidClusterData; " + ' '.join(command) # change the environment name
-		os.chdir('/home/pkolipaka3@ad.gatech.edu/Desktop/Prerana/CichlidActionClassification') # change the path to the path where this repo is cloned
-		# subprocess.run(['git', 'pull'])
-		subprocess.run('bash -c \"' + command + '\"', shell = True)
+		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
+		os.chdir('CichlidActionClassification')
+		subprocess.run(['git', 'pull'])
+		#subprocess.run(command)
 		os.chdir('..')
 		shutil.copy(os.path.join(self.fileManager.local3DModelDir,'train.log'), self.fileManager.localClusterClassificationLogfile)
 
