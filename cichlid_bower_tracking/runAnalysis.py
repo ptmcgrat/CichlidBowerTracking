@@ -267,7 +267,7 @@ elif args.AnalysisType == 'ClassifyClusters':
 		fm_obj.setProjectID(projectID)
 
 		videoIndices = [] if row.videoIDsToRun != row.videoIDsToRun or row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
-		
+		videoIndices = [int(x) for x in videoIndices]
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		tdcp_obj = TDCP(fm_obj, videoIndices)
