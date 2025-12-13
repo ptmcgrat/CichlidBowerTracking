@@ -257,7 +257,7 @@ elif args.AnalysisType == 'TrainModel':
 	
 
 elif args.AnalysisType == 'ClassifyClusters':
-	from cichlid_bower_tracking.data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP
+	from data_preparers.threeD_classifier_preparer import ThreeDClassifierPreparer as TDCP
 	
 	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
