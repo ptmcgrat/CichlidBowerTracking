@@ -172,7 +172,7 @@ class FileManager():
             elif analysisType == 'TrainModel':
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':
-                projectIDs = s_dt[(s_dt.Cluster == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+                projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
         else:
             for projectID  in projectIDs:
                 if projectID not in s_dt.index:
@@ -564,7 +564,6 @@ class FileManager():
         videoObj.localIntensityFile = self.localSummaryDir + videoObj.baseName + '_intensity.pdf'
         videoObj.localTempDir = self.localTempDir + videoObj.baseName + '/'
         videoObj.localLogfile = self.localLogfileDir + 'ClusterLog_' + str(index) + '.txt'
-
         self.createDirectory(videoObj.localTempDir)
 
         return videoObj
