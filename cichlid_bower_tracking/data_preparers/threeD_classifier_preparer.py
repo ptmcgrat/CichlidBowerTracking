@@ -70,9 +70,9 @@ class ThreeDClassifierPreparer:
 		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
 		os.chdir('CichlidActionClassification')
 		subprocess.run(['git', 'pull'])
-		#subprocess.run(command)
+		subprocess.run(command)
 		os.chdir('..')
-		shutil.copy(os.path.join(self.fileManager.local3DModelDir,'train.log'), self.fileManager.localClusterClassificationLogfile)
+		#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'train.log'), self.fileManager.localClusterClassificationLogfile)
 
 	def createSummaryFile(self):
 		
