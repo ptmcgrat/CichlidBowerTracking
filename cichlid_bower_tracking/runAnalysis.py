@@ -270,7 +270,7 @@ elif args.AnalysisType == 'ClassifyClusters':
 		
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
-		tdcp_obj = TDCP(self.fileManager, videoIndices)
+		tdcp_obj = TDCP(fm_obj, videoIndices)
 		tdcp_obj.downloadData()
 		tdcp_obj.validateInputData()
 		tdcp_obj.predictLabels()
