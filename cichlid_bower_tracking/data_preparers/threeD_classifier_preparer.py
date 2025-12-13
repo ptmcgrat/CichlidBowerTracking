@@ -57,7 +57,7 @@ class ThreeDClassifierPreparer:
 			command.extend(['--Videos_to_project_file', self.fileManager.localVideoProjectsFile])
 			command.extend(['--Trained_model', self.fileManager.localVideoModelFile])
 			command.extend(['--Training_options', self.fileManager.localModelCommandsFile])
-			command.extend(['--Trained_categories', self.fileManager.localVideoClassesFile])
+			command.extend(['--Trained_categories', self.fileManager.localModelDataBreakdown])
 			command.extend(['--Temporary_output_directory', videoObj.localAllClipsDir])
 			command.extend(['--Output_file', videoObj.localAllClipsDir + 'output.csv'])
 
