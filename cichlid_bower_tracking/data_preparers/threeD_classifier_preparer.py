@@ -51,7 +51,7 @@ class ThreeDClassifierPreparer:
 			# Run command
 			command = ['python3', 'ClassifyVideos.py']
 			command.extend(['--Input_videos_directory', videoObj.localAllClipsDir])
-			command.extend(['--Results_directory', self.fileManager.local3DModelDir])
+			command.extend(['--Results_directory', videoObj.localAllClipsDir])
 			command.extend(['--Temporary_clips_directory', videoObj.localAllClipsDir])
 
 			command.extend(['--Videos_to_project_file', self.fileManager.localVideoProjectsFile])
