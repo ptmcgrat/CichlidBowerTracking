@@ -34,7 +34,7 @@ class ThreeDClassifierPreparer:
 
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			assert os.path.exists(videoObj.localAllClipsDir, tarred = True)
+			assert os.path.exists(videoObj.localAllClipsDir)
 			assert os.path.exists(videoObj.localLabeledClustersFile)
 
 	def predictLabels(self):
@@ -62,8 +62,6 @@ class ThreeDClassifierPreparer:
 			command.extend(['--Output_file', videoObj.localAllClipsDir + 'output.csv'])
 
 		print(' '.join(command))
-
-
 
 		if not os.path.isdir('CichlidActionClassification'):
 			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification'])
