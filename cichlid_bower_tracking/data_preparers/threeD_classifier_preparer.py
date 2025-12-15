@@ -54,7 +54,7 @@ class ThreeDClassifierPreparer:
 			command.extend(['--Results_directory', videoObj.localAllClipsDir])
 			command.extend(['--Temporary_clips_directory', videoObj.localAllClipsDir])
 
-			command.extend(['--Videos_to_project_file', self.fileManager.localVideoProjectsFile])
+			command.extend(['--ML_labels', self.fileManager.localVideoProjectsFile])
 			command.extend(['--Trained_model', self.fileManager.localVideoModelFile])
 			command.extend(['--Training_options', self.fileManager.localModelCommandsFile])
 			command.extend(['--Trained_categories', self.fileManager.localModelDataBreakdown])
