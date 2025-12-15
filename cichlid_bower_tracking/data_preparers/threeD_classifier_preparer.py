@@ -77,7 +77,7 @@ class ThreeDClassifierPreparer:
 	def createSummaryFile(self):
 		
 		# for videoIndex, video in enumerate(self.fileManager.lp.movies):
-		for videoIndex in self.videos:
+		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			new_dt = pd.read_csv(videoObj.localLabeledClustersFile)
 			try:
