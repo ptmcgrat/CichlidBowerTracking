@@ -42,7 +42,7 @@ class ThreeDClassifierPreparer:
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			data = {}
-			data['VideoFile'] = [x for x in os.listdir(videoObj.localAllClipsDir) if '.mp4' in x]
+			data['ClipName'] = [x for x in os.listdir(videoObj.localAllClipsDir) if '.mp4' in x]
 			data['ProjectID'] = self.fileManager.projectID
 			data['Label'] = 'x' # Doesn't matter what you put in here
 			dt = pd.DataFrame(data)
