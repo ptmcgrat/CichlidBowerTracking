@@ -73,7 +73,6 @@ class ThreeDClassifierPreparer:
 			subprocess.run(['git', 'pull'])
 			subprocess.run(command)
 			os.chdir('..')
-			break
 			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'train.log'), self.fileManager.localClusterClassificationLogfile)
 
 	def createSummaryFile(self):
@@ -83,13 +82,13 @@ class ThreeDClassifierPreparer:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			new_dt = pd.read_csv(videoObj.localLabeledClustersFile)
 			pred_dt = pd.read_csv(videoObj.localAllClipsDir + 'output.csv')
-			pdb.set_trace()
+			temp_dt = pd.merge(new_dt, pred_dt, left_on = 'ClipName', right_on = 'index', how = 'left')
 			try:
 				# c_dt = c_dt.append(new_dt)
-				c_dt = pd.concat([c_dt, new_dt], ignore_index=True)
+				c_dt = pd.concat([c_dt, temp_dt], ignore_index=True)
 			except NameError:
 				c_dt = new_dt
-		# pdb.set_trace()
+		pdb.set_trace()
 		pred_dt = pd.read_csv(os.path.join(self.fileManager.localAnalysisDir,'output.csv'), index_col = 0)
 		# pdb.set_trace()
 		pred_dt['ClipName'] = pred_dt.index.str.replace('.mp4','')
