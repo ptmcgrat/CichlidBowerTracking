@@ -54,7 +54,7 @@ class ThreeDModelPreparer():
 		command.extend(['--gpu', str(0)])
 		
 
-		if not os.path.isdir('VideoClassifier'):
+		if not os.path.isdir('CichlidActionClassification'):
 			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification'])
 
 		#command = "source activate CichlidActionClassification; " + ' ' .join(command)

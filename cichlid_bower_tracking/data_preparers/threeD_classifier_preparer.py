@@ -87,7 +87,7 @@ class ThreeDClassifierPreparer:
 				# c_dt = c_dt.append(new_dt)
 				c_dt = pd.concat([c_dt, temp_dt], ignore_index=True)
 			except NameError:
-				c_dt = new_dt
+				c_dt = temp_dt
 		pdb.set_trace()
 		pred_dt = pd.read_csv(os.path.join(self.fileManager.localAnalysisDir,'output.csv'), index_col = 0)
 		# pdb.set_trace()
