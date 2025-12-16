@@ -38,6 +38,8 @@ class ThreeDClassifierPreparer:
 			assert os.path.exists(videoObj.localLabeledClustersFile)
 
 	def predictLabels(self):
+		if not os.path.isdir('CichlidActionClassification'):
+			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification'])
 
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
@@ -62,18 +64,17 @@ class ThreeDClassifierPreparer:
 			#command.extend(['--Temporary_output_directory', videoObj.localAllClipsDir])
 			command.extend(['--Output_file', videoObj.localAllClipsDir + 'output.csv'])
 
-		print(' '.join(command))
+			print(' '.join(command))
 
-		if not os.path.isdir('CichlidActionClassification'):
-			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification'])
-
-		#command = "source activate CichlidActionClassification; " + ' ' .join(command)
-		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
-		os.chdir('CichlidActionClassification')
-		subprocess.run(['git', 'pull'])
-		subprocess.run(command)
-		os.chdir('..')
-		#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'train.log'), self.fileManager.localClusterClassificationLogfile)
+		
+			#command = "source activate CichlidActionClassification; " + ' ' .join(command)
+			#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
+			os.chdir('CichlidActionClassification')
+			subprocess.run(['git', 'pull'])
+			subprocess.run(command)
+			os.chdir('..')
+			break
+			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'train.log'), self.fileManager.localClusterClassificationLogfile)
 
 	def createSummaryFile(self):
 		
