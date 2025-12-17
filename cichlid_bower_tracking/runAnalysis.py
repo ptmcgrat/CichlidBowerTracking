@@ -277,6 +277,9 @@ elif args.AnalysisType == 'ClassifyClusters':
 		tdcp_obj.createSummaryFile()
 		tdcp_obj.uploadData()
 
+		s_dt.loc[projectID,'ClassifyClusters'] = True
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
 
 s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 fm_obj.uploadData(fm_obj.localSummaryFile)
