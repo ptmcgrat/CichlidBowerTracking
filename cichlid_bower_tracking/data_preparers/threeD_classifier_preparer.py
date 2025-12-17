@@ -21,7 +21,7 @@ class ThreeDClassifierPreparer:
 		self.fileManager.downloadData(self.fileManager.localModelCommandsFile)
 		self.fileManager.downloadData(self.fileManager.localVideoModelFile)
 		self.fileManager.downloadData(self.fileManager.localModelDataBreakdown)
-		
+		self.fileManager.createDirectory(self.localAnalysisDir)
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			self.fileManager.downloadData(videoObj.localAllClipsDir, tarred = True)
