@@ -90,7 +90,7 @@ class ThreeDClassifierPreparer:
 				c_dt = temp_dt
 		c_dt['ProjectID'] = self.fileManager.projectID
 		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','ClipCreated','TimeStamp','Prediction','Probability']]
-		out_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
+		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 
 	def uploadData(self):
 		self.fileManger.uploadData(self.fileManager.localAllLabeledClustersFile)
