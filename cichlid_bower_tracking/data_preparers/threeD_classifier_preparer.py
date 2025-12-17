@@ -88,19 +88,9 @@ class ThreeDClassifierPreparer:
 				c_dt = pd.concat([c_dt, temp_dt], ignore_index=True)
 			except NameError:
 				c_dt = temp_dt
-		pdb.set_trace()
-		pred_dt = pd.read_csv(os.path.join(self.fileManager.localAnalysisDir,'output.csv'), index_col = 0)
-		# pdb.set_trace()
-		pred_dt['ClipName'] = pred_dt.index.str.replace('.mp4','')
-		# pdb.set_trace()
-		out_dt = pd.merge(c_dt, pred_dt[['ClipName','predicted_label']], on='ClipName', how = 'left')
-		# out_dt['confidence'] = out_dt['predicted_label'].map(lambda label: pred_dt[label].values[0] if label in pred_dt.columns else None)
-		# pdb.set_trace()
-		# out_dt['confidence'] = out_dt.apply(lambda row: row[row['predicted_label']] if row['predicted_label'] in pred_dt.columns else None, axis=1)
-		out_dt['confidence'] = out_dt.apply(lambda row: pred_dt.loc[row['ClipName'], row['predicted_label']] if row['ClipName'] in pred_dt.index and row['predicted_label'] in pred_dt.columns else None, axis=1)
-		# pred_dt.to_csv(os.path.join(self.fileManager.localAnalysisDir,'output.csv'))
-		# pdb.set_trace()
-		out_dt['modelID'] = self.fileManager.modelID
-		# pdb.set_trace()
+		c_dt['ProjectID'] = self.fileManager.projectID
+		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','ClipCreated','TimeStamp','Prediction','Probability']]
 		out_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
-		# pdb.set_trace()
+
+	def uploadData(self):
+		self.fileManger.uploadData(self.fileManager.localAllLabeledClustersFile)
