@@ -93,4 +93,4 @@ class ThreeDClassifierPreparer:
 		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 
 	def uploadData(self):
-		self.fileManger.uploadData(self.fileManager.localAllLabeledClustersFile)
+		self.fileManager.uploadData(self.fileManager.localAllLabeledClustersFile)
