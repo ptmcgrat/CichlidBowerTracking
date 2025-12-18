@@ -92,5 +92,8 @@ class ThreeDClassifierPreparer:
 		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','ClipCreated','TimeStamp','Prediction','Probability']]
 		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 
-	def uploadData(self):
+	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localAllLabeledClustersFile)
+		if delete:
+			shutil.rmtree(self.fileManager.localProjectDir)
+
