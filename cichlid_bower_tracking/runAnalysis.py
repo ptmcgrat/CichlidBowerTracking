@@ -281,5 +281,18 @@ elif args.AnalysisType == 'ClassifyClusters':
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
 
+elif args.AnalysisType == 'Summary':
+	from data_preparers.summary_preparer import SummaryPreparer as SP
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
+		if projectID not in projectIDs:
+			continue
+		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+
+		fm_obj.setProjectID(projectID)
+		sp_obj = SP(fm_obj, videoIndices)
+		sp_obj.downloadData()
+		sp_obj.validateInputData()
+		sp_obj.createSummaryFigures()
+		
 s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 fm_obj.uploadData(fm_obj.localSummaryFile)

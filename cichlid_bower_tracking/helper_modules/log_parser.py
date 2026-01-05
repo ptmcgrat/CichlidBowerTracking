@@ -155,7 +155,8 @@ class LogParser:
         if len(self.restarts) > 0:
             self.malformed_file.append('# of restarts: ' + str(len(self.restarts)))
 
-        for trial in self.trials:
+        for i,trial in enumerate(self.trials):
+            trial.figureFile = 'Trial_' + str(i+1) + '_SummaryFigure.pdf'
             for day_start,day_stop in trial.days:
                 expected_frames = int((day_stop.time - day_start.time).total_seconds()/60/5)
                 if expected_frames == 0:
