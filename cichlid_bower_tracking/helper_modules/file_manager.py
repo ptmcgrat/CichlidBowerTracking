@@ -173,6 +173,9 @@ class FileManager():
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':
                 projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+            elif analysisType == 'Summary':
+                projectIDs = s_dt[(s_dt.Depth == True) & (s_dt.ClassifyClusters == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+
         else:
             for projectID  in projectIDs:
                 if projectID not in s_dt.index:
@@ -210,7 +213,6 @@ class FileManager():
         self.localPiRGB = self.localPrepDir + 'PiCameraRGB.jpg'
         self.localFirstDepthRGB = self.localPrepDir + 'FirstDepthRGB.jpg' 
         self.localLastDepthRGB = self.localPrepDir + 'LastDepthRGB.jpg'
-
 
         # Directories created by analysis
         self.localAnalysisDir = self.localProjectDir + 'MasterAnalysisFiles/'
@@ -252,6 +254,8 @@ class FileManager():
         self.localTempClassifierDir = self.localProjectDir + 'TempClassifier/'
         self.localAllLabeledClustersFile = self.localAnalysisDir + 'AllLabeledClusters.csv'
 
+        # Files created by summary preparer
+        self.localSummarizedClustersEvents = self.localSummaryDir + 'SummarizedClusterEvents.csv'
         # Files created by fish_tracking preparer
         self.localAllFishTracksFile = self.localAnalysisDir + 'AllTrackedFish.csv'
         self.localAllFishDetectionsFile = self.localAnalysisDir + 'AllDetectionsFish.csv'

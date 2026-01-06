@@ -1,15 +1,17 @@
-
+import math
+import pandas as pd
 import numpy as np
 import datetime, sys, pdb
 from skimage import morphology
 from types import SimpleNamespace
 from PIL import Image,ImageDraw
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 class DepthAnalyzer:
 	# Contains code process depth data for figure creation
 
-	def __init__(self, fileManager,smooth_depth = True):
-		self.smooth_depth = smooth_depth
+	def __init__(self, fileManager):
 		self.fileManager = fileManager
 		self.lp = self.fileManager.lp
 		self.first_good_index = self.lp.frames
@@ -25,18 +27,11 @@ class DepthAnalyzer:
 		#     self.depth_data
 		# except AttributeError:
 		#     self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
-		if self.smooth_depth:
-			try:
-				self.depth_data
-			except AttributeError:
-				self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
-		else:
-			try:
-				self.depth_data
-			except AttributeError:
-				self.depth_data = np.load(self.fileManager.localInterpDepthFile)
-			except FileNotFoundError:
-				self.depth_data = None
+		try:
+			self.depth_data
+		except AttributeError:
+			self.depth_data = np.load(self.fileManager.localSmoothDepthFile)
+		self.num_frames, self.height, self.width = self.depth_data.shape
 
 	def t_to_index(self, t):
 		try:
@@ -90,8 +85,8 @@ class DepthAnalyzer:
 		tPit = np.where(totalHeightChange <= -1 * totalThreshold, True, False)
 		tPit = morphology.remove_small_objects(tPit, minPixels).astype(int)
 
-		bowers = tCastle - tPit
-
+		bowers = (tCastle - tPit).astype('float')
+		bowers[np.isnan(totalHeightChange)] = np.nan
 		return bowers
 
 	def returnHeight(self, t, cropped=False):
@@ -212,7 +207,6 @@ class DepthAnalyzer:
 		#    print('Warning: Second timepoint ' + str(t1) + ' is earlier than first timepoint ' + str(t0),
 		#          file=sys.stderr)
 
-
 class ClusterAnalyzer:
 	# Contains code process cluster data for figure creation
 	def __init__(self, fileManager):
@@ -229,36 +223,49 @@ class ClusterAnalyzer:
 
 		self.transM = np.load(self.fileManager.localTransMFile)
 		self.clusterData = pd.read_csv(self.fileManager.localAllLabeledClustersFile, index_col='TimeStamp',
-									   parse_dates=True, infer_datetime_format=True)
+									   parse_dates=True)
 		self._appendDepthCoordinates()
-		with open(self.fileManager.localTrayFile) as f:
-			line = next(f)
-			tray = line.rstrip().split(',')
-			self.tray_r = [int(x) for x in tray]
-			if self.tray_r[0] > self.tray_r[2]:
-				self.tray_r = [self.tray_r[2], self.tray_r[1], self.tray_r[0], self.tray_r[3]]
-			if self.tray_r[1] > self.tray_r[3]:
-				self.tray_r = [self.tray_r[0], self.tray_r[3], self.tray_r[2], self.tray_r[1]]
-
-		self.cropped_dims = [self.tray_r[2] - self.tray_r[0], self.tray_r[3] - self.tray_r[1]]
-		self.goodPixels = (self.tray_r[2] - self.tray_r[0]) * (self.tray_r[3] - self.tray_r[1])
+		
+		with open(self.fileManager.localVideoCropFile) as f:
+			for line in f:
+				video_crop_points = eval(line.rstrip())
+		polygon = Polygon(video_crop_points)
+		self.clusterData['InFrame'] = self.clusterData.apply(lambda row: polygon.contains(Point(row['Y'],row['X'])), axis = 1)
+		self.clusterData.to_csv(self.fileManager.localAllLabeledClustersFile)
 
 	def _appendDepthCoordinates(self):
 		# adds columns containing X and Y in depth coordinates to all cluster csv
-		self.clusterData['Y_depth'] = self.clusterData.apply(
+		self.clusterData['X_depth'] = self.clusterData.apply(
 			lambda row: (self.transM[0][0] * row.Y + self.transM[0][1] * row.X + self.transM[0][2]) / (
 					self.transM[2][0] * row.Y + self.transM[2][1] * row.X + self.transM[2][2]), axis=1)
-		self.clusterData['X_depth'] = self.clusterData.apply(
+		self.clusterData['Y_depth'] = self.clusterData.apply(
 			lambda row: (self.transM[1][0] * row.Y + self.transM[1][1] * row.X + self.transM[1][2]) / (
 					self.transM[2][0] * row.Y + self.transM[2][1] * row.X + self.transM[2][2]), axis=1)
-		scaling_factor = sqrt(np.linalg.det(self.transM))
-		self.clusterData['approx_radius'] = self.clusterData.apply(
-			lambda row: (np.mean(row.X_span + row.Y_span) * scaling_factor)/2, axis=1)
+		#scaling_factor = math.sqrt(np.linalg.det(self.transM))
+		#self.clusterData['approx_radius'] = self.clusterData.apply(
+		#	lambda row: (np.mean(row.X_span + row.Y_span) * scaling_factor)/2, axis=1)
 		# self.clusterData.round({'X_Depth': 0, 'Y_Depth': 0})
 
-		self.clusterData.to_csv(self.fileManager.localAllLabeledClustersFile)
 
-	def sliceDataframe(self, t0=None, t1=None, bid=None, columns=None, input_frame=None, cropped=True):
+	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, cropped=True):
+		# utility function to return two numpy arrays that match the provided criteria
+		# t0: return only rows with timestamps after t0
+		# t1: return only rows with timestamps before t1
+		# bid: single letter character matching the behavioral id
+		# cropped: If True, events that occur within the area defined by the video crop
+		dt = self.clusterData
+		dt = dt.dropna(subset=['Prediction']).sort_index()
+
+		if t0 is not None:
+			self._checkTimes(t0, t1)
+			dt = dt[t0:t1]
+		if bid is not None:
+			dt = dt[dt.Prediction == bid]
+		if cropped:
+			dt = dt[dt.InFrame == True]
+		return [np.array(dt.X_depth), np.array(dt.Y_depth)]
+
+	def sliceDataframe(self, t0=None, t1=None, bid=None, cropped=True):
 		# utility function to access specific slices of the Dataframe based on the AllClusterData csv.
 		#
 		# t0: return only rows with timestamps after t0
