@@ -80,10 +80,10 @@ class DepthAnalyzer:
 			totalThreshold = thresh
 
 		tCastle = np.where(totalHeightChange >= totalThreshold, True, False)
-		tCastle = morphology.remove_small_objects(tCastle, minPixels).astype(int)
+		tCastle = morphology.remove_small_objects(tCastle, max_size = minPixels).astype(int)
 
 		tPit = np.where(totalHeightChange <= -1 * totalThreshold, True, False)
-		tPit = morphology.remove_small_objects(tPit, minPixels).astype(int)
+		tPit = morphology.remove_small_objects(tPit, max_size = minPixels).astype(int)
 
 		bowers = (tCastle - tPit).astype('float')
 		bowers[np.isnan(totalHeightChange)] = np.nan
@@ -386,10 +386,10 @@ class ClusterAnalyzer:
 		z_spit = self.returnClusterKDE(t0, t1, 'p', cropped=cropped, bandwidth=bandwidth)
 
 		scoop_binary = np.where(z_spit - z_scoop <= -1 * totalThreshold, True, False)
-		scoop_binary = morphology.remove_small_objects(scoop_binary, minPixels).astype(int)
+		scoop_binary = morphology.remove_small_objects(scoop_binary, max_size = minPixels).astype(int)
 
 		spit_binary = np.where(z_spit - z_scoop >= totalThreshold, True, False)
-		spit_binary = morphology.remove_small_objects(spit_binary, minPixels).astype(int)
+		spit_binary = morphology.remove_small_objects(spit_binary, max_size = inPixels).astype(int)
 
 		bowers = spit_binary - scoop_binary
 		return bowers
