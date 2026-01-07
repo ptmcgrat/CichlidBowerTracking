@@ -77,7 +77,7 @@ class FileManager():
 
     def getProjectStates(self):
         # Dictionary to hold row of data
-        row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':'', 'ManualAnnotation':0, 'ClusterClassification':False, 'Summary': False, 'videoIDs':''}
+        row_data = {'tankID':'', 'StartingFiles':False, 'Prep':False, 'Depth':False, 'Cluster':'', 'ManualAnnotation':0, 'ClassifyClusters':False, 'Summary': False, 'videoIDs':''}
 
         #print('Checking project ' + self.projectID + ': ', end = '')
         try:
@@ -89,7 +89,7 @@ class FileManager():
         row_data['videoIDs'] = 'VideoIndices: ' + ','.join([str(x) for x in range(len(self.lp.movies))])
         # Get all files on Dropbox
         allfiles = []
-        for directory in [self.localProjectDir,self.localPrepDir,self.localVideoDir,self.localTroubleshootingDir,self.localAnalysisDir,self.localAllClipsDir, self.localManualLabelClipsDir, self.localManualLabelFramesDir]:
+        for directory in [self.localProjectDir,self.localPrepDir,self.localVideoDir,self.localTroubleshootingDir,self.localAnalysisDir,self.localAllClipsDir, self.localManualLabelClipsDir, self.localManualLabelFramesDir, self.localSummaryDir]:
             outfiles = subprocess.run(['rclone','lsf',directory.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('\n')
             allfiles += [directory + x for x in outfiles]
 
@@ -100,8 +100,8 @@ class FileManager():
         necessaryFiles['Depth'] = [self.localSmoothDepthFile]
         necessaryFiles['Cluster'] = [self.localAllClipsDir, self.localManualLabelClipsDir, self.localManualLabelFramesDir]
         necessaryFiles['ManualAnnotation'] = [self.localLabeledClipsFile]
-        necessaryFiles['ClusterClassification'] = [self.localAllLabeledClustersFile]
-        necessaryFiles['Summary'] = [self.localSummaryDir]
+        necessaryFiles['ClassifyClusters'] = [self.localAllLabeledClustersFile]
+        necessaryFiles['Summary'] = [self.localSummarizedClustersEvents, self.localSummarizedBuildingFigure, self.localSummarizedHourlyClusterFigure]
         
         for index,vid_obj in enumerate(self.lp.movies):
             vid_obj = self.returnVideoObject(index)
@@ -246,7 +246,7 @@ class FileManager():
         # Created by manual label video preparer
         self.localLabeledClipsProjectDir = self.localLabeledClipsDir + projectID + '/'
 
-     # Files created by manual labelerer  preparers
+        # Files created by manual labelerer  preparers
         self.localNewLabeledFramesFile = self.localAnalysisDir + 'NewLabeledFrames.csv'
         self.localNewLabeledFramesDir = self.localTempDir + 'NewLabeledFrames/'
 
@@ -256,6 +256,9 @@ class FileManager():
 
         # Files created by summary preparer
         self.localSummarizedClustersEvents = self.localSummaryDir + 'SummarizedClusterEvents.csv'
+        self.localSummarizedBuildingFigure = self.localSummaryDir + 'SummarizedIntegratedBuilding.pdf'
+        self.localSummarizedHourlyClusterFigure = self.localSummaryDir + 'SummarizedHourlyClusterEvents.pdf'
+
         # Files created by fish_tracking preparer
         self.localAllFishTracksFile = self.localAnalysisDir + 'AllTrackedFish.csv'
         self.localAllFishDetectionsFile = self.localAnalysisDir + 'AllDetectionsFish.csv'

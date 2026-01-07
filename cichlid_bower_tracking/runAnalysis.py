@@ -293,6 +293,7 @@ elif args.AnalysisType == 'Summary':
 		sp_obj.downloadData()
 		sp_obj.validateInputData()
 		sp_obj.createSummaryFigures()
+		sp_obj.uploadData(delete=True)
 
 s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 fm_obj.uploadData(fm_obj.localSummaryFile)

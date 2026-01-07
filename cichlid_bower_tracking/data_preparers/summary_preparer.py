@@ -1,9 +1,11 @@
-import os, pdb
+import os, pdb, datetime
 import matplotlib.pyplot as plt
 import matplotlib
+import seaborn as sns
 from helper_modules.depth_analyzer import DepthAnalyzer as DA
 from helper_modules.depth_analyzer import ClusterAnalyzer as CA
 import pandas as pd 
+import PyPDF2 as pypdf
 
 class SummaryPreparer:
 	# This class takes in directory information and a logfile containing depth information and performs the following:
@@ -39,7 +41,9 @@ class SummaryPreparer:
 		assert os.path.exists(self.fileManager.localAllLabeledClustersFile)
 
 	def uploadProjectData(self, delete = True):
-		self.fileManager.uploadData(self.fileManager.finalSummaryFigure)
+		self.fileManager.uploadData(self.localSummarizedClustersEvents)
+		self.fileManager.uploadData(self.localSummarizedBuildingFigure)
+		self.fileManager.uploadData(self.localSummarizedHourlyClusterFigure)
 		if delete:
 			shutil.rmtree(self.fileManager.localProjectDir)
 
@@ -65,6 +69,8 @@ class SummaryPreparer:
 		self.da_obj = DA(self.fileManager)
 		self.cl_obj = CA(self.fileManager)
 		e_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','ManipulationType','Number'])
+		cat_h_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','Hour','ManipulationID','Number'])
+		com_h_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','Hour','ManipulationGroup','Number'])
 		for i,trial in enumerate(self.lp.trials):
 			localTrialFigureFile = self.fileManager.localSummaryDir + trial.figureFile
 			num_days = len(trial.days)
@@ -73,6 +79,7 @@ class SummaryPreparer:
 			start_frame = trial.days[0][0]
 
 			for j, (first_frame,last_frame) in enumerate(trial.days):
+				day_stamp = first_frame.time.replace(hour = 0, minute=0, second=0, microsecond=0)
 
 				#current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
 				axes[0,j].imshow(self.da_obj.returnHeightChange(start_frame.time, last_frame.time, cropped=True), vmin=-v, vmax=v)
@@ -96,14 +103,50 @@ class SummaryPreparer:
 					if j == 0:
 						axes[k+3,j].set_ylabel(self.cl_obj.bid_labels[bid])
 					e_dt.loc[len(e_dt)] = [self.lp.projectID, 'Trial_' + str(i+1), j, self.cl_obj.bid_labels[bid], len(x)]
+				
+				for hour in range(8,20):
+					start = day_stamp + datetime.timedelta(hours=hour)
+					stop = day_stamp + datetime.timedelta(hours=hour+1)
+					if stop < first_frame.time or start > last_frame.time:
+						continue
+					output, combined_output = self.cl_obj.returnCategoryCounts(start, stop)
+					for bid in ['c', 'p', 'b', 'f', 't', 'm', 's']:
+						cat_h_dt.loc[len(cat_h_dt)] = [self.lp.projectID, 'Trial_' + str(i+1), j, hour, self.cl_obj.bid_labels[bid], output[bid]]
+					for cat in combined_output.keys():
+						com_h_dt.loc[len(com_h_dt)] = [self.lp.projectID, 'Trial_' + str(i+1), j, hour, cat, combined_output[cat]]
 				[ax.set_xticks([]) for ax in axes[:,j]]
 				[ax.set_yticks([]) for ax in axes[:,j]]
 				#[ax.set_adjustable('box') for ax in axes[:,j]]
 			
 			figTrial.tight_layout()
-			plt.show()
+			#plt.show()
 			figTrial.savefig(localTrialFigureFile)
+		plt.close('all')
+
+		figHourly, axes = plt.subplots(nrows = len(self.lp.trials), ncols = 4, figsize=(12, 3*len(self.lp.trials)))
+		for i,trial in enumerate(self.lp.trials):
+			for j,cat in enumerate(com_h_dt['ManipulationGroup'].unique()):
+				sub_dt = com_h_dt[(com_h_dt['Trial#'] == 'Trial_'+str(i+1)) & (com_h_dt.ManipulationGroup == cat)]
+				sns.boxplot(x='Hour', y='Number', data=sub_dt, ax = axes[i,j], showfliers = False)
+				sns.stripplot(x='Hour', y='Number', data=sub_dt, color=".25", size=3, ax=axes[i,j])
+				if i == 0:
+					axes[i,j].set_title(cat)
+				if j == 0:
+					axes[i,j].set_ylabel('Trial_'+str(i+1))
+		figHourly.tight_layout()
+		plt.show()
+		figHourly.savefig(self.fileManager.localSummarizedHourlyClusterFigure)
 		e_dt.to_csv(self.fileManager.localSummarizedClustersEvents)
+
+		writer = pypdf.PdfWriter()
+		for i,trial in enumerate(self.lp.trials):
+			localTrialFigureFile = self.fileManager.localSummaryDir + trial.figureFile
+			f = open(localTrialFigureFile, 'rb')
+			reader = pypdf.PdfReader(f)
+			for page_number in range(len(reader.pages)):
+				writer.add_page(reader.pages[page_number])
+		with open(self.fileManager.localSummarizedBuildingFigure, 'wb') as f:
+			writer.write(f)
 
 		plt.close('all')
 

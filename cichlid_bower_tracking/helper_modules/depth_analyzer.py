@@ -265,6 +265,29 @@ class ClusterAnalyzer:
 			dt = dt[dt.InFrame == True]
 		return [np.array(dt.X_depth), np.array(dt.Y_depth)]
 
+	def returnCategoryCounts(self, t0=None, t1=None, cropped=True):
+		# utility function to returns the number of counts for each category along with two summary categories
+		# t0: return only rows with timestamps after t0
+		# t1: return only rows with timestamps before t1
+		# cropped: If True, events that occur within the area defined by the video crop
+		output = {}
+		combined_output = {}
+		dt = self.clusterData
+		dt = dt.dropna(subset=['Prediction']).sort_index()
+
+		if t0 is not None:
+			self._checkTimes(t0, t1)
+			dt = dt[t0:t1]
+		if cropped:
+			dt = dt[dt.InFrame == True]
+		for bid in self.bids:
+			output[bid] = len(dt[dt.Prediction == bid])
+		combined_output['Building'] = output['c'] + output['p'] + output['b']
+		combined_output['Feeding'] = output['f'] + output['t'] + output['m']
+		combined_output['Spawning'] = output['s']
+		combined_output['Other'] = output['d'] + output['o'] + output['x']
+		return output, combined_output
+
 	def sliceDataframe(self, t0=None, t1=None, bid=None, cropped=True):
 		# utility function to access specific slices of the Dataframe based on the AllClusterData csv.
 		#
