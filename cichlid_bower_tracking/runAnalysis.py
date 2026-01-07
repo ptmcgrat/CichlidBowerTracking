@@ -71,6 +71,8 @@ if args.AnalysisType == 'AnalyzeStates':
 			if k not in s_dt:
 				s_dt[k] = False
 			s_dt.loc[projectID, k] = v
+	s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+	fm_obj.uploadData(fm_obj.localSummaryFile)
 
 elif args.AnalysisType == 'Prep':
 	import PyPDF2 as pypdf
@@ -211,6 +213,8 @@ elif args.AnalysisType == 'AnnotateVideos':
 		labeled_videos = mlv_obj.labelVideos(args.Initials)
 		quit = mlv_obj.uploadProjectData(delete = True)
 		
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
 		s_dt.loc[projectID,'ManualAnnotation'] = labeled_videos
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
@@ -242,6 +246,8 @@ elif args.AnalysisType == 'DLCVideos':
 		mlv_obj.createDLCVideos()
 		mlv_obj.uploadProjectData(delete = True)
 
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
 		s_dt.loc[projectID,'DLCVideos'] = True
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
@@ -277,6 +283,8 @@ elif args.AnalysisType == 'ClassifyClusters':
 		tdcp_obj.createSummaryFile()
 		tdcp_obj.uploadData()
 
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
 		s_dt.loc[projectID,'ClassifyClusters'] = True
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
@@ -294,11 +302,20 @@ elif args.AnalysisType == 'Summary':
 		sp_obj.validateInputData()
 		sp_obj.createSummaryFigures()
 		sp_obj.uploadData(delete=True)
+		
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
+		s_dt.loc[projectID,'Summary'] = True
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
 
-		#s_dt.loc[projectID,'Summary'] = True
-		#s_dt.to_csv(fm_obj.localSummaryFile, index = True)
-		#fm_obj.uploadData(fm_obj.localSummaryFile)
+	fm_obj.createDirectory(fm_obj.localAnalysisFinalDataDir)
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
+		fm_obj.setProjectID(projectID)
+		for s_data in [fm_obj.localSummarizedClustersEvents,fm_obj.localSummarizedBuildingFigure,fm_obj.localSummarizedHourlyClusterFigure]:
+			fm_obj.downloadData(s_data)
+			subprocess.run(['mv', s_data, fm_obj.localAnalysisFinalDataDir + projectID + '__' + os.path.basename(s_data)])
+	fm_obj.uploadData(fm_obj.localAnalysisFinalDataDir)
 
-
-s_dt.to_csv(fm_obj.localSummaryFile, index = True)
-fm_obj.uploadData(fm_obj.localSummaryFile)
+#s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+#fm_obj.uploadData(fm_obj.localSummaryFile)

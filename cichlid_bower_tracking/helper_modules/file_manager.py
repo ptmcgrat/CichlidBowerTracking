@@ -24,7 +24,8 @@ class FileManager():
             self.localMasterAnalysisDir = self.localMasterDir + '__AnalysisStates/'
             self.localAnalysisStatesDir = self.localMasterAnalysisDir + analysisID + '/'
             self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
-            
+            self.localAnalysisFinalDataDir = self.localAnalysisStatesDir + 'SummarizedBuilds/'
+
             if not self.checkFileExists(self.localSummaryFile):
                 outtext = subprocess.run(['rclone', 'lsf', self.localMasterAnalysisDir.replace(self.localMasterDir,self.cloudMasterDir)], capture_output = True).stdout.decode().split('/\n')
                 raise FileNotFoundError('Cant find '+ analysisID + '.csv.\nValid analysisIDs are: ' + ','.join(outtext))
