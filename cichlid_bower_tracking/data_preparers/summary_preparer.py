@@ -40,10 +40,10 @@ class SummaryPreparer:
 		assert os.path.exists(self.fileManager.localTransMFile)
 		assert os.path.exists(self.fileManager.localAllLabeledClustersFile)
 
-	def uploadProjectData(self, delete = True):
-		self.fileManager.uploadData(self.localSummarizedClustersEvents)
-		self.fileManager.uploadData(self.localSummarizedBuildingFigure)
-		self.fileManager.uploadData(self.localSummarizedHourlyClusterFigure)
+	def uploadData(self, delete = True):
+		self.fileManager.uploadData(self.fileManager.localSummarizedClustersEvents)
+		self.fileManager.uploadData(self.fileManager.localSummarizedBuildingFigure)
+		self.fileManager.uploadData(self.fileManager.localSummarizedHourlyClusterFigure)
 		if delete:
 			shutil.rmtree(self.fileManager.localProjectDir)
 
@@ -134,9 +134,9 @@ class SummaryPreparer:
 				if j == 0:
 					axes[i,j].set_ylabel('Trial_'+str(i+1))
 		figHourly.tight_layout()
-		plt.show()
 		figHourly.savefig(self.fileManager.localSummarizedHourlyClusterFigure)
 		e_dt.to_csv(self.fileManager.localSummarizedClustersEvents)
+		plt.close('all')
 
 		writer = pypdf.PdfWriter()
 		for i,trial in enumerate(self.lp.trials):
@@ -148,6 +148,5 @@ class SummaryPreparer:
 		with open(self.fileManager.localSummarizedBuildingFigure, 'wb') as f:
 			writer.write(f)
 
-		plt.close('all')
 
 
