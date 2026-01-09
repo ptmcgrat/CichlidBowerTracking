@@ -247,22 +247,33 @@ class ClusterAnalyzer:
 		# self.clusterData.round({'X_Depth': 0, 'Y_Depth': 0})
 
 
-	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, cropped=True):
+	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, in_frame=True, created = True):
 		# utility function to return two numpy arrays that match the provided criteria
 		# t0: return only rows with timestamps after t0
 		# t1: return only rows with timestamps before t1
 		# bid: single letter character matching the behavioral id
 		# cropped: If True, events that occur within the area defined by the video crop
 		dt = self.clusterData
-		dt = dt.dropna(subset=['Prediction']).sort_index()
-
+		if created:
+			dt = dt[dt.ClipCreated==True]
+		elif created is None:
+			dt = dt
+		else:
+			dt = dt[dt.ClipCreated==False]
+		if in_frame:
+			dt = dt[dt.InFrame == True]
+		elif in_frame is None:
+			dt = dt
+		else:
+			dt = dt[dt.InFrame == False]
 		if t0 is not None:
 			self._checkTimes(t0, t1)
 			dt = dt[t0:t1]
 		if bid is not None:
-			dt = dt[dt.Prediction == bid]
-		if cropped:
-			dt = dt[dt.InFrame == True]
+			if isinstance(bid,list):
+				dt = dt[dt.Prediction.isin(bid)]
+			else:
+				dt = dt[dt.Prediction == bid]
 		return [np.array(dt.X_depth), np.array(dt.Y_depth)]
 
 	def returnCategoryCounts(self, t0=None, t1=None, cropped=True):
