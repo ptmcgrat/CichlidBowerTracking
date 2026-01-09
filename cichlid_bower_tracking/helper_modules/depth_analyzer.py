@@ -257,11 +257,11 @@ class ClusterAnalyzer:
 		pdb.set_trace()
 
 		if created:
-			dt = dt[dt.ClipCreated==True]
+			dt = dt[dt.ClipCreated=='Yes']
 		elif created is None:
 			dt = dt
 		else:
-			dt = dt[dt.ClipCreated==False]
+			dt = dt[dt.ClipCreated=='No']
 		if in_frame:
 			dt = dt[dt.InFrame == True]
 		elif in_frame is None:
