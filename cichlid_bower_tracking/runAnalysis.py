@@ -55,7 +55,7 @@ except AttributeError:
 	number = 0
 try:
 	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, args.ProjectIDs, number)
-except AttributeError:
+except AttributeError or KeyError:
 	projectIDs = fm_obj.getProjectIDs(args.AnalysisType, None, number)
 
 if 'RunAnalysis' not in fm_obj.s_dt:
