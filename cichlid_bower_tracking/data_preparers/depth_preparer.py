@@ -321,7 +321,10 @@ class DepthPreparer:
 			if i==0:
 				outMovie = skvideo.io.FFmpegWriter(self.fileManager.localRGBDepthVideo, outputdict={'-vcodec': 'libx264'})
 				#outMovie = cv2.VideoWriter(self.fileManager.localRGBDepthVideo, cv2.VideoWriter_fourcc(*"mp4v"), 30.0, (depthRGB.shape[1],depthRGB.shape[0]))
-			depthRGB = plt.imread(self.fileManager.localProjectDir + frame.pic_file)
+			if os.path.exists(self.fileManager.localProjectDir + frame.pic_file):
+				depthRGB = plt.imread(self.fileManager.localProjectDir + frame.pic_file)
+			else:
+				print('Cant find ' + frame.pic_file + '. Using previous')
 			if len(trials) == 1:
 				start_index = trials[0][1].frames[0].index
 			else:
