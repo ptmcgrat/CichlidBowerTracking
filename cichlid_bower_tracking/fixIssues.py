@@ -1,34 +1,17 @@
 import subprocess,pdb,shutil
 from helper_modules.file_manager import FileManager as FM
 
-fm_obj = FM('YH_MC_Parentals')
+fm_obj = FM('YHMC_BC_Data')
 s_dt = fm_obj.s_dt
 
-projectIDs = s_dt[(s_dt.StartingFiles == True)].index.to_list()
+projectIDs = s_dt[(s_dt.RunAnalysis == True)].index.to_list()
+print(projectIDs)
 for projectID in projectIDs:
 	print('Running project: ' + projectID)
 	try:
 		fm_obj.setProjectID(projectID, print_issues = True)
 	except Exception as e:
 		print('Skipping this project due to issues with tankresetstartstop')
-		continue
-	if fm_obj.checkFileExists(fm_obj.localPrepDir + 'Trial_1FirstDepth.jpg'):
-		print(projectID + ' already fixed.')
-		if fm_obj.checkFileExists(fm_obj.localPrepDir + 'Trial_1ResetDepth.npy/Trial_1ResetDepth.jpg'):
-			print('Need to fix names')
-			for i,trial in enumerate(fm_obj.lp.trials):
-				bad_name = fm_obj.localPrepDir + 'Trial_' +str(i+1)+'ResetDepth.npy/Trial_'+str(i+1)+'ResetDepth.jpg'
-				good_name = fm_obj.localPrepDir + 'Trial_' +str(i+1)+'ResetDepth.npy'
-				subprocess.call(['rm','-rf',good_name])
-				fm_obj.downloadData(bad_name)
-				
-				subprocess.call(['mv',bad_name, good_name + '1'])
-				subprocess.call(['rm', '-rf' , good_name])
-				subprocess.call(['mv',good_name + '1', good_name])
-				fm_obj.deleteCloudData(good_name)
-				fm_obj.uploadData(good_name)
-				#print(['rclone','move',bad_name,good_name])
-				#subprocess.call(['rclone','move',bad_name,good_name])
 		continue
 	fm_obj.downloadData(fm_obj.localFrameDir, tarred = True)
 	for movie in fm_obj.lp.movies:

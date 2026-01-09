@@ -150,6 +150,7 @@ class PrepPreparer:
 
             userInput = input('Type q if this is acceptable: ')
             if userInput == 'q':
+                cv2.destroyAllWindows()
                 break
 
         # Save and back up tray file
@@ -196,6 +197,7 @@ class PrepPreparer:
 
             userInput = input('Type q if this is acceptable: ')
             if userInput == 'q':
+                cv2.destroyAllWindows()
                 break
 
         self.labeledVideoPoints = self.poly
@@ -258,7 +260,10 @@ class PrepPreparer:
             pic3 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i+1) + 'FirstPi.jpg')
             pic4 = cv2.imread(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i+1) + 'LastPi.jpg')
 
-            pic3 = cv2.warpPerspective(pic3, self.transM, (640, 480))
+            try:
+                pic3 = cv2.warpPerspective(pic3, self.transM, (640, 480))
+            except cv2.error:
+                pdb.set_trace()
             pic4 = cv2.warpPerspective(pic4, self.transM, (640, 480))
 
             depth_first = np.load(self.fileManager.localProjectDir + 'PrepFiles/Trial_' + str(i+1) + 'FirstDepth.npy')

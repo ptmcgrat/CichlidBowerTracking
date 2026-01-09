@@ -83,8 +83,9 @@ class FileManager():
         #print('Checking project ' + self.projectID + ': ', end = '')
         try:
             self.downloadData(self.localLogfile)
-            self.downloadData(self.localLabeledClipsFile)
+            #self.downloadData(self.localLabeledClipsFile)
         except FileNotFoundError:
+            print('Cant find logfile')
             return row_data
         self.lp = LP(self.localLogfile)
         row_data['videoIDs'] = 'VideoIndices: ' + ','.join([str(x) for x in range(len(self.lp.movies))])
@@ -118,7 +119,9 @@ class FileManager():
             for af in analysis_files:
                 if af not in allfiles:
                     if '.mp4' in af:
-                        if af.replace('.mp4','h264') in allfiles:
+                        if af.replace('.mp4','.h264') in allfiles:
+                            print('Missing file: ' + af)
+                            print('h264 file found')
                             continue
                     if analysis_type == 'StartingFiles':
                         print('Missing file: ' + af)
