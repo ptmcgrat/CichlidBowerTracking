@@ -298,16 +298,16 @@ elif args.AnalysisType == 'Summary':
 
 		fm_obj.setProjectID(projectID)
 		sp_obj = SP(fm_obj)
-		#sp_obj.downloadData()
-		#sp_obj.validateInputData()
-		#sp_obj.createSummaryFigures()
-		#sp_obj.uploadData(delete=True)
+		sp_obj.downloadData()
+		sp_obj.validateInputData()
+		sp_obj.createSummaryFigures()
+		sp_obj.uploadData(delete=True)
 		
-		#fm_obj = FM(analysisID, projectID)
-		#s_dt = fm_obj.s_dt
-		#s_dt.loc[projectID,'Summary'] = True
-		#s_dt.to_csv(fm_obj.localSummaryFile, index = True)
-		#fm_obj.uploadData(fm_obj.localSummaryFile)
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
+		s_dt.loc[projectID,'Summary'] = True
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
 
 	fm_obj.createDirectory(fm_obj.localAnalysisFinalDataDir)
 	for projectID, row in s_dt[s_dt.Summary == True].iterrows():
