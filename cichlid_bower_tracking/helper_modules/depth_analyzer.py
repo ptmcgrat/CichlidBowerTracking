@@ -254,7 +254,7 @@ class ClusterAnalyzer:
 		# bid: single letter character matching the behavioral id
 		# cropped: If True, events that occur within the area defined by the video crop
 		dt = self.clusterData
-
+		dt = dt.sort_index()
 		if created:
 			dt = dt[dt.ClipCreated=='Yes']
 		elif created is None:
