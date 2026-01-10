@@ -215,9 +215,9 @@ class ClusterAnalyzer:
 		self.bid_labels = {'c':'bower scoop', 'p': 'bower spit', 'b': 'bower multiple',
 						   'f': 'feed scoop', 't': 'feed spit', 'm': 'feed multiple',
 						   's': 'spawn', 'd': 'drop sand', 'o': 'fish other', 'x': 'no fish other'}
-		self.bid_colors = {'c':'blue', 'p': 'blue', 'b': 'blue',
-						   'f': 'orange', 't': 'orange', 'm': 'orange',
-						   's': 'pink', 'd': 'green', 'o': 'green', 'x': 'silver'}
+		self.bid_colors = {'c':(0,0,255), 'p': (0,0,255), 'b': (0,0,255),
+						   'f': (255, 165,0), 't': (255, 165,0), 'm': (255, 165,0),
+						   's': (255, 192, 203), 'd': (0,255,0), 'o': (0,255,0), 'x': (187, 194, 194)}
 
 		self.lp = self.fileManager.lp
 		self._loadData()
@@ -316,10 +316,10 @@ class ClusterAnalyzer:
 
 		for time,row in dt.iterrows():
 			if row.ClipCreated == 'No':
-				color = 'black'
+				color = (0,0,0)
 				label = 'NoClip'
 			if not row.InFrame:
-				color = 'red'
+				color = (255,0,0)
 				label = 'Cropped'
 			else:
 				color = self.bid_colors[row.Prediction]

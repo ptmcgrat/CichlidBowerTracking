@@ -63,8 +63,6 @@ class EditVideosPreparer():
 			for i in range(int(videoObj.framerate*60*10)):
 				current_time = videoObj.startTime + datetime.timedelta(seconds = i/videoObj.framerate)
 				out_dt = self.cl_obj.addClusterLabels(current_time, videoObj)
-				if len(out_dt) > 0:
-					pdb.set_trace()
 				ret, frame = cap.read()
 				if ret:
 					for time, row in out_dt.iterrows():
