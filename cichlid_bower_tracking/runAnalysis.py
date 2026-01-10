@@ -42,6 +42,9 @@ cc.add_argument('--ModelID', type=str, nargs='+', help='Optional name of project
 summary = subparser.add_parser('Summary', description = 'Summarize all of the analyzed data')
 summary.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 
+edit = subparser.add_parser('EditVideos', description = 'Add cluster boxes to videos that you annotated')
+edit.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+
 args = parser.parse_args()
 analysisID = args.AnalysisID
 
@@ -316,6 +319,31 @@ elif args.AnalysisType == 'Summary':
 			fm_obj.downloadData(s_data)
 			subprocess.run(['mv', s_data, fm_obj.localAnalysisFinalDataDir + projectID + '__' + os.path.basename(s_data)])
 	fm_obj.uploadData(fm_obj.localAnalysisFinalDataDir)
+
+elif args.AnalysisType == 'EditVideos':
+	from data_preparers.edit_videos_preparer import EditVideosPreparer as EVP
+	for projectID, row in fm_obj.s_dt.iterrows():
+		if projectID not in projectIDs:
+			continue
+		print(projectID)
+		if row.videoIDsToAnnotate == 'VideoIndices: ' or row.videoIDsToAnnotate != row.videoIDsToAnnotate:
+			print('Warning: No videos specified for this project. Skipping')
+			continue
+		else:
+			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
+		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
+		fm_obj.setProjectID(projectID)
+		evp_obj = EVP(fm_obj, videoIndices)
+		evp_obj.downloadProjectData()
+		evp_obj.validateInputData()
+		evp_obj.editVideos()
+		evp_obj.uploadProjectData(delete = False)
+		
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
+		s_dt.loc[projectID,'EditVideos'] = True
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
 
 #s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 #fm_obj.uploadData(fm_obj.localSummaryFile)

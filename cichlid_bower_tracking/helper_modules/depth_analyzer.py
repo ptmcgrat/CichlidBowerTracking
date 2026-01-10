@@ -215,6 +215,10 @@ class ClusterAnalyzer:
 		self.bid_labels = {'c':'bower scoop', 'p': 'bower spit', 'b': 'bower multiple',
 						   'f': 'feed scoop', 't': 'feed spit', 'm': 'feed multiple',
 						   's': 'spawn', 'd': 'drop sand', 'o': 'fish other', 'x': 'no fish other'}
+		self.bid_colors = {'c':'blue', 'p': 'blue', 'b': 'blue',
+						   'f': 'orange', 't': 'orange', 'm': 'orange',
+						   's': 'pink', 'd': 'green', 'o': 'green', 'x': 'silver'}
+
 		self.lp = self.fileManager.lp
 		self._loadData()
 
@@ -302,6 +306,29 @@ class ClusterAnalyzer:
 		combined_output['Spawning'] = output['s']
 		combined_output['Other'] = output['d'] + output['o'] + output['x']
 		return output, combined_output
+
+	def addClusterLabels(self, current_time, videoObj, delta_t = 1, delta_xy = 30):
+		dt = self.clusterData
+		min_time = current_time - datetime.timedelta(seconds=delta_t)
+		max_time = current_time + datetime.timedelta(seconds=delta_t)
+		dt = dt[(dt.index > min_time) & (dt.index < max_time)][['X','Y','ClipCreated','Prediction','InFrame']]
+		out = pd.DataFrame(columns = ['x1','x2','y1','y2','color','label'])
+
+		for time,row in dt.iterrows():
+			if row.ClipCreated == 'No':
+				color = 'black'
+				label = 'NoClip'
+			if not row.InFrame:
+				color = 'red'
+				label = 'Cropped'
+			else:
+				color = self.bid_colors[row.Prediction]
+				label = self.bid_labels[row.Prediction]
+		
+			out.loc[len(out)] = [max(0,row.Y-delta_xy), min(videoObj.width,row.Y+delta_xy),
+								 max(0,row.X-delta_xy), min(videoObj.height,row.X+delta_xy),
+								 color, label]
+		return out
 
 	def sliceDataframe(self, t0=None, t1=None, bid=None, cropped=True):
 		# utility function to access specific slices of the Dataframe based on the AllClusterData csv.

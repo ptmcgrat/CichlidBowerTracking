@@ -176,8 +176,10 @@ class FileManager():
             elif analysisType == 'TrainModel':
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':
-                projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+                projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt.Classif == False)].index.to_list()
             elif analysisType == 'Summary':
+                projectIDs = s_dt[(s_dt.Depth == True) & (s_dt.ClassifyClusters == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+            elif analysisType == 'EditVideos':
                 projectIDs = s_dt[(s_dt.Depth == True) & (s_dt.ClassifyClusters == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
 
         else:
@@ -221,6 +223,8 @@ class FileManager():
         # Directories created by analysis
         self.localAnalysisDir = self.localProjectDir + 'MasterAnalysisFiles/'
         self.localSummaryDir = self.localProjectDir + 'Summary/'
+        self.localEditVideosDir = self.localProjectDir + 'EditedVideos/'
+
         self.localAllClipsDir = self.localProjectDir + 'AllClips/'
         self.localManualLabelClipsDir = self.localProjectDir + 'MLClips/'
         self.localManualLabelFramesDir = self.localProjectDir + 'MLFrames/'
