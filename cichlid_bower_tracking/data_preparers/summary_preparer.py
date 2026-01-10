@@ -136,7 +136,7 @@ class SummaryPreparer:
 			figTrial.savefig(localTrialFigureFile)
 		plt.close('all')
 
-		figHourly, axes = plt.subplots(nrows = len(self.lp.trials), ncols = 4, figsize=(12, 3*len(self.lp.trials)))
+		figHourly, axes = plt.subplots(nrows = len(self.lp.trials), ncols = 4, figsize=(12, 3*len(self.lp.trials)), squeeze=False)
 		for i,trial in enumerate(self.lp.trials):
 			for j,cat in enumerate(com_h_dt['ManipulationGroup'].unique()):
 				sub_dt = com_h_dt[(com_h_dt['Trial#'] == 'Trial_'+str(i+1)) & (com_h_dt.ManipulationGroup == cat)]
