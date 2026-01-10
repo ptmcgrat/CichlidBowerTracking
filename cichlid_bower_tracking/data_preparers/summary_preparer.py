@@ -74,8 +74,7 @@ class SummaryPreparer:
 		for i,trial in enumerate(self.lp.trials):
 			localTrialFigureFile = self.fileManager.localSummaryDir + trial.figureFile
 			num_days = len(trial.days)
-			print(num_days)
-			figTrial, axes = plt.subplots(nrows = 15, ncols = num_days, figsize=(num_days, 15))
+			figTrial, axes = plt.subplots(nrows = 15, ncols = num_days, figsize=(num_days, 15), squeeze=False)
 			figTrial.suptitle(self.lp.projectID + ' Trial ' + str(i+1) + ' Summary File')
 			start_frame = trial.days[0][0]
 
