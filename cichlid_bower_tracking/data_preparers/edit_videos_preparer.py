@@ -60,7 +60,7 @@ class EditVideosPreparer():
 			cap = cv2.VideoCapture(videoObj.localVideoFile)
 			out_file = self.fileManager.localEditVideosDir + videoObj.baseName + '.mp4'
 			outAll = cv2.VideoWriter(out_file, cv2.VideoWriter_fourcc(*"mp4v"), videoObj.framerate, (videoObj.width, videoObj.height))
-			for i in range(int(videoObj.framerate*60*10)):
+			for i in range(int(videoObj.framerate*60*11)):
 				current_time = videoObj.startTime + datetime.timedelta(seconds = i/videoObj.framerate)
 				out_dt = self.cl_obj.addClusterLabels(current_time, videoObj)
 				ret, frame = cap.read()
@@ -70,7 +70,7 @@ class EditVideosPreparer():
 						cv2.putText(frame, row.label, (row.x1, row.y1), cv2.FONT_HERSHEY_SIMPLEX, 1, row.color, 2)
 					outAll.write(frame)
 				else:
+					break
 					print('VideoError: BadFrame')
 
 			outAll.release()
-			break

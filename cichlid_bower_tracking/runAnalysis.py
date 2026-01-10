@@ -337,7 +337,7 @@ elif args.AnalysisType == 'EditVideos':
 		evp_obj.downloadProjectData()
 		evp_obj.validateInputData()
 		evp_obj.editVideos()
-		evp_obj.uploadProjectData(delete = False)
+		evp_obj.uploadProjectData(delete = True)
 		
 		fm_obj = FM(analysisID, projectID)
 		s_dt = fm_obj.s_dt
