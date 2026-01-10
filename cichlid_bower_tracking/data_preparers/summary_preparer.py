@@ -89,7 +89,7 @@ class SummaryPreparer:
 				axes[1,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v/2, vmax=v/2)
 				axes[2,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
 
-				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's']):
+				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
 					y = self.da_obj.height - y
 					axes[k+3,j].scatter(x,y,s = 0.05)
@@ -100,28 +100,22 @@ class SummaryPreparer:
 						axes[k+3,j].set_ylabel(self.cl_obj.bid_labels[bid])
 					e_dt.loc[len(e_dt)] = [self.lp.projectID, 'Trial_' + str(i+1), j, self.cl_obj.bid_labels[bid], len(x)]
 				
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, ['d','o','x'])
-				axes[10,j].scatter(x,y,s = 0.05)
-				axes[10,j].set_xlim(0,self.da_obj.width)
-				axes[10,j].set_ylim(0,self.da_obj.height)
-				axes[10,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, None, False, True)
-				axes[11,j].scatter(x,y,s = 0.05)
-				axes[11,j].set_xlim(0,self.da_obj.width)
-				axes[11,j].set_ylim(0,self.da_obj.height)
-				axes[11,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+				axes[13,j].scatter(x,y,s = 0.05)
+				axes[13,j].set_xlim(0,self.da_obj.width)
+				axes[13,j].set_ylim(0,self.da_obj.height)
+				axes[13,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, None, None, False)
-				axes[12,j].scatter(x,y,s = 0.05)
-				axes[12,j].set_xlim(0,self.da_obj.width)
-				axes[12,j].set_ylim(0,self.da_obj.height)
-				axes[12,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+				axes[14,j].scatter(x,y,s = 0.05)
+				axes[14,j].set_xlim(0,self.da_obj.width)
+				axes[14,j].set_ylim(0,self.da_obj.height)
+				axes[14,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 				if j==0:
 					axes[0,j].set_ylabel('Total depth')
 					axes[1,j].set_ylabel('Daily depth')
 					axes[2,j].set_ylabel('Daily bower')
-					axes[10,j].set_ylabel('All others')
-					axes[11,j].set_ylabel('Cropped clips')
-					axes[12,j].set_ylabel('Clips not created')
+					axes[13,j].set_ylabel('Cropped clips')
+					axes[14,j].set_ylabel('Not created')
 
 				for hour in range(8,20):
 					start = day_stamp + datetime.timedelta(hours=hour)
