@@ -269,7 +269,10 @@ class ClusterAnalyzer:
 			dt = dt[dt.InFrame == False]
 		if t0 is not None:
 			self._checkTimes(t0, t1)
-			dt = dt[t0:t1]
+			try:
+				dt = dt[t0:t1]
+			except KeyError:
+				pdb.set_trace()
 		if bid is not None:
 			if isinstance(bid,list):
 				dt = dt[dt.Prediction.isin(bid)]
