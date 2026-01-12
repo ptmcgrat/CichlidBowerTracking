@@ -322,8 +322,13 @@ class ClusterAnalyzer:
 				color = (255,0,0)
 				label = 'Cropped'
 			else:
-				color = self.bid_colors[row.Prediction]
-				label = self.bid_labels[row.Prediction]
+				try:
+					color = self.bid_colors[row.Prediction]
+					label = self.bid_labels[row.Prediction]
+				except KeyError:
+					print(row)
+					color = (255,255,255)
+					label = 'UnknownError'
 		
 			out.loc[len(out)] = [max(0,row.Y-delta_xy), min(videoObj.width,row.Y+delta_xy),
 								 max(0,row.X-delta_xy), min(videoObj.height,row.X+delta_xy),
