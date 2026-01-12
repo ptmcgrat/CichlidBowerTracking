@@ -318,7 +318,7 @@ class ClusterAnalyzer:
 			if row.ClipCreated == 'No':
 				color = (0,0,0)
 				label = 'NoClip'
-			if not row.InFrame:
+			elif not row.InFrame:
 				color = (255,0,0)
 				label = 'Cropped'
 			else:
