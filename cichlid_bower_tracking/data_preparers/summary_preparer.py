@@ -106,20 +106,16 @@ class SummaryPreparer:
 				
 				# k = 2 Scoops plus spits (day time)
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', peak_bower = True)
-				axes[3,j].scatter(x,y,s = 0.05, color = 'blue')
+				axes[4,j].scatter(x,y,s = 0.05, color = 'blue')
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', peak_bower = True)
-				axes[3,j].scatter(x,y,s = 0.05, color = 'orange')
-				axes[3,j].set_xlim(0,self.da_obj.width)
-				axes[3,j].set_ylim(0,self.da_obj.height)
+				axes[4,j].scatter(x,y,s = 0.05, color = 'orange')
+				axes[4,j].set_xlim(0,self.da_obj.width)
+				axes[4,j].set_ylim(0,self.da_obj.height)
 				
 
 				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
 					y = self.da_obj.height - y
-					if bid == 'c':
-						
-					if bid == 'p':
-						axes[2,j].scatter(x,y,s = 0.05, color = 'blue')
 
 					axes[k+5,j].scatter(x,y,s = 0.05)
 					axes[k+5,j].set_xlim(0,self.da_obj.width)
