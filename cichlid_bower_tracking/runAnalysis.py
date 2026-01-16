@@ -45,6 +45,11 @@ summary.add_argument('AnalysisID', type=str, help='The AnalysisID you want to an
 edit = subparser.add_parser('EditVideos', description = 'Add cluster boxes to videos that you annotated')
 edit.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 
+fa = subparser.add_parser('FixAnnotations', description = 'Manually fix sand manipulation categories. Creating this to fix the reflection/nofishother class.')
+fa.add_argument('Category', type=str, help='The category you would like to fix')
+fa.add_argument('Initials', type=str, help='Initials of person annotating the videos')
+fa.add_argument('AnalysisID', type=str, help='Optional name of analysisID to restrict the analysis to.')
+
 args = parser.parse_args()
 analysisID = args.AnalysisID
 
@@ -180,6 +185,7 @@ elif args.AnalysisType == 'Cluster':
 			cp_obj.downloadProjectData()
 			cp_obj.validateInputData()
 			cp_obj.runClusterAnalysis()
+			cp_obj.addCropAndDepthCoordinates()
 			cp_obj.uploadProjectData(delete = True)
 
 			fm_obj = FM(analysisID, projectID)
@@ -259,8 +265,8 @@ elif args.AnalysisType == 'DLCVideos':
 elif args.AnalysisType == 'TrainModel':
 	from data_preparers.threeD_model_preparer import ThreeDModelPreparer as TDMP
 	tdm_obj = TDMP(fm_obj, args.Exclude)
-	#tdm_obj.downloadProjectData()
-	#tdm_obj.validateInputData()
+	tdm_obj.downloadProjectData()
+	tdm_obj.validateInputData()
 	tdm_obj.create3DModel()
 	tdm_obj.uploadData(delete = False)
 	
@@ -344,6 +350,13 @@ elif args.AnalysisType == 'EditVideos':
 		s_dt.loc[projectID,'EditVideos'] = True
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
+
+elif args.AnalysisType == 'FixAnnotations':
+	from data_preparers.manual_label_video_fixer import ManualLabelVideoFixer as MLVF
+	mlvf_obj = MLVF(fm_obj, args.Category, args.AnalysisID)
+	mlvf_obj.downloadProjectData()
+	mlvf_obj.validateInputData()
+	mlvf_obj.fixVideos(args.Initials)
 
 #s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 #fm_obj.uploadData(fm_obj.localSummaryFile)

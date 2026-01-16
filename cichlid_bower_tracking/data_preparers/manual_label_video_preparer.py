@@ -36,7 +36,8 @@ class ManualLabelVideoPreparer():
 			for videoIndex in self.videoIndices:
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
 				self.fileManager.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
-		
+				self.fileManager.downloadData(videoObj.localLabeledClustersFile)
+
 		if self.dtype == 'DLC':
 			if not os.path.exists(self.fileManager.localLabeledDLCClipsDir):
 				if self.fileManager.checkFileExists(self.fileManager.localLabeledDLCClipsDir):
@@ -55,6 +56,7 @@ class ManualLabelVideoPreparer():
 			for videoIndex in self.videoIndices:
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
 				assert os.path.exists(videoObj.localManualLabelClipsDir)
+				assert os.path.exists(videoObj.localLabeledClustersFile)
 		if self.dtype == 'DLC':
 			assert os.path.exists(self.fileManager.localLabeledDLCClipsDir)
 			#assert os.path.exists(self.fileManager.localLabeledFramesFile)
@@ -86,12 +88,11 @@ class ManualLabelVideoPreparer():
 		return self.quit
 
 	def labelVideos(self, initials):
-		
+		new_dt = pd.read_csv(videoObj.localLabeledClustersFile)
 		self.initials = initials
 
 		# Read in annotations and create csv file for all annotations with the same user and projectID
 		labeled_dt = pd.read_csv(self.fileManager.localLabeledClipsFile, index_col = 'LID')
-		
 		projectIDs = labeled_dt['ClipName'].str.split('__').str[0]
 		annotatedClips = projectIDs[projectIDs == self.fileManager.projectID].shape[0]
 		# Identify clips that can be labeled
@@ -150,6 +151,8 @@ class ManualLabelVideoPreparer():
 
 			# subprocess.run(['mv', self.fileManager.localManualLabelClipsDir + f.replace('_ManualLabel',''), self.fileManager.localNewLabeledClipsDir])
 			shutil.move(f.replace('_ManualLabel',''), self.fileManager.localLabeledClipsProjectDir + clip_name + '.mp4') #changed for windows
+			shutil.move(f, self.fileManager.localLabeledClipsProjectDir + clip_name + '_ManualLabel.mp4') #changed for windows
+			
 			annotatedClips += 1
 			index += 1
 
