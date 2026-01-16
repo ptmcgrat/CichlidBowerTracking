@@ -46,7 +46,7 @@ class SummaryPreparer:
 		print('Uploading: ' + self.fileManager.localSummarizedBuildingFigure)
 		self.fileManager.uploadData(self.fileManager.localSummarizedBuildingFigure)
 		self.fileManager.uploadData(self.fileManager.localSummarizedHourlyClusterFigure)
-		self.fileManager.uploadData(self.localSummarizedHistogramFigure)
+		self.fileManager.uploadData(self.fileManager.localSummarizedHistogramFigure)
 		if delete:
 			shutil.rmtree(self.fileManager.localProjectDir)
 
