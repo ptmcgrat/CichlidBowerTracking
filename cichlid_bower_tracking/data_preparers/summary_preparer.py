@@ -87,12 +87,18 @@ class SummaryPreparer:
 				#bowerVolume = self.da_obj.returnVolumeSummary(first_frame.time,last_frame.time).depthBowerVolume
 				#current_axs[0].set_title(str(first_frame.time.month) + '/' + str(first_frame.time.day) + ':' + trial.days_videos[trial.num_days - j - 1])
 				axes[1,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v/2, vmax=v/2)
-				axes[2,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
+				#axes[2,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
 
 				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
 					y = self.da_obj.height - y
-					pdb.set_trace()
+					if bid == 'c':
+						axes[2,j].scatter(x,y,s = 0.05, color = 'orange')
+						axes[2,j].set_xlim(0,self.da_obj.width)
+						axes[2,j].set_ylim(0,self.da_obj.height)
+					if bid == 'p':
+						axes[2,j].scatter(x,y,s = 0.05, color = 'blue')
+
 					axes[k+3,j].scatter(x,y,s = 0.05)
 					axes[k+3,j].set_xlim(0,self.da_obj.width)
 					axes[k+3,j].set_ylim(0,self.da_obj.height)
@@ -133,7 +139,7 @@ class SummaryPreparer:
 				#[ax.set_adjustable('box') for ax in axes[:,j]]
 			
 			figTrial.tight_layout()
-			#plt.show()
+			plt.show()
 			figTrial.savefig(localTrialFigureFile)
 		plt.close('all')
 
