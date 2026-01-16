@@ -42,6 +42,7 @@ class SummaryPreparer:
 
 	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localSummarizedClustersEvents)
+		print('Uploading: ' + self.fileManager.localSummarizedBuildingFigure)
 		self.fileManager.uploadData(self.fileManager.localSummarizedBuildingFigure)
 		self.fileManager.uploadData(self.fileManager.localSummarizedHourlyClusterFigure)
 		if delete:
