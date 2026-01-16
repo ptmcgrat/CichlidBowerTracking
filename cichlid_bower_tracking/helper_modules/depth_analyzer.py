@@ -260,7 +260,7 @@ class ClusterAnalyzer:
 		dt = self.clusterData
 		dt = dt.sort_index()
 		if confidence is not None:
-			dt = dt[dt.Confidence>confidence]
+			dt = dt[dt.Probability>confidence]
 		if created:
 			dt = dt[dt.ClipCreated=='Yes']
 		elif created is None:
