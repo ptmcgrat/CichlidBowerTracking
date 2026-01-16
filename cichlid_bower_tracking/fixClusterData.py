@@ -51,8 +51,8 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 		buffered_polygon = polygon.buffer(20, join_style=2)
 		clusterData['InFrame'] = clusterData.apply(lambda row: buffered_polygon.contains(Point(row['Y'],row['X'])), axis = 1)
   
-		#clusterData.to_csv(videoObj.localLabeledClustersFile)
-		#fm_obj.uploadData(videoObj.localLabeledClustersFile)
+		clusterData.to_csv(videoObj.localLabeledClustersFile)
+		fm_obj.uploadData(videoObj.localLabeledClustersFile)
 
 		clusterData['NewClipName'] = projectID + '__' + clusterData['ClipName']
 		if videoIndex not in videoAnnotations:
@@ -64,9 +64,11 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 			out_video = fm_obj.localLabeledClipsProjectDir + row.NewClipName + '_ManualLabel.mp4'
 			shutil.move(in_video,out_video) #changed for windows
 			ma_dt.loc[ma_dt.ClipName == row.NewClipName,'InFrame'] = clusterData.loc[clusterData.NewClipName == row.NewClipName,'InFrame'].values[0]
-	pdb.set_trace()
 		
-		#fm_obj.uploadData(videoObj.localLabeledClustersFile)
-		#fm_obj.uploadData(fm_obj.localLabeledClipsProjectDir, tarred = True)	
-# Add ML video and InFrame info to Manual Annotation
+	fm_obj.uploadData(fm_obj.localLabeledClipsProjectDir, tarred = True)	
+	shutil.rmtree(fm_obj.localProjectDir)
+	shutil.rmtree(fm_obj.localLabeledClipsProjectDir)
+
+ma_dt.to_csv(fm_obj.localLabeledClipsFile)
+fm_obj.uploadData(fm_obj.localLabeledClipsFile)
 
