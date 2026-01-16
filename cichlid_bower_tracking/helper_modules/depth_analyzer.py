@@ -251,7 +251,7 @@ class ClusterAnalyzer:
 		# self.clusterData.round({'X_Depth': 0, 'Y_Depth': 0})
 
 
-	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, in_frame=True, created = True):
+	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, in_frame=True, created = True, confidence = None, peak_bower = False):
 		# utility function to return two numpy arrays that match the provided criteria
 		# t0: return only rows with timestamps after t0
 		# t1: return only rows with timestamps before t1
@@ -259,6 +259,8 @@ class ClusterAnalyzer:
 		# cropped: If True, events that occur within the area defined by the video crop
 		dt = self.clusterData
 		dt = dt.sort_index()
+		if confidence is not None:
+			dt = dt[dt.Confidence>confidence]
 		if created:
 			dt = dt[dt.ClipCreated=='Yes']
 		elif created is None:
@@ -274,6 +276,8 @@ class ClusterAnalyzer:
 		if t0 is not None:
 			self._checkTimes(t0, t1)
 			try:
+				if peak_bower:
+					t1 = t1.replace(hour = 13, minute=0, second=0, microsecond=0)
 				dt = dt[t0:t1]
 			except KeyError:
 				pdb.set_trace()
