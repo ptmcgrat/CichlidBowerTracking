@@ -232,6 +232,6 @@ class SummaryPreparer:
 
 		figHist.tight_layout()
 		#plt.show()
-		figHist.savefig(self.localSummarizedHistogramFigure)
+		figHist.savefig(self.fileManager.localSummarizedHistogramFigure)
 		plt.close('all')
 
