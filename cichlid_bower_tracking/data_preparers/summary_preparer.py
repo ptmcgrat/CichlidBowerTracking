@@ -98,21 +98,17 @@ class SummaryPreparer:
 				axes[2,j].set_xlim(0,self.da_obj.width)
 				axes[2,j].set_ylim(0,self.da_obj.height)
 				axes[2,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
-				if j == 0:
-					axes[2,j].set_ylabel('Spits/Scoops')
 
 				# k = 2 Scoops plus spits (high confidence)
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', confidence = 0.5)
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', confidence = 0.75)
 				y = self.da_obj.height - y
 				axes[3,j].scatter(x,y,s = 0.05, color = 'blue')
-				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', confidence = 0.5)
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', confidence = 0.75)
 				y2 = self.da_obj.height - y2
 				axes[3,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				axes[3,j].set_xlim(0,self.da_obj.width)
 				axes[3,j].set_ylim(0,self.da_obj.height)
 				axes[3,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
-				if j == 0:
-					axes[3,j].set_ylabel('HC Spits/Scoops')
 				# k = 2 Scoops plus spits (day time)
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', peak_bower = True)
 				y = self.da_obj.height - y
@@ -123,19 +119,32 @@ class SummaryPreparer:
 				axes[4,j].set_xlim(0,self.da_obj.width)
 				axes[4,j].set_ylim(0,self.da_obj.height)
 				axes[4,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
-				if j == 0:
-					axes[4,j].set_ylabel('Peak Spits/Scoops')
+				
+				# k = 2 Scoops plus spits (day time)
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, ['f','t','m'])
+				y = self.da_obj.height - y
+				axes[5,j].scatter(x,y,s = 0.05, color = 'blue')
+				axes[5,j].set_xlim(0,self.da_obj.width)
+				axes[5,j].set_ylim(0,self.da_obj.height)
+				axes[5,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, ['f','t','m'], peak_bower = True)
+				y = self.da_obj.height - y
+				axes[6,j].scatter(x,y,s = 0.05, color = 'blue')
+				axes[6,j].set_xlim(0,self.da_obj.width)
+				axes[6,j].set_ylim(0,self.da_obj.height)
+				axes[6,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 
 				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
 					y = self.da_obj.height - y
 
-					axes[k+5,j].scatter(x,y,s = 0.05)
-					axes[k+5,j].set_xlim(0,self.da_obj.width)
-					axes[k+5,j].set_ylim(0,self.da_obj.height)
-					axes[k+5,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+					axes[k+7,j].scatter(x,y,s = 0.05)
+					axes[k+7,j].set_xlim(0,self.da_obj.width)
+					axes[k+7,j].set_ylim(0,self.da_obj.height)
+					axes[k+7,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 					if j == 0:
-						axes[k+5,j].set_ylabel(self.cl_obj.bid_labels[bid])
+						axes[k+7,j].set_ylabel(self.cl_obj.bid_labels[bid])
 					e_dt.loc[len(e_dt)] = [self.lp.projectID, 'Trial_' + str(i+1), j, self.cl_obj.bid_labels[bid], len(x)]
 				
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, None, False, True)
@@ -151,7 +160,13 @@ class SummaryPreparer:
 				if j==0:
 					axes[0,j].set_ylabel('Total depth')
 					axes[1,j].set_ylabel('Daily depth')
-					axes[2,j].set_ylabel('Daily bower')
+					axes[2,j].set_ylabel('All Build')
+					axes[3,j].set_ylabel('HC Build')
+					axes[4,j].set_ylabel('Peak Build')
+					axes[5,j].set_ylabel('All Feed')
+					axes[6,j].set_ylabel('Peek Feed')
+					
+					#axes[2,j].set_ylabel('Daily bower')
 					axes[13,j].set_ylabel('Cropped clips')
 					axes[14,j].set_ylabel('Not created')
 
