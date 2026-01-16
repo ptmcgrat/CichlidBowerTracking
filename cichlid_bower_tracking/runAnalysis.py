@@ -322,7 +322,7 @@ elif args.AnalysisType == 'Summary':
 	fm_obj.createDirectory(fm_obj.localAnalysisFinalDataDir)
 	for projectID, row in s_dt[s_dt.Summary == True].iterrows():
 		fm_obj.setProjectID(projectID)
-		for s_data in [fm_obj.localSummarizedClustersEvents,fm_obj.localSummarizedBuildingFigure,fm_obj.localSummarizedHourlyClusterFigure]:
+		for s_data in [fm_obj.localSummarizedClustersEvents,fm_obj.localSummarizedBuildingFigure,fm_obj.localSummarizedHourlyClusterFigure,fm_obj.localSummarizedHistogramFigure]:
 			fm_obj.downloadData(s_data)
 			subprocess.run(['mv', s_data, fm_obj.localAnalysisFinalDataDir + projectID + '__' + os.path.basename(s_data)])
 	fm_obj.uploadData(fm_obj.localAnalysisFinalDataDir)

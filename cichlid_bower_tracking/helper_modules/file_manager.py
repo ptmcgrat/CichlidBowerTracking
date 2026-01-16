@@ -266,6 +266,7 @@ class FileManager():
         self.localSummarizedClustersEvents = self.localSummaryDir + 'SummarizedClusterEvents.csv'
         self.localSummarizedBuildingFigure = self.localSummaryDir + 'SummarizedIntegratedBuilding.pdf'
         self.localSummarizedHourlyClusterFigure = self.localSummaryDir + 'SummarizedHourlyClusterEvents.pdf'
+        self.localSummarizedHistogramFigure = self.localSummaryDir + 'SummarizedHistograms.pdf'
 
         # Files created by fish_tracking preparer
         self.localAllFishTracksFile = self.localAnalysisDir + 'AllTrackedFish.csv'

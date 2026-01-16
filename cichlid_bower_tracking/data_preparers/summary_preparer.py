@@ -1,6 +1,7 @@
 import os, pdb, datetime, shutil
 import matplotlib.pyplot as plt
 import matplotlib
+import numpy as np
 import seaborn as sns
 from helper_modules.depth_analyzer import DepthAnalyzer as DA
 from helper_modules.depth_analyzer import ClusterAnalyzer as CA
@@ -45,6 +46,7 @@ class SummaryPreparer:
 		print('Uploading: ' + self.fileManager.localSummarizedBuildingFigure)
 		self.fileManager.uploadData(self.fileManager.localSummarizedBuildingFigure)
 		self.fileManager.uploadData(self.fileManager.localSummarizedHourlyClusterFigure)
+		self.fileManager.uploadData(self.localSummarizedHistogramFigure)
 		if delete:
 			shutil.rmtree(self.fileManager.localProjectDir)
 
@@ -215,5 +217,21 @@ class SummaryPreparer:
 		with open(self.fileManager.localSummarizedBuildingFigure, 'wb') as f:
 			writer.write(f)
 
+		dt = self.cl_obj.clusterData
+		dt['N'] = dt.ClipName.str.split('__').str[2].astype('int64')
+		figHist, axes = plt.subplots(nrows = 10, ncols = 2, figsize=(5, 10), squeeze=False)
+		for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
+			sub_dt = dt[dt.Prediction == bid]
+			sub_dt['N'].hist(ax = axes[k,0], bins = np.arange(0,3000,150))
+			sub_dt['Probability'].hist(ax = axes[k,1], bins = np.arange(0,1,0.05))
+			axes[k,0].set_ylabel(self.cl_obj.bid_labels[bid], fontsize = 6)
+			if k != 9:
+				axes[k,0].set_xticks([])
+				axes[k,1].set_xticks([])
+			axes[k,1].yaxis.tick_right()
 
+		figHist.tight_layout()
+		#plt.show()
+		figHist.savefig(self.localSummarizedHistogramFigure)
+		plt.close('all')
 
