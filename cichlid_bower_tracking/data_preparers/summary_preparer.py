@@ -90,28 +90,41 @@ class SummaryPreparer:
 				#axes[2,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
 				# k = 2 Scoops plus spits
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c')
+				y = self.da_obj.height - y
 				axes[2,j].scatter(x,y,s = 0.05, color = 'blue')
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p')
-				axes[2,j].scatter(x,y,s = 0.05, color = 'orange')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p')
+				y2 = self.da_obj.height - y2
+				axes[2,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				axes[2,j].set_xlim(0,self.da_obj.width)
 				axes[2,j].set_ylim(0,self.da_obj.height)
-				
+				axes[2,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
+				if j == 0:
+					axes[2,j].set_ylabel('Spits/Scoops')
+
 				# k = 2 Scoops plus spits (high confidence)
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', confidence = 0.5)
+				y = self.da_obj.height - y
 				axes[3,j].scatter(x,y,s = 0.05, color = 'blue')
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', confidence = 0.5)
-				axes[3,j].scatter(x,y,s = 0.05, color = 'orange')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', confidence = 0.5)
+				y2 = self.da_obj.height - y2
+				axes[3,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				axes[3,j].set_xlim(0,self.da_obj.width)
 				axes[3,j].set_ylim(0,self.da_obj.height)
-				
+				axes[3,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
+				if j == 0:
+					axes[3,j].set_ylabel('HC Spits/Scoops')
 				# k = 2 Scoops plus spits (day time)
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', peak_bower = True)
+				y = self.da_obj.height - y
 				axes[4,j].scatter(x,y,s = 0.05, color = 'blue')
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', peak_bower = True)
-				axes[4,j].scatter(x,y,s = 0.05, color = 'orange')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', peak_bower = True)
+				y2 = self.da_obj.height - y2
+				axes[4,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				axes[4,j].set_xlim(0,self.da_obj.width)
 				axes[4,j].set_ylim(0,self.da_obj.height)
-				
+				axes[4,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
+				if j == 0:
+					axes[4,j].set_ylabel('Peak Spits/Scoops')
 
 				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
