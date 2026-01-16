@@ -56,11 +56,9 @@ class ManualLabelVideoFixer():
 
 		numClips = len(self.labeled_dt)
 		# Identify clips that can be labeled
+		clips = [self.fileManager.localLabeledClipsDir + row.ProjectID + '/' + row.ClipName + '.mp4' for i, row in self.labeled_dt.iterrows()]
 		pdb.set_trace()
-		clips = []
-		for videoIndex in self.videoIndices:
-			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			clips += [videoObj.localManualLabelClipsDir + x for x in os.listdir(videoObj.localManualLabelClipsDir) if 'ManualLabel.mp4' in x]
+		for index, row in self.labeled_dt.iterrows()
 
 		print(self.commands_help)
 		

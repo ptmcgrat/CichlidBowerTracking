@@ -92,6 +92,7 @@ class SummaryPreparer:
 				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
 					y = self.da_obj.height - y
+					pdb.set_trace()
 					axes[k+3,j].scatter(x,y,s = 0.05)
 					axes[k+3,j].set_xlim(0,self.da_obj.width)
 					axes[k+3,j].set_ylim(0,self.da_obj.height)
