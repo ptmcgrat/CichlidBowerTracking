@@ -96,7 +96,7 @@ class ManualLabelVideoFixer():
 			row = o_dt.loc[o_dt.ClipName == clip_name].iloc[0]
 			o_dt.loc[o_dt.ClipName == clip_name,'OldLabel'] = row.ManualLabel + '_' + row.MLabeler + '_' + row.MLabelTime
 			o_dt.loc[o_dt.ClipName == clip_name,'ManualLabel'] = chr(info)
-			o_dt.loc[o_dt.ClipName == clip_name,'ManualLabeler'] = initials
+			o_dt.loc[o_dt.ClipName == clip_name,'MLabeler'] = initials
 			o_dt.loc[o_dt.ClipName == clip_name,'MLabelTime'] = str(datetime.datetime.now())
 
 			o_dt.to_csv(self.fileManager.localLabeledClipsFile, sep = ',')
