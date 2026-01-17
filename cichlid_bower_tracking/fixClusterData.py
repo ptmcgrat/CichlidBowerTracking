@@ -65,7 +65,7 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 			shutil.move(in_video,out_video) #changed for windows
 			ma_dt.loc[ma_dt.ClipName == row.NewClipName,'InFrame'] = clusterData.loc[clusterData.NewClipName == row.NewClipName,'InFrame'].values[0]
 		
-	fm_obj.uploadData(fm_obj.locaglLabeledClipsProjectDir, tarred = True)	
+	fm_obj.uploadData(fm_obj.localLabeledClipsProjectDir, tarred = True)	
 	shutil.rmtree(fm_obj.localProjectDir)
 	shutil.rmtree(fm_obj.localLabeledClipsProjectDir)
 
