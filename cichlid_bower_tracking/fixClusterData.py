@@ -14,7 +14,7 @@ analysisID = args.AnalysisID
 fm_obj = FM(analysisID)
 s_dt = fm_obj.s_dt
 
-projectIDs = s_dt[s_dt.RunAnalysis == True].index.tolist()
+projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster != 'VideoIndices: ')].index.tolist()
 
 fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 ma_dt = pd.read_csv(fm_obj.localLabeledClipsFile, index_col = 0)
@@ -29,7 +29,7 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 	fm_obj.downloadData(fm_obj.localVideoCropFile)
 	fm_obj.downloadData(fm_obj.localTransMFile)
 	fm_obj.downloadData(fm_obj.localLabeledClipsProjectDir, tarred = True)
-
+	
 	videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 	videoAnnotations = row.videoIDsToAnnotate.split(': ')[1].split(',')
 	p_dt = ma_dt[ma_dt.ProjectID == projectID]
@@ -65,7 +65,7 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 			shutil.move(in_video,out_video) #changed for windows
 			ma_dt.loc[ma_dt.ClipName == row.NewClipName,'InFrame'] = clusterData.loc[clusterData.NewClipName == row.NewClipName,'InFrame'].values[0]
 		
-	fm_obj.uploadData(fm_obj.localLabeledClipsProjectDir, tarred = True)	
+	fm_obj.uploadData(fm_obj.locaglLabeledClipsProjectDir, tarred = True)	
 	shutil.rmtree(fm_obj.localProjectDir)
 	shutil.rmtree(fm_obj.localLabeledClipsProjectDir)
 

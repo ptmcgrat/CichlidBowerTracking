@@ -88,7 +88,6 @@ class ManualLabelVideoPreparer():
 		return self.quit
 
 	def labelVideos(self, initials):
-		new_dt = pd.read_csv(videoObj.localLabeledClustersFile)
 		self.initials = initials
 
 		# Read in annotations and create csv file for all annotations with the same user and projectID
@@ -99,8 +98,10 @@ class ManualLabelVideoPreparer():
 		clips = []
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			clips += [videoObj.localManualLabelClipsDir + x for x in os.listdir(videoObj.localManualLabelClipsDir) if 'ManualLabel.mp4' in x]
-
+			c_dt = pd.read_csv(videoObj.localLabeledClustersFile)
+			in_frame_clips = c_dt[c_dt.InFrame == True]['ClipName'].tolist()
+			potential_clips = [x for x in os.listdir(videoObj.localManualLabelClipsDir) if 'ManualLabel.mp4' in x]
+			clips += [videoObj.localManualLabelClipsDir + x for x in potential_clips if x.replace('_ManualLabel.mp4','') in in_frame_clips]
 		print(self.commands_help)
 		
 		random.shuffle(clips) # Shuffle the clips so that it's a random sample
@@ -113,7 +114,7 @@ class ManualLabelVideoPreparer():
 				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
 				index += 1
 				continue
-	
+			
 			cap = cv2.VideoCapture(f) # Open video object and display it
 	
 			while(True):

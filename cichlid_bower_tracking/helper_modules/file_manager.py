@@ -181,6 +181,8 @@ class FileManager():
                 projectIDs = s_dt[(s_dt.Depth == True) & (s_dt.ClassifyClusters == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
             elif analysisType == 'EditVideos':
                 projectIDs = s_dt[(s_dt.Depth == True) & (s_dt.ClassifyClusters == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
+            elif analysisType == 'FixAnnotations':
+                projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.ManualAnnotation > 0)].index.to_list()
 
         else:
             for projectID  in projectIDs:
