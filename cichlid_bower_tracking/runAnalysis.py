@@ -354,8 +354,8 @@ elif args.AnalysisType == 'EditVideos':
 elif args.AnalysisType == 'FixAnnotations':
 	from data_preparers.manual_label_video_fixer import ManualLabelVideoFixer as MLVF
 	mlvf_obj = MLVF(fm_obj, args.Category, args.AnalysisID, projectIDs)
-	#mlvf_obj.downloadData()
-	#mlvf_obj.validateInputData()
+	mlvf_obj.downloadData()
+	mlvf_obj.validateInputData()
 	mlvf_obj.fixVideos(args.Initials)
 	mlvf_obj.uploadData(delete = True)
 #s_dt.to_csv(fm_obj.localSummaryFile, index = True)
