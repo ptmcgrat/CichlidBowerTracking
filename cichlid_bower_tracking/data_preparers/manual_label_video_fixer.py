@@ -57,9 +57,11 @@ class ManualLabelVideoFixer():
 			self.fileManager.setProjectID(projectID)
 			clips += [(x,self.fileManager.localLabeledClipsProjectDir + x + '_ManualLabel.mp4') for x in sub_dt.ClipName.tolist()]
 
+		for clip in clips:
+			if not os.path.exists(clip[1]):
+				print('Cant find clip for: ' + clip[0])
+				clips.remove(clip)
 		assert all(os.path.exists(x[1]) for x in clips)
-
-		print(self.commands_help)
 		
 		index = 0
 		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
