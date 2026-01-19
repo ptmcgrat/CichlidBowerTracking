@@ -20,8 +20,8 @@ class ManualLabelVideoPreparer():
 		self.videoIndices = videoIndices
 		self.dtype = dtype
 		# 10 categories of annotation plus quit and skip commands
-		self.commands = ['c','f','p','t','b','m','s','x','o','d','q','k','r']
-		self.commands_help = "Type 'c': BuildScoop; 'f': FeedScoop; 'p': BuildSpit; 't': FeedSpit; 'b': BuildMultiple; 'm': FeedMultiple; s': Spawn; 'x': Reflection; 'o': FishOther; 'd': DropSand; 'q': quit; 'k': skip; 'r': redo"
+		self.commands = ['c','f','p','t','b','m','s','x','o','d','q','k','r', 'u']
+		self.commands_help = "Type 'c': BuildScoop; 'f': FeedScoop; 'p': BuildSpit; 't': FeedSpit; 'b': BuildMultiple; 'm': FeedMultiple; s': Spawn; 'x': Reflection; 'o': FishOther; 'd': DropSand; 'q': quit; 'k': skip; 'r': redo; 'u': uninformative"
 
 	def downloadProjectData(self):
 		self.fileManager.createDirectory(self.fileManager.localMasterDir)
