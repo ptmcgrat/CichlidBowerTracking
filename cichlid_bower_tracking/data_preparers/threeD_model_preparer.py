@@ -44,13 +44,13 @@ class ThreeDModelPreparer():
 		dt.to_csv(self.fileManager.localVideoProjectsFile)
 
 		command = ['python3', 'TrainModel.py']
-		command.extend(['--Input_videos_directory', self.fileManager.localLabeledClipsDir])
+		command.extend(['--Clips_directory', self.fileManager.localLabeledClipsDir])
+		command.extend(['--Temp_directory', self.fileManager.local3DModelTempDir])
 		command.extend(['--ML_labels', self.fileManager.localVideoProjectsFile])
 		command.extend(['--Results_directory', self.fileManager.local3DModelDir])
-		command.extend(['--Temporary_clips_directory', self.fileManager.local3DModelTempDir])
-		
-		command.extend(['--Log', self.fileManager.localModelCondaVersionsFile])
-		
+		command.extend(['--CommandsLog', self.fileManager.localModelCommandsFile])
+		command.extend(['--JSONLog', self.fileManager.localModelDataBreakdown])
+		command.extend(['--CondaLog', self.fileManager.localModelCondaVersionsFile])		
 		command.extend(['--gpu', str(0)])
 		
 
