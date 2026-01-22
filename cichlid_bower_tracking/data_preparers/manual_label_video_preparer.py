@@ -99,7 +99,7 @@ class ManualLabelVideoPreparer():
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			c_dt = pd.read_csv(videoObj.localLabeledClustersFile)
-			in_frame_clips = c_dt[c_dt.InFrame == True]['ClipName'].tolist()
+			in_frame_clips = c_dt[(c_dt.InFrame == True) & (c_dt.N > Nfilter)]['ClipName'].tolist()
 			potential_clips = [x for x in os.listdir(videoObj.localManualLabelClipsDir) if 'ManualLabel.mp4' in x]
 			clips += [videoObj.localManualLabelClipsDir + x for x in potential_clips if x.replace('_ManualLabel.mp4','') in in_frame_clips]
 		print(self.commands_help)
@@ -110,16 +110,11 @@ class ManualLabelVideoPreparer():
 		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
 			f = clips[index] # Get current clip
 			clip_name = self.fileManager.projectID + '__' + f.split('/')[-1].replace('_ManualLabel.mp4','')
-			Npixels = int(clip_name.split('__')[3])
 			if clip_name in labeled_dt.ClipName.values:
 				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
 				index += 1
 				continue
 			
-			if Nfilter is not None and Npixels < Nfilter:
-				print('Skipping ' + clip_name + ' due to the Nfilter', file = sys.stderr)
-				continue
-
 			cap = cv2.VideoCapture(f) # Open video object and display it
 	
 			while(True):
