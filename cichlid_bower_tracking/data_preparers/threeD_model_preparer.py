@@ -48,6 +48,7 @@ class ThreeDModelPreparer():
 		command.extend(['--Temp_directory', self.fileManager.local3DModelTempDir])
 		command.extend(['--ML_labels', self.fileManager.localVideoProjectsFile])
 		#command.extend(['--Results_directory', self.fileManager.local3DModelDir])
+		command.extend(['--DataSummaryLog', self.fileManager.localModelDataBreakdown])
 		command.extend(['--CommandsLog', self.fileManager.localModelCommandsFile])
 		command.extend(['--JSONLog', self.fileManager.localModelDataBreakdown])
 		command.extend(['--CondaLog', self.fileManager.localModelCondaVersionsFile])		
