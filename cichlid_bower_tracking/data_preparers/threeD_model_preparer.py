@@ -61,7 +61,7 @@ class ThreeDModelPreparer():
 		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
 		os.chdir('CAC_MD')
 		subprocess.run(['git', 'pull'])
-		#subprocess.run(command)
+		subprocess.run(command)
 		os.chdir('..')
 		
 		with open(os.path.join(self.fileManager.local3DModelDir,'val.log')) as f:
