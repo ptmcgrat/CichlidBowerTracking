@@ -41,6 +41,7 @@ class ThreeDModelPreparer():
 		#dt = dt.rename(columns = {'ClipName':'VideoFile', 'ManualLabel':'Label'})
 		if self.exclude is not None:
 			dt = dt[~dt.AnalysisID.isin(self.exclude)]
+		dt = dt[dt.ManualLabel != 'u']
 		dt.to_csv(self.fileManager.localVideoProjectsFile)
 
 		command = ['python3', 'TrainModel.py']
