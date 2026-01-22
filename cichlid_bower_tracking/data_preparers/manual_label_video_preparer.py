@@ -87,7 +87,7 @@ class ManualLabelVideoPreparer():
 
 		return self.quit
 
-	def labelVideos(self, initials):
+	def labelVideos(self, initials, Nfilter):
 		self.initials = initials
 
 		# Read in annotations and create csv file for all annotations with the same user and projectID
@@ -110,11 +110,16 @@ class ManualLabelVideoPreparer():
 		while index < len(clips): # We use a while loop so we can reannotate a clip if a mistake is made
 			f = clips[index] # Get current clip
 			clip_name = self.fileManager.projectID + '__' + f.split('/')[-1].replace('_ManualLabel.mp4','')
+			Npixels = int(clip_name.split('__')[3])
 			if clip_name in labeled_dt.ClipName.values:
 				print('Skipping ' + clip_name + ' since it is already labeled', file = sys.stderr)
 				index += 1
 				continue
 			
+			if Nfilter is not None and Npixels < Nfilter:
+				print('Skipping ' + clip_name + ' due to the Nfilter', file = sys.stderr)
+				continue
+
 			cap = cv2.VideoCapture(f) # Open video object and display it
 	
 			while(True):
@@ -146,7 +151,7 @@ class ManualLabelVideoPreparer():
 			if clip_name in labeled_dt.ClipName.values:
 				labeled_dt.loc[newlyLabeled_dt.ClipName == clip_name,'ManualLabel'] = chr(info)
 			else:
-				labeled_dt.loc[len(labeled_dt)] = [self.fileManager.analysisID, clip_name, chr(info), self.initials, str(datetime.datetime.now())] # Create new annotation
+				labeled_dt.loc[len(labeled_dt)] = [self.fileManager.analysisID, clip_name, chr(info), self.initials, str(datetime.datetime.now()), None] # Create new annotation
 
 			labeled_dt.to_csv(self.fileManager.localLabeledClipsFile, sep = ',')
 

@@ -27,6 +27,7 @@ ma.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze
 ma.add_argument('Initials', type=str, help='Initials of person annotating the videos')
 ma.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to.')
 ma.add_argument('--Number', type=int, help='Optional argment to specify how many videos per project to annotate', default = 100)
+ma.add_argument('--NFilter', type=int, help='Optional argment filter out clips with less sand manipulation (200 might be a good threshold)', default = None)
 
 cfas = subparser.add_parser('DLCVideos', description = 'Create video clips to upload into DLC for annotation.')
 cfas.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
@@ -219,7 +220,7 @@ elif args.AnalysisType == 'AnnotateVideos':
 		mlv_obj = MLVP(fm_obj, args.Number, videoIndices, 'Videos')
 		mlv_obj.downloadProjectData()
 		mlv_obj.validateInputData()
-		labeled_videos = mlv_obj.labelVideos(args.Initials)
+		labeled_videos = mlv_obj.labelVideos(args.Initials, args.NFilter)
 		quit = mlv_obj.uploadProjectData(delete = True)
 		
 		fm_obj = FM(analysisID, projectID)
