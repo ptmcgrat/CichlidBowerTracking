@@ -1,31 +1,53 @@
 import subprocess,pdb,shutil
 from helper_modules.file_manager import FileManager as FM
 
-fm_obj = FM('YHMC_BC_Data')
-s_dt = fm_obj.s_dt
+fm_obj = FM()
+fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/')
 
-projectIDs = s_dt[(s_dt.RunAnalysis == True)].index.to_list()
-print(projectIDs)
-for projectID in projectIDs:
-	print('Running project: ' + projectID)
-	try:
-		fm_obj.setProjectID(projectID, print_issues = True)
-	except Exception as e:
-		print('Skipping this project due to issues with tankresetstartstop')
-		continue
-	fm_obj.downloadData(fm_obj.localFrameDir, tarred = True)
-	for movie in fm_obj.lp.movies:
-		fm_obj.downloadData(fm_obj.localProjectDir + movie.pic_file)
-	prepDirectory = fm_obj.localPrepDir
-	fm_obj.createDirectory(prepDirectory)
-	for trial_num,trial in enumerate(fm_obj.lp.trials):
-		subprocess.call(['cp', fm_obj.localProjectDir + trial.daylight_frames[0].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'FirstDepth.jpg'])
-		subprocess.call(['cp', fm_obj.localProjectDir + trial.daylight_frames[0].npy_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'FirstDepth.npy'])
-		subprocess.call(['cp', fm_obj.localProjectDir + trial.daylight_frames[-1].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastDepth.jpg'])
-		subprocess.call(['cp', fm_obj.localProjectDir + trial.daylight_frames[-1].npy_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastDepth.npy'])
-		subprocess.call(['cp', fm_obj.localProjectDir + trial.movies[0].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'FirstPi.jpg'])
-		subprocess.call(['cp', fm_obj.localProjectDir + trial.movies[-1].pic_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'LastPi.jpg'])
-		subprocess.call(['cp', fm_obj.localProjectDir + trial.reset_frame.npy_file, prepDirectory + 'Trial_' + str(trial_num+1) + 'ResetDepth.npy'])
+hybrid_indata = fm_obj.localYOLOAnnotationDir + 'CVxMC-tucker-2025-11-13/'
+hybrid_outdata = fm_obj.localYOLOAnnotationDir + 'HybridMulti/'
+fm_obj.createDirectory(hybrid_outdata)
+fm_obj.createDirectory(hybrid_outdata + 'images/train/')
+fm_obj.createDirectory(hybrid_outdata + 'images/val/')
+fm_obj.createDirectory(hybrid_outdata + 'labels/train/')
+fm_obj.createDirectory(hybrid_outdata + 'labels/val/')
+fm_obj.createDirectory(hybrid_outdata)
 
-	fm_obj.uploadData(fm_obj.localPrepDir)
-	#shutil.rmtree(fm_obj.localProjectDir)
+with open(hybrid_outdata + 'data.yaml', 'w') as f:
+	print('path: ' + hybrid_outdata)
+	print('train: images/train')
+	print('val: images/val')
+	print('')
+	print('names:')
+	print('  0: female')
+	print('  1: male')
+
+train_images = os.listdir(hybrid_indata + 'images/train/') 
+for ti in train_images:
+	subprocess.run(['cp', hybrid_indata + 'images/train/' + ti, hybrid_outdata + 'images/train/' + ti])
+val_images = os.listdir(hybrid_indata + 'images/val/') 
+for ti in val_images:
+	subprocess.run(['cp', hybrid_indata + 'images/train/' + ti, hybrid_outdata + 'images/train/' + ti])
+
+train_labels = os.listdir(hybrid_indata + 'labels/train/') 
+for ti in train_labels:
+	with open(hybrid_indata + 'labels/train/' + ti) as infile, open(hybrid_outdata + 'labels/train' + ti) as outfile:
+		for line in infile:
+			if line[0] == '0':
+				print('1' + line[1:], file = outfile)
+			elif line[0] == '1':
+				print('0' + line[1:], file = outfile)
+			else:
+				raise Exception
+
+val_labels = os.listdir(hybrid_indata + 'labels/val/') 
+for ti in val_labels:
+	with open(hybrid_indata + 'labels/val/' + ti) as infile, open(hybrid_outdata + 'labels/val' + ti) as outfile:
+		for line in infile:
+			if line[0] == '0':
+				print('1' + line[1:], file = outfile)
+			elif line[0] == '1':
+				print('0' + line[1:], file = outfile)
+			else:
+				raise Exception
+
