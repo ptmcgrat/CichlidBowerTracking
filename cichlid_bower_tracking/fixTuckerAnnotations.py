@@ -154,3 +154,6 @@ for i, indata in enumerate(indatas):
 					print('0' + line[1:], file = outfile)
 				else:
 					raise Exception
+
+fm_obj.downloadData(fm_obj.localYOLOAnnotationDir)
+
