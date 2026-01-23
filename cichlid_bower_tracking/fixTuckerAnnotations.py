@@ -42,7 +42,7 @@ for ti in train_labels:
 
 val_labels = os.listdir(hybrid_indata + 'labels/val/') 
 for ti in val_labels:
-	with open(hybrid_indata + 'labels/val/' + ti) as infile, open(hybrid_outdata + 'labels/val/' + ti) as outfile:
+	with open(hybrid_indata + 'labels/val/' + ti) as infile, open(hybrid_outdata + 'labels/val/' + ti, 'w') as outfile:
 		for line in infile:
 			if line[0] == '0':
 				print('1' + line[1:], file = outfile)
