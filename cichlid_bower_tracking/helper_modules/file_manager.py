@@ -327,8 +327,7 @@ class FileManager():
         self.localLabeledClipsFile = self.local3DVideosDir + 'ManualLabels.csv'
         self.localLabeledClipsDir = self.local3DVideosDir + 'Clips/'
 
-        self.localLabeledFramesFile = self.localObjectDetectionDir + 'AnnotatedFrames.csv'
-        self.localLabeledFramesDir = self.localObjectDetectionDir + 'Frames/'
+        self.localYOLOAnnotationDir = self.localObjectDetectionDir + 'YOLO_Annotations/'
         self.localLabeledDLCClipsDir = self.localObjectDetectionDir + 'DLCClips/'
 
     def returnVideoObject(self, index):
