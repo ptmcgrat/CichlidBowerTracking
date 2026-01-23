@@ -75,6 +75,7 @@ with open(hybrid_outdata + 'data.yaml', 'w') as f:
 indatas = ['MC-tucker-2025-11-03/', 'MCxYH-tucker-2025-11-03/', 'YH-tucker-2025-11-03/']
 for i, indata in enumerate(indatas):
 	hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/' + indata
+	train_images = os.listdir(hybrid_indata + 'images/train/') 
 	for ti in train_images:
 		subprocess.run(['cp', hybrid_indata + 'images/train/' + ti, hybrid_outdata + 'images/train/' + ti])
 	val_images = os.listdir(hybrid_indata + 'images/val/') 
@@ -124,6 +125,7 @@ with open(hybrid_outdata + 'data.yaml', 'w') as f:
 indatas = ['CVxMC-tucker-2025-11-13/', 'MC-tucker-2025-11-03/', 'MCxYH-tucker-2025-11-03/', 'YH-tucker-2025-11-03/']
 for i, indata in enumerate(indatas):
 	hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/' + indata
+	train_images = os.listdir(hybrid_indata + 'images/train/') 
 	for ti in train_images:
 		subprocess.run(['cp', hybrid_indata + 'images/train/' + ti, hybrid_outdata + 'images/train/' + ti])
 	val_images = os.listdir(hybrid_indata + 'images/val/') 
