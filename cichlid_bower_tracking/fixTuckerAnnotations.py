@@ -4,7 +4,7 @@ from helper_modules.file_manager import FileManager as FM
 fm_obj = FM()
 fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/')
 
-hybrid_indata = fm_obj.localYOLOAnnotationDir + 'CVxMC-tucker-2025-11-13/'
+hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/CVxMC-tucker-2025-11-13/'
 hybrid_outdata = fm_obj.localYOLOAnnotationDir + 'HybridMulti/'
 fm_obj.createDirectory(hybrid_outdata)
 fm_obj.createDirectory(hybrid_outdata + 'images/train/')
