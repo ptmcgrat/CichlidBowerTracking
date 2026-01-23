@@ -155,5 +155,5 @@ for i, indata in enumerate(indatas):
 				else:
 					raise Exception
 
-fm_obj.downloadData(fm_obj.localYOLOAnnotationDir)
+fm_obj.uploadData(fm_obj.localYOLOAnnotationDir)
 
