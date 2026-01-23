@@ -27,7 +27,7 @@ for ti in train_images:
 	subprocess.run(['cp', hybrid_indata + 'images/train/' + ti, hybrid_outdata + 'images/train/' + ti])
 val_images = os.listdir(hybrid_indata + 'images/val/') 
 for ti in val_images:
-	subprocess.run(['cp', hybrid_indata + 'images/train/' + ti, hybrid_outdata + 'images/train/' + ti])
+	subprocess.run(['cp', hybrid_indata + 'images/val/' + ti, hybrid_outdata + 'images/val/' + ti])
 
 train_labels = os.listdir(hybrid_indata + 'labels/train/') 
 for ti in train_labels:
