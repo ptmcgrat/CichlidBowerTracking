@@ -72,7 +72,7 @@ with open(hybrid_outdata + 'data.yaml', 'w') as f:
 	print('  2: Hybrid male', file = f)
 	print('  3: YH male', file = f)
 
-indatas = ['MC-tucker-2025-11-03', 'MCxYH-tucker-2025-11-03', 'YH-tucker-2025-11-03']
+indatas = ['MC-tucker-2025-11-03/', 'MCxYH-tucker-2025-11-03/', 'YH-tucker-2025-11-03/']
 for i, indata in enumerate(indatas):
 	hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/' + indata
 	for ti in train_images:
@@ -121,7 +121,7 @@ with open(hybrid_outdata + 'data.yaml', 'w') as f:
 	print('  0: female', file = f)
 	print('  1: male', file = f)
 
-indatas = ['CVxMC-tucker-2025-11-13', 'MC-tucker-2025-11-03', 'MCxYH-tucker-2025-11-03', 'YH-tucker-2025-11-03']
+indatas = ['CVxMC-tucker-2025-11-13/', 'MC-tucker-2025-11-03/', 'MCxYH-tucker-2025-11-03/', 'YH-tucker-2025-11-03/']
 for i, indata in enumerate(indatas):
 	hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/' + indata
 	for ti in train_images:
