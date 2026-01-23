@@ -57,12 +57,12 @@ class ThreeDModelPreparer():
 		
 
 		if not os.path.isdir('CAC_MD'):
-			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification', '--branch', 'mcgrath_dev', '--single-branch','CAC_MD'])
+			subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification', '--branch', 'mcgrath_dev', '--single-branch','CAC_MD'], capture_output = True)
 
 		#command = "source activate CichlidActionClassification; " + ' ' .join(command)
 		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
 		os.chdir('CAC_MD')
-		subprocess.run(['git', 'pull'])
+		subprocess.run(['git', 'pull'], capture_output = True)
 		subprocess.run(command)
 		os.chdir('..')
 		
