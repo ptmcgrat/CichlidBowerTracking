@@ -33,10 +33,11 @@ train_labels = os.listdir(hybrid_indata + 'labels/train/')
 for ti in train_labels:
 	with open(hybrid_indata + 'labels/train/' + ti) as infile, open(hybrid_outdata + 'labels/train/' + ti, 'w') as outfile:
 		for line in infile:
+			line = line.rstrip()
 			if line[0] == '0':
-				print('1' + line[1:].rstrip(), file = outfile)
+				print('1' + line[1:], file = outfile)
 			elif line[0] == '1':
-				print('0' + line[1:].rstrip(), file = outfile)
+				print('0' + line[1:], file = outfile)
 			else:
 				raise Exception
 
@@ -44,10 +45,11 @@ val_labels = os.listdir(hybrid_indata + 'labels/val/')
 for ti in val_labels:
 	with open(hybrid_indata + 'labels/val/' + ti) as infile, open(hybrid_outdata + 'labels/val/' + ti, 'w') as outfile:
 		for line in infile:
+			line = line.rstrip()
 			if line[0] == '0':
-				print('1' + line[1:].rstrip(), file = outfile)
+				print('1' + line[1:], file = outfile)
 			elif line[0] == '1':
-				print('0' + line[1:].rstrip(), file = outfile)
+				print('0' + line[1:], file = outfile)
 			else:
 				raise Exception
 
