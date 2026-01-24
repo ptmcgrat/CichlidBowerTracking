@@ -1,4 +1,4 @@
-import subprocess,pdb,shutil,os, 
+import subprocess,pdb,shutil,os
 from helper_modules.file_manager import FileManager as FM
 from ultralytics import YOLO
 
