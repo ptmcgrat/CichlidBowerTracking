@@ -1,9 +1,22 @@
-import subprocess,pdb,shutil,os
+import subprocess,pdb,shutil,os, 
 from helper_modules.file_manager import FileManager as FM
+from ultralytics import YOLO
 
-fm_obj = FM()
-fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/')
+fm_obj = FM(analysisID = 'YH_MC_Parentals')
+data = fm_obj.localYOLOAnnotationDir + 'GenericSex/data.yaml'
+model = YOLO("yolo26n.pt")
+results = model.train(data=data, epochs = 100)
 
+for projectID, row in fm_obj.s_dt.iterrows():
+	videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
+	fm_obj.setProjectID(projectID)
+	videoObj = fm_obj.returnVideoObject(videoIndices[0])
+	fm_obj.downloadData(videoObj.localVideoFile)
+
+	results = model.track(videoObj.localVideoFile)  # Tracking with default tracker
+	pdb.set_trace()
+
+"""
 hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/CVxMC-tucker-2025-11-13/'
 hybrid_outdata = fm_obj.localYOLOAnnotationDir + 'HybridMulti/'
 fm_obj.createDirectory(hybrid_outdata)
@@ -156,4 +169,4 @@ for i, indata in enumerate(indatas):
 					raise Exception
 
 fm_obj.uploadData(fm_obj.localYOLOAnnotationDir)
-
+"""
