@@ -13,7 +13,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 	videoObj = fm_obj.returnVideoObject(videoIndices[0])
 	fm_obj.downloadData(videoObj.localVideoFile)
 
-	results = model.track(videoObj.localVideoFile)  # Tracking with default tracker
+	results2 = model.track(videoObj.localVideoFile)  # Tracking with default tracker
 	pdb.set_trace()
 
 """
