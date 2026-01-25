@@ -16,7 +16,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 	results = model.track(videoObj.localVideoFile, stream = True)  # Tracking with default tracker
 	for result in results:
 		track_ids = result.boxes.id.cpu().tolist()
-		print(f"Frame has track IDs: {track_ids}")
+		#print(f"Frame has track IDs: {track_ids}")
 """
 hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/CVxMC-tucker-2025-11-13/'
 hybrid_outdata = fm_obj.localYOLOAnnotationDir + 'HybridMulti/'
