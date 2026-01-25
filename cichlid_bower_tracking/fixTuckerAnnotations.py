@@ -5,7 +5,7 @@ from ultralytics import YOLO
 fm_obj = FM(analysisID = 'YH_MC_Parentals')
 data = fm_obj.localYOLOAnnotationDir + 'GenericSex/data.yaml'
 model = YOLO("yolo26n.pt")
-trained_model = model.train(data=data, epochs = 100)
+model_results = model.train(data=data, epochs = 100)
 
 for projectID, row in fm_obj.s_dt.iterrows():
 	videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
@@ -13,7 +13,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 	videoObj = fm_obj.returnVideoObject(videoIndices[0])
 	fm_obj.downloadData(videoObj.localVideoFile)
 
-	results = trained_model.track(videoObj.localVideoFile, stream = True)  # Tracking with default tracker
+	results = model.track(videoObj.localVideoFile, stream = True)  # Tracking with default tracker
 	for result in results:
 		track_ids = result.boxes.id.cpu().tolist()
 		print(f"Frame has track IDs: {track_ids}")
