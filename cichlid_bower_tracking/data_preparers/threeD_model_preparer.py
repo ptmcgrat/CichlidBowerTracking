@@ -41,7 +41,7 @@ class ThreeDModelPreparer():
 		#dt = dt.rename(columns = {'ClipName':'VideoFile', 'ManualLabel':'Label'})
 		if self.exclude is not None:
 			dt = dt[~dt.AnalysisID.isin(self.exclude)]
-		dt = dt[dt.ManualLabel != 'u']
+		dt = dt[(dt.ManualLabel != 'u') & (dt.ManualLabel != 'x')]
 		dt.to_csv(self.fileManager.localVideoProjectsFile)
 
 		command = ['python3', 'TrainModel.py']
@@ -49,7 +49,7 @@ class ThreeDModelPreparer():
 		command.extend(['--Temp_directory', self.fileManager.local3DModelTempDir])
 		command.extend(['--ML_labels', self.fileManager.localVideoProjectsFile])
 		command.extend(['--Results_directory', self.fileManager.local3DModelDir])
-		command.extend(['--DataSummaryLog', self.fileManager.localModelDataBreakdown])
+		command.extend(['--DataSummaryLog', self.fileManager.localModelDataSummary])
 		command.extend(['--CommandsLog', self.fileManager.localModelCommandsFile])
 		command.extend(['--JSONLog', self.fileManager.localModelDataBreakdown])
 		command.extend(['--CondaLog', self.fileManager.localModelCondaVersionsFile])		
