@@ -26,14 +26,15 @@ for projectID in missing_projects:
 	for videoIndex in videoIndices:
 		videoObj = fm_obj.returnVideoObject(videoIndex)
 		fm_obj.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
-for lid,row in dt[dt.ClipExists == False].iterrows():
-	clip_location1 = fm_obj.localLabeledClipsDir + row.ClipName
-	clip_location1a = clip_location1.replace('.mp4','_ManualLabel.mp4')
-	clip_location2 = self.localManualLabelClipsDir + row.VideoInfo + '/' + row.ClipName.replace(row.ProjectID + '__','')
-	clip_location2a = clip_location2.replace('.mp4','_ManualLabel.mp4')
-	if os.path.exists(clip_location2):
-		subprocess.run(['cp', clip_location2,clip_location1])
-		subprocess.run(['cp', clip_location2a,clip_location1a])
+
+	for lid,row in dt[(dt.ClipExists == False) & (dt.ProjectID == projectID)].iterrows():
+		clip_location1 = fm_obj.localLabeledClipsDir + row.ClipName
+		clip_location1a = clip_location1.replace('.mp4','_ManualLabel.mp4')
+		clip_location2 = fm_obj.localManualLabelClipsDir + row.VideoInfo + '/' + row.ClipName.replace(row.ProjectID + '__','')
+		clip_location2a = clip_location2.replace('.mp4','_ManualLabel.mp4')
+		if os.path.exists(clip_location2):
+			subprocess.run(['cp', clip_location2,clip_location1])
+			subprocess.run(['cp', clip_location2a,clip_location1a])
 
 #for projectID in missing_projects:
 #	fm_obj.uploadData(fm_obj.localLabeledClipsDir + projectID, tarred = True)
