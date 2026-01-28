@@ -9,7 +9,7 @@ s_dt = fm_obj.s_dt
 #fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 
 dt = pd.read_csv(fm_obj.localLabeledClipsFile, index_col = 0)
-dt[dt.AnalysisID == 'YH_MC_Parentals']
+dt = dt[dt.AnalysisID == 'YH_MC_Parentals']
 dt['ClipExists'] = True
 dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 dt['ClipName'] = dt.ClipName + '.mp4'
@@ -19,4 +19,6 @@ for lid,row in dt.iterrows():
 	dt.loc[lid,'ClipExists'] = os.path.exists(clip_location)
 
 missing_projects = dt[dt.ClipExists == False].groupby('ProjectID').count().index.tolist()
-pdb.set_trace()
+for projectID in missing_projects:
+	videoIndices = [int(x) for x in s_dt.loc[projectID,'videoIDsToAnnotate'].split(': ')[1].split(',')]
+	pdb.set_trace()
