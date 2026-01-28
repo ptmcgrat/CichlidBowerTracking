@@ -13,6 +13,6 @@ dt['ClipExists'] = True
 dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 dt['ClipName'] = dt.ClipName + '.mp4'
 
-for lid,row in a_dt.iterrows():
-	clip_location = self.fileManager.localLabeledClipsDir + row.ProjectID + '/' + row.ClipName
+for lid,row in dt.iterrows():
+	clip_location = fm_obj.localLabeledClipsDir + row.ProjectID + '/' + row.ClipName
 	pdb.set_trace()
