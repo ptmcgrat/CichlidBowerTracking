@@ -1,4 +1,4 @@
-import pdb
+import pdb, os
 import pandas as pd
 from helper_modules.file_manager import FileManager as FM
 
@@ -15,4 +15,5 @@ dt['ClipName'] = dt.ClipName + '.mp4'
 
 for lid,row in dt.iterrows():
 	clip_location = fm_obj.localLabeledClipsDir + row.ClipName
-	pdb.set_trace()
+	dt.loc[lid,'ClipExists'] = os.path.exists(clip_location)
+pdb.set_trace()
