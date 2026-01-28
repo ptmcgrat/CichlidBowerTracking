@@ -2,14 +2,17 @@ import pdb
 import pandas as pd
 from helper_modules.file_manager import FileManager as FM
 
-fm_obj = FM(analysisID = 'MC_YH_Parentals')
+fm_obj = FM(analysisID = 'YH_MC_Parentals')
 s_dt = fm_obj.s_dt
 
 fm_obj.downloadData(fm_obj.localLabeledClipsDir, tarred_subdirs = True)
 fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 
-a_dt = pd.read_csv(fm_obj.localLabeledClipsFile, index_col = 0)
-a_dt['ClipExists'] = True
+dt = pd.read_csv(fm_obj.localLabeledClipsFile, index_col = 0)
+dt['ClipExists'] = True
+dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
+dt['ClipName'] = dt.ClipName + '.mp4'
 
 for lid,row in a_dt.iterrows():
+	clip_location = self.fileManager.localLabeledClipsDir + row.ProjectID + '/' + row.ClipName
 	pdb.set_trace()
