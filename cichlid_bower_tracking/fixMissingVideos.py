@@ -13,6 +13,7 @@ dt = dt[dt.AnalysisID == 'YH_MC_Parentals']
 dt['ClipExists'] = True
 dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 dt['ClipName'] = dt.ClipName + '.mp4'
+dt['VideoInfo'] = dt.ClipName.str.split('__').str[1]
 
 for lid,row in dt.iterrows():
 	clip_location = fm_obj.localLabeledClipsDir + row.ClipName
@@ -28,4 +29,5 @@ for projectID in missing_projects:
 for lid,row in dt[dt.ClipExists == False].iterrows():
 	clip_location1 = fm_obj.localLabeledClipsDir + row.ClipName
 	clip_location2 = videoObj.localManualLabelClipsDir + row.ClipName.replace(row.ProjectID + '__','')
-	pdb.set_trace()
+	if os.path.exists(clip_location2):
+		pdb.set_trace()
