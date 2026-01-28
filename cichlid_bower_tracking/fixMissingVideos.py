@@ -27,5 +27,5 @@ for projectID in missing_projects:
 		fm_obj.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
 for lid,row in dt.iterrows():
 	clip_location1 = fm_obj.localLabeledClipsDir + row.ClipName
-	clip_location2 = videoObj.localManualLabelClipsDir + row.ClipName.replace(row.projectID + '__','')
+	clip_location2 = videoObj.localManualLabelClipsDir + row.ClipName.replace(row.ProjectID + '__','')
 	pdb.set_trace()
