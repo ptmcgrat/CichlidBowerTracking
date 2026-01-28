@@ -1,4 +1,4 @@
-import pdb, os
+import pdb, os, subprocess
 import pandas as pd
 from helper_modules.file_manager import FileManager as FM
 
@@ -31,3 +31,6 @@ for lid,row in dt[dt.ClipExists == False].iterrows():
 	clip_location2 = videoObj.localManualLabelClipsDir + row.ClipName.replace(row.ProjectID + '__','')
 	if os.path.exists(clip_location2):
 		subprocess.run(['cp', clip_location2,clip_location1])
+
+#for projectID in missing_projects:
+#	fm_obj.uploadData(fm_obj.localLabeledClipsDir + projectID, tarred = True)
