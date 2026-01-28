@@ -27,7 +27,7 @@ missing_projects = dt[dt.ClipExists == False].groupby('ProjectID').count().index
 for projectID in missing_projects:
 	videoIndices = [int(x) for x in s_dt.loc[projectID,'videoIDsToAnnotate'].split(': ')[1].split(',')]
 	fm_obj.setProjectID(projectID)
-	local_project_dir = m_obj.localLabeledClipsDir + projectID + '/'
+	local_project_dir = fm_obj.localLabeledClipsDir + projectID + '/'
 	fm_obj.downloadData(local_project_dir, tarred = True)
 	for videoIndex in videoIndices:
 		videoObj = fm_obj.returnVideoObject(videoIndex)
