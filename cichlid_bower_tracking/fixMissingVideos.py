@@ -14,5 +14,5 @@ dt['ProjectID'] = dt.ClipName.str.split('__').str[0]
 dt['ClipName'] = dt.ClipName + '.mp4'
 
 for lid,row in dt.iterrows():
-	clip_location = fm_obj.localLabeledClipsDir + row.ProjectID + '/' + row.ClipName
+	clip_location = fm_obj.localLabeledClipsDir + row.ClipName
 	pdb.set_trace()
