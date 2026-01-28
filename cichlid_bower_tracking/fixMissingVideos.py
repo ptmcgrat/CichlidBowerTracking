@@ -21,6 +21,7 @@ for lid,row in dt.iterrows():
 missing_projects = dt[dt.ClipExists == False].groupby('ProjectID').count().index.tolist()
 for projectID in missing_projects:
 	videoIndices = [int(x) for x in s_dt.loc[projectID,'videoIDsToAnnotate'].split(': ')[1].split(',')]
+	fm_obj.setProjectID(projectID)
 	for videoIndex in videoIndices:
 		videoObj = fm_obj.returnVideoObject(videoIndex)
 		fm_obj.downloadData(videoObj.localManualLabelClipsDir, tarred = True)
