@@ -5,8 +5,11 @@ from helper_modules.file_manager import FileManager as FM
 fm_obj = FM(analysisID = 'YH_MC_Parentals')
 s_dt = fm_obj.s_dt
 
-#fm_obj.downloadData(fm_obj.localLabeledClipsDir, tarred_subdirs = True)
-#fm_obj.downloadData(fm_obj.localLabeledClipsFile)
+
+shutil.rmtree(fm_obj.localLabeledClipsDir)
+
+fm_obj.downloadData(fm_obj.localLabeledClipsDir, tarred_subdirs = True)
+fm_obj.downloadData(fm_obj.localLabeledClipsFile)
 
 dt = pd.read_csv(fm_obj.localLabeledClipsFile, index_col = 0)
 dt = dt[dt.AnalysisID == 'YH_MC_Parentals']
@@ -36,5 +39,5 @@ for projectID in missing_projects:
 			subprocess.run(['cp', clip_location2,clip_location1])
 			subprocess.run(['cp', clip_location2a,clip_location1a])
 
-#for projectID in missing_projects:
-#	fm_obj.uploadData(fm_obj.localLabeledClipsDir + projectID, tarred = True)
+for projectID in missing_projects:
+	fm_obj.uploadData(fm_obj.localLabeledClipsDir + projectID, tarred = True)
