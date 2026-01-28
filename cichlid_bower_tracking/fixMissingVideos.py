@@ -18,7 +18,7 @@ dt['VideoInfo'] = dt.ClipName.str.split('__').str[1]
 for lid,row in dt.iterrows():
 	clip_location = fm_obj.localLabeledClipsDir + row.ClipName
 	dt.loc[lid,'ClipExists'] = os.path.exists(clip_location)
-
+print(len(dt[dt.ClipExists == False]))
 missing_projects = dt[dt.ClipExists == False].groupby('ProjectID').count().index.tolist()
 for projectID in missing_projects:
 	videoIndices = [int(x) for x in s_dt.loc[projectID,'videoIDsToAnnotate'].split(': ')[1].split(',')]
@@ -30,4 +30,4 @@ for lid,row in dt[dt.ClipExists == False].iterrows():
 	clip_location1 = fm_obj.localLabeledClipsDir + row.ClipName
 	clip_location2 = videoObj.localManualLabelClipsDir + row.ClipName.replace(row.ProjectID + '__','')
 	if os.path.exists(clip_location2):
-		pdb.set_trace()
+		subprocess.run(['cp', clip_location2,clip_location1])
