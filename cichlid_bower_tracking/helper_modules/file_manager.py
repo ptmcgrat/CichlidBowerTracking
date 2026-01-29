@@ -293,6 +293,7 @@ class FileManager():
     def _createMLData(self):
 
         self.localMLDir = self.localMasterDir + '__MachineLearningModels/'
+        self.localYOLODir = self.localMLDir + 'YOLOModels/'
 
         self.localYolov5WeightsFile = self.localMLDir + 'YOLOV5/best.pt'
         self.localYolov5InfoDir = self.localMLDir + 'YOLOV5/ModelInfo'

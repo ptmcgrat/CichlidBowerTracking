@@ -1,5 +1,5 @@
 
-import subprocess, os, pdb, shutil
+import subprocess, os, pdb, shutil, json
 import pandas as pd
 
 class ThreeDModelPreparer():
@@ -84,7 +84,9 @@ class ThreeDModelPreparer():
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'save_' + str(epoch) + '.pth'), self.fileManager.localVideoModelFile)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localModelConfusionFile)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_accuracy.csv'), self.fileManager.localModelProjectAccuracy)
-			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.fileManager.localModelDataBreakdown)
+			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.fileManager.localModelDataBreakdown)
+
+
 
 	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localModelDataSummary)

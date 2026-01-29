@@ -1,9 +1,13 @@
-import pdb, os, subprocess, shutil
+import pdb, os, subprocess, shutil, json
 import pandas as pd
 from helper_modules.file_manager import FileManager as FM
 
 fm_obj = FM(analysisID = 'HybridMulti')
 s_dt = fm_obj.s_dt
+
+fm_obj.downloadData(fm_obj.localModelDataBreakdown)
+fm_obj.downloadData(fm_obj.localModelConfusionFile)
+
 
 
 shutil.rmtree(fm_obj.localLabeledClipsDir)
