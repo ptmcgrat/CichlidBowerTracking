@@ -2,7 +2,7 @@ import pdb, os, subprocess, shutil
 import pandas as pd
 from helper_modules.file_manager import FileManager as FM
 
-fm_obj = FM(analysisID = 'YH_MC_Parentals')
+fm_obj = FM(analysisID = 'HybridMulti')
 s_dt = fm_obj.s_dt
 
 
@@ -24,7 +24,6 @@ for lid,row in dt.iterrows():
 
 print(len(dt[dt.ClipExists == False]))
 missing_projects = dt[dt.ClipExists == False].groupby('ProjectID').count().index.tolist()
-pdb.set_trace()
 for projectID in missing_projects:
 	videoIndices = [int(x) for x in s_dt.loc[projectID,'videoIDsToAnnotate'].split(': ')[1].split(',')]
 	fm_obj.setProjectID(projectID)
