@@ -86,14 +86,14 @@ class ThreeDModelPreparer():
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_accuracy.csv'), self.fileManager.localModelProjectAccuracy)
 			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.fileManager.localModelDataBreakdown)
 			
-			dt = pd.read_csv(fm_obj.localModelConfusionFile, index_col = 0)
-			with open(fm_obj.localModelDataBreakdown,'r') as input_f:
+			dt = pd.read_csv(self.fileManager.localModelConfusionFile, index_col = 0)
+			with open(self.fileManager.localModelDataBreakdown,'r') as input_f:
 				json_data = json.load(input_f)
 			dt.columns = json_data['labels']
 			dt.index = json_data['labels']
 
 			dt = dt[['c','p','b','o','f','t','m','s','d']].loc[['c','p','b','o','f','t','m','s','d']]
-			dt.to_csv(fm_obj.localModelConfusionFile)
+			dt.to_csv(self.fileManager.localModelConfusionFile)
 
 	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localModelDataSummary)
