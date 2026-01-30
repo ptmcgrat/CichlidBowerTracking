@@ -50,7 +50,7 @@ class ThreeDClassifierPreparer:
 			data = {}
 			data['ClipName'] = [x for x in os.listdir(videoObj.localAllClipsDir) if '.mp4' in x]
 			data['ProjectID'] = self.fileManager.projectID
-			data['ManuelLabel'] = 'x' # Doesn't matter what you put in here
+			data['ManualLabel'] = 'x' # Doesn't matter what you put in here
 			data['AnalysisID'] = self.fileManager.analysisID
 			dt = pd.DataFrame(data)
 			dt.to_csv(self.fileManager.localVideoProjectsFile)
