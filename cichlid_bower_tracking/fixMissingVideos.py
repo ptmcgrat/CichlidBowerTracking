@@ -11,8 +11,8 @@ fm_obj.downloadData(fm_obj.localModelConfusionFile)
 dt = pd.read_csv(fm_obj.localModelConfusionFile, index_col = 0)
 with open(fm_obj.localModelDataBreakdown,'r') as input_f:
 	json_data = json.load(input_f)
-
-pdb.set_trace()
+dt.columns = json_data['labels']
+dt.index = json_data['labels']
 
 dt = dt[['c','p','b','o','f','t','m','s','d']].loc[['c','p','b','o','f','t','m','s','d']]
 pdb.set_trace()

@@ -63,7 +63,7 @@ class ThreeDModelPreparer():
 		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
 		os.chdir('CAC_MD')
 		subprocess.run(['git', 'pull'], capture_output = True)
-		subprocess.run(command)
+		#subprocess.run(command)
 		os.chdir('..')
 		
 		with open(os.path.join(self.fileManager.local3DModelDir,'val.log')) as f:
@@ -85,8 +85,15 @@ class ThreeDModelPreparer():
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_confusion_matrix.csv'), self.fileManager.localModelConfusionFile)
 			shutil.copy(os.path.join(self.fileManager.local3DModelDir,'epoch_' + str(epoch) + '_accuracy.csv'), self.fileManager.localModelProjectAccuracy)
 			#shutil.copy(os.path.join(self.fileManager.local3DModelDir,'source.json'), self.fileManager.localModelDataBreakdown)
+			
+			dt = pd.read_csv(fm_obj.localModelConfusionFile, index_col = 0)
+			with open(fm_obj.localModelDataBreakdown,'r') as input_f:
+				json_data = json.load(input_f)
+			dt.columns = json_data['labels']
+			dt.index = json_data['labels']
 
-
+			dt = dt[['c','p','b','o','f','t','m','s','d']].loc[['c','p','b','o','f','t','m','s','d']]
+			dt.to_csv(fm_obj.localModelConfusionFile)
 
 	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localModelDataSummary)
