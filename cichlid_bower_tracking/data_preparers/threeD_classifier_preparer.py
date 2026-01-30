@@ -80,7 +80,7 @@ class ThreeDClassifierPreparer:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			new_dt = pd.read_csv(videoObj.localLabeledClustersFile)
 			pred_dt = pd.read_csv(videoObj.localAllClipsDir + 'output.csv')
-			temp_dt = pd.merge(new_dt, pred_dt, left_on = 'ClipName', right_on = 'index', how = 'left')
+			temp_dt = pd.merge(new_dt, pred_dt, on = 'ClipName', how = 'left')
 			try:
 				# c_dt = c_dt.append(new_dt)
 				c_dt = pd.concat([c_dt, temp_dt], ignore_index=True)
