@@ -9,6 +9,7 @@ fm_obj.downloadData(fm_obj.localModelDataBreakdown)
 fm_obj.downloadData(fm_obj.localModelConfusionFile)
 
 dt = pd.read_csv(fm_obj.localModelConfusionFile, index_col = 0)
+pdb.set_trace()
 dt = dt[['c','p','b','o','f','t','m','s','d']].loc[['c','p','b','o','f','t','m','s','d']]
 with open(fm_obj.localModelDataBreakdown,'r') as input_f:
 	json_data = json.load(input_f)
