@@ -68,9 +68,10 @@ class ThreeDClassifierPreparer:
 			command.extend(['--Trained_model', self.fileManager.localVideoModelFile])
 
 			command.extend(['--Output_file', videoObj.localAllClipsDir + 'output.csv'])
-			subprocess.run(command)
-			#print(' '.join(command))
+			print(' '.join(command))
 
+			subprocess.run(command)
+			pdb.set_trace()
 		
 
 	def createSummaryFile(self):
