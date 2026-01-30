@@ -102,10 +102,10 @@ class SummaryPreparer:
 				axes[2,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
 
 				# k = 2 Scoops plus spits (high confidence)
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', confidence = 0.75)
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', N = 200)
 				y = self.da_obj.height - y
 				axes[3,j].scatter(x,y,s = 0.05, color = 'blue')
-				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', confidence = 0.75)
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', N = 200)
 				y2 = self.da_obj.height - y2
 				axes[3,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				axes[3,j].set_xlim(0,self.da_obj.width)
@@ -137,7 +137,7 @@ class SummaryPreparer:
 				axes[6,j].set_ylim(0,self.da_obj.height)
 				axes[6,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 
-				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
+				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
 					y = self.da_obj.height - y
 
@@ -163,7 +163,7 @@ class SummaryPreparer:
 					axes[0,j].set_ylabel('Total depth')
 					axes[1,j].set_ylabel('Daily depth')
 					axes[2,j].set_ylabel('All Build')
-					axes[3,j].set_ylabel('HC Build')
+					axes[3,j].set_ylabel('N>200 Build')
 					axes[4,j].set_ylabel('Peak Build')
 					axes[5,j].set_ylabel('All Feed')
 					axes[6,j].set_ylabel('Peek Feed')
@@ -219,7 +219,7 @@ class SummaryPreparer:
 		dt = self.cl_obj.clusterData
 		dt['N'] = dt.ClipName.str.split('__').str[2].astype('int64')
 		figHist, axes = plt.subplots(nrows = 10, ncols = 2, figsize=(5, 10), squeeze=False)
-		for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o','x']):
+		for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o']):
 			sub_dt = dt[dt.Prediction == bid]
 			sub_dt['N'].hist(ax = axes[k,0], bins = np.arange(0,3000,150))
 			sub_dt['Probability'].hist(ax = axes[k,1], bins = np.arange(0,1,0.05))

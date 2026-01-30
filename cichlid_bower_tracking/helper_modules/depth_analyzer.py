@@ -251,7 +251,7 @@ class ClusterAnalyzer:
 		# self.clusterData.round({'X_Depth': 0, 'Y_Depth': 0})
 
 
-	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, in_frame=True, created = True, confidence = None, peak_bower = False):
+	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, in_frame=True, created = True, confidence = None, peak_bower = False, N = None):
 		# utility function to return two numpy arrays that match the provided criteria
 		# t0: return only rows with timestamps after t0
 		# t1: return only rows with timestamps before t1
@@ -261,6 +261,8 @@ class ClusterAnalyzer:
 		dt = dt.sort_index()
 		if confidence is not None:
 			dt = dt[dt.Probability>confidence]
+		if N is not None:
+			dt = dt[dt.N > N]
 		if created:
 			dt = dt[dt.ClipCreated=='Yes']
 		elif created is None:
