@@ -71,7 +71,6 @@ class ThreeDClassifierPreparer:
 			print(' '.join(command))
 
 			subprocess.run(command)
-			pdb.set_trace()
 		
 
 	def createSummaryFile(self):
