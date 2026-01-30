@@ -53,15 +53,16 @@ class ThreeDClassifierPreparer:
 
 			# Run command
 			command = ['python3', 'ClassifyVideos.py']
-			command.extend(['--Input_videos_directory', videoObj.localAllClipsDir])
-			command.extend(['--Results_directory', videoObj.localAllClipsDir])
-			command.extend(['--Temporary_clips_directory', videoObj.localAllClipsDir])
-
+			command.extend(['--Clips_directory', videoObj.localAllClipsDir])
 			command.extend(['--ML_labels', self.fileManager.localVideoProjectsFile])
+			command.extend(['--Temp_directory', videoObj.localAllClipsDir])
+			command.extend(['--Results_directory', videoObj.localAllClipsDir])
+
+			command.extend(['--CommandsLog', self.fileManager.localModelCommandsFile])
+			command.extend(['--JSONLog', self.fileManager.localModelDataBreakdown])
+			command.extend(['--CondaLog', videoObj.localClassifyLogfile])
 			command.extend(['--Trained_model', self.fileManager.localVideoModelFile])
-			command.extend(['--Training_options', self.fileManager.localModelCommandsFile])
-			command.extend(['--Trained_categories', self.fileManager.localModelDataBreakdown])
-			#command.extend(['--Temporary_output_directory', videoObj.localAllClipsDir])
+
 			command.extend(['--Output_file', videoObj.localAllClipsDir + 'output.csv'])
 
 			print(' '.join(command))
