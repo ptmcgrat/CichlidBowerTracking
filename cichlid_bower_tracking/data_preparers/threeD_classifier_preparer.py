@@ -44,7 +44,6 @@ class ThreeDClassifierPreparer:
 		#command = "source activate CichlidActionClassification; " + ' ' .join(command)
 		#command = "source " + os.getenv('HOME') + "/anaconda3/etc/profile.d/conda.sh; conda activate CichlidActionClassification; " + ' '.join(command)
 		os.chdir('CAC_MD')			
-		subprocess.run(['git', 'clone', 'https://www.github.com/ptmcgrat/CichlidActionClassification'])
 
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
@@ -69,7 +68,7 @@ class ThreeDClassifierPreparer:
 			command.extend(['--Trained_model', self.fileManager.localVideoModelFile])
 
 			command.extend(['--Output_file', videoObj.localAllClipsDir + 'output.csv'])
-
+			subprocess.run(command)
 			#print(' '.join(command))
 
 		
