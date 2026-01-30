@@ -358,6 +358,8 @@ class FileManager():
         videoObj.localIntensityFile = self.localSummaryDir + videoObj.baseName + '_intensity.pdf'
         videoObj.localTempDir = self.localTempDir + videoObj.baseName + '/'
         videoObj.localLogfile = self.localLogfileDir + 'ClusterLog_' + str(index) + '.txt'
+        videoObj.localClassifyLogfile = self.localLogfileDir + 'ClassifyLog_' + str(index) + '.txt'
+
         self.createDirectory(videoObj.localTempDir)
 
         return videoObj
