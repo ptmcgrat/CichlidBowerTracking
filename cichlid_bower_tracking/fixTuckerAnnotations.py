@@ -19,7 +19,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 	fm_obj.downloadData(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile)
 	with open('tracking_results.csv', 'w', newline='') as f:
 		writer = csv.writer(f)
-		results = model.track(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = True, save=True, show=False, persist = True)  # Tracking with default tracker
+		results = model.track(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = True, save=False, show=False, persist = True)  # Tracking with default tracker
 		for result in results:
 			if result.boxes.id is not None:
 				boxes = results.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
