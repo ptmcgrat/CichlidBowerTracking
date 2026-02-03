@@ -15,7 +15,6 @@ class TrackFishPreparer():
 		self.fileManager = fileManager
 		self.videoObj = self.fileManager.returnVideoObject(videoIndex)
 		self.videoIndex = videoIndex
-		self.createLogFile()
 
 	def downloadProjectData(self):
 		self.fileManager.createDirectory(self.fileManager.localMasterDir)
@@ -36,6 +35,7 @@ class TrackFishPreparer():
 			subprocess.run(['rm', '-f', self.videoObj.localh264File])
 
 		self.fileManager.downloadData(self.fileManagerlocalYOLOModelFile)
+		self.createLogFile()
 
 	def validateInputData(self):
 
