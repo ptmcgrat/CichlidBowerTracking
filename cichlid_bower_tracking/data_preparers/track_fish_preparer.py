@@ -57,7 +57,7 @@ class TrackFishPreparer():
 
 	def runYOLOAnalysis(self):
 
-		model = YOLO(self.fileManagerlocalYOLOModelFile)
+		model = YOLO(self.fileManager.localYOLOModelFile)
 
 		with open(self.videoObj.localFishDetectionsFile, 'w', newline='') as f:
 		
