@@ -34,7 +34,7 @@ class TrackFishPreparer():
 			#self.fileManager.uploadData(self.videoObj.localVideoFile)
 			subprocess.run(['rm', '-f', self.videoObj.localh264File])
 
-		self.fileManager.downloadData(self.fileManagerlocalYOLOModelFile)
+		self.fileManager.downloadData(self.fileManager.localYOLOModelFile)
 		self.createLogFile()
 
 	def validateInputData(self):
@@ -42,7 +42,7 @@ class TrackFishPreparer():
 		assert os.path.exists(self.videoObj.localVideoFile)
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
 		assert os.path.exists(self.fileManager.localLogfileDir)
-		assert os.path.exists(self.fileManagerlocalYOLOModelFile)
+		assert os.path.exists(self.fileManager.localYOLOModelFile)
 
 	def createLogFile(self):
 		
