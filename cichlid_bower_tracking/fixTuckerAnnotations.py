@@ -7,8 +7,10 @@ fm_obj = FM(analysisID = 'YH_MC_Parentals')
 hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/CVxMC-tucker-2025-11-13/'
 
 data = fm_obj.localYOLOAnnotationDir + 'GenericSex/data.yaml'
-model = YOLO("yolo26n.pt")
-model_results = model.train(data=data, epochs = 100, project = fm_obj.localYOLODir, name = 'GenericSex')
+#model = YOLO("yolo26n.pt")
+#model_results = model.train(data=data, epochs = 100, project = fm_obj.localYOLODir, name = 'GenericSex')
+#fm_obj.uploadData(fm_obj.localYOLODir)
+model = YOLO(fm_obj.localYOLODir + 'GenericSex/weights/best.pt')
 
 pdb.set_trace()
 for projectID, row in fm_obj.s_dt.iterrows():
