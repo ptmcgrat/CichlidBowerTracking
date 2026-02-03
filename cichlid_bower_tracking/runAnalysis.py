@@ -312,7 +312,9 @@ elif args.AnalysisType == 'TrackFish':
 		videoIndices = [] if row.videoIDsToRun != row.videoIDsToRun or row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
 		already_run = [] if row.TrackFish == 'VideoIndices: ' else row.Cluster.split(': ')[1].split(',')
 		videoIndices = [int(x) for x in videoIndices if x not in already_run]
-		
+
+		fm_obj.setProjectID(projectID)
+
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 
 		for videoIndex in videoIndices:
