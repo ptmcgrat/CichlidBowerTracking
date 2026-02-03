@@ -48,7 +48,6 @@ class FileManager():
         if self.system == 'pi':
             self._createPiData()
         
-
         self._createParameters()
 
     def readAnalysisFile(self):
@@ -177,6 +176,8 @@ class FileManager():
                 projectIDs = []
             elif analysisType == 'ClassifyClusters':
                 projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt.ClassifyClusters == False)].index.to_list()
+            elif analysisType == 'TrackFish':
+                projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.TrackFish != 'VideoIndices: ')].index.to_list()
             elif analysisType == 'Summary':
                 projectIDs = s_dt[(s_dt.Depth == True) & (s_dt.ClassifyClusters == True) & (s_dt.RunAnalysis == True) & (s_dt[analysisType] == False)].index.to_list()
             elif analysisType == 'EditVideos':
@@ -295,10 +296,8 @@ class FileManager():
         self.localMLDir = self.localMasterDir + '__MachineLearningModels/'
         self.localYOLODir = self.localMLDir + 'YOLOModels/'
 
-        self.localYolov5WeightsFile = self.localMLDir + 'YOLOV5/best.pt'
-        self.localYolov5InfoDir = self.localMLDir + 'YOLOV5/ModelInfo'
-
-        self.localSexClassificationModelFile = self.localMLDir + 'SexClassification/' + self.analysisID + '/best.h5'
+        self.localYOLOModelDir = self.localYOLODir + self.analysisID + '/'
+        self.localYOLOModelFile = self.localYOLOModelDir + '/weights/best.pt'
 
         self.local3DModelDir = self.localMLDir + 'VideoModels/' + self.analysisID + '/'
         self.local3DModelTempDir = self.local3DModelDir + 'Temp/'
@@ -359,6 +358,7 @@ class FileManager():
         videoObj.localTempDir = self.localTempDir + videoObj.baseName + '/'
         videoObj.localLogfile = self.localLogfileDir + 'ClusterLog_' + str(index) + '.txt'
         videoObj.localClassifyLogfile = self.localLogfileDir + 'ClassifyLog_' + str(index) + '.txt'
+        videoObj.localYOLOLogfile = self.localLogfileDir + 'YOLOLog_' + str(index) + '.txt'
 
         self.createDirectory(videoObj.localTempDir)
 

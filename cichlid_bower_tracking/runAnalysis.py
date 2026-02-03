@@ -40,6 +40,10 @@ cc = subparser.add_parser('ClassifyClusters', description='Use created ML model 
 cc.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 cc.add_argument('--ModelID', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
 
+trackfish = subparser.add_parser('TrackFish', description = 'Run YOLO to track and sex fish')
+trackfish.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+trackfish.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
+
 summary = subparser.add_parser('Summary', description = 'Summarize all of the analyzed data')
 summary.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 
@@ -298,6 +302,37 @@ elif args.AnalysisType == 'ClassifyClusters':
 		s_dt.loc[projectID,'ClassifyClusters'] = True
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
+
+elif args.AnalysisType == 'TrackFish':
+	from data_preparers.track_fish_preparer import TrackFishPreparer as TFP
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
+		if projectID not in projectIDs:
+			continue
+		
+		videoIndices = [] if row.videoIDsToRun != row.videoIDsToRun or row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
+		already_run = [] if row.TrackFish == 'VideoIndices: ' else row.Cluster.split(': ')[1].split(',')
+		videoIndices = [int(x) for x in videoIndices if x not in already_run]
+		
+		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
+
+		for videoIndex in videoIndices:
+			
+			tfp_obj = TFP(fm_obj, videoIndex)
+			tfp_obj.downloadProjectData()
+			tfp_obj.validateInputData()
+			tfp_obj.runYOLOAnalysis()
+			tfp_obj.uploadProjectData(delete = True)
+
+			fm_obj = FM(analysisID, projectID)
+			s_dt = fm_obj.s_dt
+
+			if s_dt.loc[projectID,'TrackFish'] == 'VideoIndices: ':
+				s_dt.loc[projectID,'TrackFish'] +=  str(videoIndex)
+			else:
+				s_dt.loc[projectID,'TrackFish'] +=  ',' + str(videoIndex)
+
+			s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+			fm_obj.uploadData(fm_obj.localSummaryFile)
 
 elif args.AnalysisType == 'Summary':
 	from data_preparers.summary_preparer import SummaryPreparer as SP
