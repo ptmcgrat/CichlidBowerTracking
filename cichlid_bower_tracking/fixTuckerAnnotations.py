@@ -26,7 +26,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 			if result.boxes.id is not None:
 				boxes = result.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
 				track_ids = result.boxes.id.cpu().numpy().astype(int)
-				classes = result.boxes.cls.cpu()
+				classes = result.boxes.cls.cpu().numpy()
 				for box, track_id, class_id in zip(boxes, track_ids, classes):
 					x_center, y_center, width, height = box
 					# Write frame, ID, and coordinates to the CSV file
