@@ -6,11 +6,11 @@ fm_obj = FM(analysisID = 'YH_MC_Parentals')
 
 hybrid_indata = fm_obj.localYOLOAnnotationDir + 'OriginalTuckerData/CVxMC-tucker-2025-11-13/'
 
-
 data = fm_obj.localYOLOAnnotationDir + 'GenericSex/data.yaml'
 model = YOLO("yolo26n.pt")
 model_results = model.train(data=data, epochs = 100, project = fm_obj.localYOLODir, name = 'GenericSex')
 
+pdb.set_trace()
 for projectID, row in fm_obj.s_dt.iterrows():
 	videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
 	fm_obj.setProjectID(projectID)
