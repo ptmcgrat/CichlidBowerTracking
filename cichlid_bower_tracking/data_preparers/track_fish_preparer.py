@@ -34,7 +34,7 @@ class TrackFishPreparer():
 			#self.fileManager.uploadData(self.videoObj.localVideoFile)
 			subprocess.run(['rm', '-f', self.videoObj.localh264File])
 
-		self.fileManager.downloadData(self.fileManager.localYOLOModelFile)
+		self.fileManager.downloadData(self.fileManager.localYOLOModelDir)
 		self.createLogFile()
 
 	def validateInputData(self):
