@@ -18,8 +18,9 @@ for projectID, row in fm_obj.s_dt.iterrows():
 	videoObj = fm_obj.returnVideoObject(videoIndices[0])
 	fm_obj.downloadData(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile)
 
-	results = model.track(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = False, save=True, show=False)  # Tracking with default tracker
-	#for result in results:
+	results = model.track(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = True, save=True, show=False)  # Tracking with default tracker
+	for result in results:
+		next(results)
 	#	if result.boxes.id is not None:
 	#		track_ids = result.boxes.id.cpu().tolist()
 	#		#print(f"Frame has track IDs: {track_ids}")
