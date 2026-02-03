@@ -12,14 +12,14 @@ data = fm_obj.localYOLOAnnotationDir + 'GenericSex/data.yaml'
 #fm_obj.uploadData(fm_obj.localYOLODir)
 model = YOLO(fm_obj.localYOLODir + 'GenericSex/weights/best.pt')
 
-pdb.set_trace()
 for projectID, row in fm_obj.s_dt.iterrows():
 	videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
 	fm_obj.setProjectID(projectID)
 	videoObj = fm_obj.returnVideoObject(videoIndices[0])
 	fm_obj.downloadData(videoObj.localVideoFile)
 
-	results = model.track(videoObj.localVideoFile, stream = True)  # Tracking with default tracker
+	results = model.track(videoObj.localVideoFile, stream = True, save=True, show=False)  # Tracking with default tracker
+	pdb.set_trace()
 	for result in results:
 		if result.boxes.id is not None:
 			track_ids = result.boxes.id.cpu().tolist()
