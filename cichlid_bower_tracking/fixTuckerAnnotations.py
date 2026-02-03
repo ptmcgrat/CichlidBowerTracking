@@ -16,9 +16,9 @@ for projectID, row in fm_obj.s_dt.iterrows():
 	videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
 	fm_obj.setProjectID(projectID)
 	videoObj = fm_obj.returnVideoObject(videoIndices[0])
-	fm_obj.downloadData(self.fileManager.localLabeledDLCClipsDir + videoObj.localDLCVideoFile)
+	fm_obj.downloadData(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile)
 
-	results = model.track(self.fileManager.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = False, save=True, show=False)  # Tracking with default tracker
+	results = model.track(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = False, save=True, show=False)  # Tracking with default tracker
 	#for result in results:
 	#	if result.boxes.id is not None:
 	#		track_ids = result.boxes.id.cpu().tolist()
