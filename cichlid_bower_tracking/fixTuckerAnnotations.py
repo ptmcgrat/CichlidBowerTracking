@@ -22,8 +22,8 @@ for projectID, row in fm_obj.s_dt.iterrows():
 		results = model.track(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = True, save=False, show=False, persist = True)  # Tracking with default tracker
 		for result in results:
 			if result.boxes.id is not None:
-				boxes = results.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
-				track_ids = results.boxes.id.cpu().numpy().astype(int)
+				boxes = result.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
+				track_ids = result.boxes.id.cpu().numpy().astype(int)
 				for box, track_id in zip(boxes, track_ids):
 					x_center, y_center, width, height = box
 					# Write frame, ID, and coordinates to the CSV file
