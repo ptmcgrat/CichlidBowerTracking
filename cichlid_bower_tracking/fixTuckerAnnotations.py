@@ -19,6 +19,8 @@ for projectID, row in fm_obj.s_dt.iterrows():
 	fm_obj.downloadData(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile)
 	with open('tracking_results.csv', 'w', newline='') as f:
 		writer = csv.writer(f)
+		writer.writerow(['FrameNum', 'TrackID', 'X_center', 'Y_center', 'Width', 'Height', 'Sex'])
+
 		results = model.track(fm_obj.localLabeledDLCClipsDir + videoObj.localDLCVideoFile, stream = True, save=False, show=False, persist = True)  # Tracking with default tracker
 		for frame_idx, result in enumerate(results):
 			if result.boxes.id is not None:
@@ -28,7 +30,7 @@ for projectID, row in fm_obj.s_dt.iterrows():
 				for box, track_id in zip(boxes, track_ids):
 					x_center, y_center, width, height = box
 					# Write frame, ID, and coordinates to the CSV file
-					writer.writerow([frame_idx, track_id, x_center, y_center, width, height])
+					writer.writerow([frame_idx, track_id, x_center, y_center, width, height,result.names[int(result.boxes.cls.cpu())]])
 
 
 	#		track_ids = result.boxes.id.cpu().tolist()
