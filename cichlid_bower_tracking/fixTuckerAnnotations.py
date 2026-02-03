@@ -23,11 +23,11 @@ for projectID, row in fm_obj.s_dt.iterrows():
 		for result in results:
 			if result.boxes.id is not None:
 				boxes = results.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
-            	track_ids = results.boxes.id.cpu().numpy().astype(int)
-	            for box, track_id in zip(boxes, track_ids):
-                	x_center, y_center, width, height = box
-                	# Write frame, ID, and coordinates to the CSV file
-                	writer.writerow([frame_idx, track_id, x_center, y_center, width, height])
+				track_ids = results.boxes.id.cpu().numpy().astype(int)
+				for box, track_id in zip(boxes, track_ids):
+					x_center, y_center, width, height = box
+					# Write frame, ID, and coordinates to the CSV file
+					writer.writerow([frame_idx, track_id, x_center, y_center, width, height])
 
 
 	#		track_ids = result.boxes.id.cpu().tolist()
