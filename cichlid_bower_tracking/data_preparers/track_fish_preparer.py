@@ -1,4 +1,4 @@
-import pdb, subprocess, os, csv, datetime
+import pdb, subprocess, os, csv, datetime, shutil
 from ultralytics import YOLO
 
 class TrackFishPreparer():
