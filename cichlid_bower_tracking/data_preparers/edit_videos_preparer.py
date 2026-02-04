@@ -28,6 +28,8 @@ class EditVideosPreparer():
 		self.fileManager.downloadData(self.fileManager.localAllLabeledClustersFile)
 		self.fileManager.downloadData(self.fileManager.localAllFishTracksFile)
 		self.fileManager.downloadData(self.fileManager.localAllTracksSummaryFile)
+		self.fileManager.downloadData(self.fileManager.localVideoCropFile)
+		self.fileManager.downloadData(self.fileManager.localTransMFile)
 
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
