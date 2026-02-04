@@ -320,9 +320,8 @@ class ClusterAnalyzer:
 		dt = self.clusterData
 		min_time = current_time - datetime.timedelta(seconds=delta_t)
 		max_time = current_time + datetime.timedelta(seconds=delta_t)
-		dt = dt[(dt.index > min_time) & (dt.index < max_time)][['X','Y','ClipCreated','Prediction','InFrame']]
+		dt = dt[(dt.index > min_time) & (dt.index < max_time)][['X','Y','ClipCreated','Prediction','InFrame','TrackID']]
 		out = pd.DataFrame(columns = ['x1','x2','y1','y2','color','label', 'track_id'])
-
 		for time,row in dt.iterrows():
 			if row.ClipCreated == 'No':
 				color = (0,0,0)
