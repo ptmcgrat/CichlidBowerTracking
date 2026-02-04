@@ -68,7 +68,7 @@ class EditVideosPreparer():
 				current_time = videoObj.startTime + datetime.timedelta(seconds = i/videoObj.framerate)
 				out_dt = self.cl_obj.addClusterLabels(current_time, videoObj)
 				ret, frame = cap.read()
-				sub_dt = t_dt[t_dt.FrameNum == i]
+				sub_dt = t_dt[(t_dt.VideoID == videoObj.baseName) & (t_dt.FrameNum == i)]
 				if ret:
 					for time, row in out_dt.iterrows():
 						cv2.rectangle(frame, (row.x1, row.y1), (row.x2, row.y2), color=row.color, thickness=2)
