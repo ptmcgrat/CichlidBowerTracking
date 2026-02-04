@@ -78,8 +78,8 @@ class EditVideosPreparer():
 							if row.Sex == 'male':
 								cv2.rectangle(frame, (row.X_center - row.Width/2, row.Y_center - row.Height), (row.X_center - row.Width/2, row.Y_center - row.Height), color=(0,0,1), thickness=2)
 							if row.TrackID in sub_dt.track_id:
-						for time,row in out_dt[out_dt.track_id == row.TrackID]:
-							cv2.line(img, (row.X_center, row.Y_center), ((row.x1 + row.x2)/2, (row.y1 + row.y2)/2), (122, 122, 122), 2)
+								for time,row in out_dt[out_dt.track_id == row.TrackID]:
+									cv2.line(img, (row.X_center, row.Y_center), ((row.x1 + row.x2)/2, (row.y1 + row.y2)/2), (122, 122, 122), 2)
 		
 					outAll.write(frame)
 				else:
