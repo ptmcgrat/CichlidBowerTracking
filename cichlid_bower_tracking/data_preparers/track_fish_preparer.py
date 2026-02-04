@@ -84,5 +84,5 @@ class TrackFishPreparer():
 		self.fileManager.uploadData(self.videoObj.localYOLOLogfile)
 
 		if delete:
-			shutil.rmtree(self.videoObj.localVideoFile)
-			shutil.rmtree(self.videoObj.localFishDetectionsFile)
+			os.remove(self.videoObj.localVideoFile)
+			os.remove(self.videoObj.localFishDetectionsFile)
