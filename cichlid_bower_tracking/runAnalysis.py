@@ -44,6 +44,9 @@ trackfish = subparser.add_parser('TrackFish', description = 'Run YOLO to track a
 trackfish.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 trackfish.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
 
+atwcfish = subparser.add_parser('AssociateTracksWithClusters', description = 'Identify fish responsible for manipulations')
+atwcfish.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+
 summary = subparser.add_parser('Summary', description = 'Summarize all of the analyzed data')
 summary.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 
@@ -336,6 +339,24 @@ elif args.AnalysisType == 'TrackFish':
 			s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 			fm_obj.uploadData(fm_obj.localSummaryFile)
 
+elif args.AnalysisType == 'AssociateTracksWithClusters':
+	from data_preparers.associate_tracks_preparer import AssociateTracksPreparer as ATP
+	for projectID, row in s_dt.loc[projectIDs].iterrows():
+		
+		if projectID not in projectIDs:
+			continue
+		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
+		fm_obj.setProjectID(projectID)
+		videoIndices = row.TrackFish.split(': ')[1].split(',')
+		videoIndices = [int(x) for x in videoIndices]
+
+		atp_obj = ATP(fm_obj, videoIndices)
+		atp_obj.downloadData()
+		atp_obj.validateInputData()
+		atp_obj.createAssociations()
+		atp_obj.uploadData(delete=True)
+
+
 elif args.AnalysisType == 'Summary':
 	from data_preparers.summary_preparer import SummaryPreparer as SP
 	for projectID, row in s_dt.loc[projectIDs].iterrows():
@@ -370,11 +391,14 @@ elif args.AnalysisType == 'EditVideos':
 		if projectID not in projectIDs:
 			continue
 		print(projectID)
+		videoIndices2 = row.TrackFish.split(': ')[1].split(',')
+
 		if row.videoIDsToAnnotate == 'VideoIndices: ' or row.videoIDsToAnnotate != row.videoIDsToAnnotate:
 			print('Warning: No videos specified for this project. Skipping')
 			continue
 		else:
-			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',')]
+			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',') if x in videoIndices2]
+
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 		fm_obj.setProjectID(projectID)
 		evp_obj = EVP(fm_obj, videoIndices)

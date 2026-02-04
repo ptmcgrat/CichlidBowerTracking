@@ -234,7 +234,10 @@ class ClusterAnalyzer:
 			for line in f:
 				video_crop_points = eval(line.rstrip())
 		polygon = Polygon(video_crop_points)
-		self.clusterData['InFrame'] = self.clusterData.apply(lambda row: polygon.contains(Point(row['Y'],row['X'])), axis = 1)
+		
+		buffered_polygon = polygon.buffer(20, join_style=2)
+		clusterData['InFrame'] = clusterData.apply(lambda row: buffered_polygon.contains(Point(row['Y'],row['X'])), axis = 1)
+
 		self.clusterData.to_csv(self.fileManager.localAllLabeledClustersFile)
 
 	def _appendDepthCoordinates(self):
@@ -318,7 +321,7 @@ class ClusterAnalyzer:
 		min_time = current_time - datetime.timedelta(seconds=delta_t)
 		max_time = current_time + datetime.timedelta(seconds=delta_t)
 		dt = dt[(dt.index > min_time) & (dt.index < max_time)][['X','Y','ClipCreated','Prediction','InFrame']]
-		out = pd.DataFrame(columns = ['x1','x2','y1','y2','color','label'])
+		out = pd.DataFrame(columns = ['x1','x2','y1','y2','color','label', 'track_id'])
 
 		for time,row in dt.iterrows():
 			if row.ClipCreated == 'No':
@@ -338,7 +341,7 @@ class ClusterAnalyzer:
 		
 			out.loc[len(out)] = [max(0,row.Y-delta_xy), min(videoObj.width,row.Y+delta_xy),
 								 max(0,row.X-delta_xy), min(videoObj.height,row.X+delta_xy),
-								 color, label]
+								 color, label, row.TrackID]
 		return out
 
 	def sliceDataframe(self, t0=None, t1=None, bid=None, cropped=True):
