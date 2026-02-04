@@ -76,7 +76,10 @@ class EditVideosPreparer():
 					if len(sub_dt) != 0:
 						for t_id, row in sub_dt.iterrows():
 							if row.Sex == 'female':
-								cv2.rectangle(frame, (row.X_center - row.Width/2, row.Y_center - row.Height/2), (row.X_center + row.Width/2, row.Y_center + row.Height/2), color=(1,0,0), thickness=2)
+								try:
+									cv2.rectangle(frame, (row.X_center - row.Width/2, row.Y_center - row.Height/2), (row.X_center + row.Width/2, row.Y_center + row.Height/2), color=(1,0,0), thickness=2)
+								except:
+									pdb.set_trace()
 							if row.Sex == 'male':
 								cv2.rectangle(frame, (row.X_center - row.Width/2, row.Y_center - row.Height/2), (row.X_center + row.Width/2, row.Y_center + row.Height/2), color=(0,0,1), thickness=2)
 							if row.TrackID in sub_dt.track_id:
