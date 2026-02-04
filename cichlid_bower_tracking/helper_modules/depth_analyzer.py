@@ -236,7 +236,7 @@ class ClusterAnalyzer:
 		polygon = Polygon(video_crop_points)
 		
 		buffered_polygon = polygon.buffer(20, join_style=2)
-		clusterData['InFrame'] = clusterData.apply(lambda row: buffered_polygon.contains(Point(row['Y'],row['X'])), axis = 1)
+		self.clusterData['InFrame'] = self.clusterData.apply(lambda row: buffered_polygon.contains(Point(row['Y'],row['X'])), axis = 1)
 
 		self.clusterData.to_csv(self.fileManager.localAllLabeledClustersFile)
 
