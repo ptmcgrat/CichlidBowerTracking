@@ -312,8 +312,8 @@ elif args.AnalysisType == 'TrackFish':
 		if projectID not in projectIDs:
 			continue
 		
-		videoIndices = [] if row.videoIDsToRun != row.videoIDsToRun or row.videoIDsToRun == 'VideoIndices: ' else row.videoIDsToRun.split(': ')[1].split(',')
-		already_run = [] if row.TrackFish == 'VideoIndices: ' else row.Cluster.split(': ')[1].split(',')
+		videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
+		already_run = [] if row.TrackFish == 'VideoIndices: ' else row.TrackFish.split(': ')[1].split(',')
 		videoIndices = [int(x) for x in videoIndices if x not in already_run]
 
 		fm_obj.setProjectID(projectID)
