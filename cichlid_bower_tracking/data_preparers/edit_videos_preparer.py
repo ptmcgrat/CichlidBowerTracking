@@ -83,8 +83,7 @@ class EditVideosPreparer():
 							cv2.rectangle(frame, (int(row.X_center - row.Width/2), int(row.Y_center - row.Height/2)), (int(row.X_center + row.Width/2), int(row.Y_center + row.Height/2)), color=(255,0,0), thickness=2)
 						if row.Sex == 'male':
 							cv2.rectangle(frame, (int(row.X_center - row.Width/2), int(row.Y_center - row.Height/2)), (int(row.X_center + row.Width/2), int(row.Y_center + row.Height/2)), color=(0,0,255), thickness=2)
-						pdb.set_trace()
-						if row.TrackID in out_dt.track_id:
+						if row.TrackID in out_dt.track_id.to_list():
 							for time,row in out_dt[out_dt.track_id == row.TrackID]:
 								cv2.line(img, (row.X_center, row.Y_center), ((row.x1 + row.x2)/2, (row.y1 + row.y2)/2), (122, 122, 122), 2)
 	
