@@ -73,13 +73,18 @@ class EditVideosPreparer():
 			begin_time = videoObj.startTime
 			end_time = videoObj.startTime + datetime.timedelta(minutes = length)
 			while end_time < videoObj.endTime:
-				pdb.set_trace()
+				data[(begin_time,end_time)] = len(gc_dt[(gc_dt.index > begin_time) & (gc_dt.index < end_time)])
+				begin_time += datetime.timedelta(minutes = length)				
+				end_time += datetime.timedelta(minutes = length)				
+
+			begin_time, end_time = max(data, key=stats.get)
+			
+			current_time = videoObj.startTime + datetime.timedelta(seconds = 0/videoObj.framerate)
 				
-			pdb.set_trace()
-			for i in range(int(videoObj.framerate*60*135)):
+			while current_time < end_time:
 				current_time = videoObj.startTime + datetime.timedelta(seconds = i/videoObj.framerate)
 				ret, frame = cap.read()
-				if i < videoObj.framerate*60*120:
+				if current_time < begin_time:
 					continue
 				out_dt = self.cl_obj.addClusterLabels(current_time, videoObj)
 				
