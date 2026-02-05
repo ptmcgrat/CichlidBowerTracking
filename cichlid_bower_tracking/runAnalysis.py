@@ -398,13 +398,13 @@ elif args.AnalysisType == 'EditVideos':
 			continue
 		else:
 			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',') if x in videoIndices2]
-
+		videoIndices = [0,1,2]
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 		fm_obj.setProjectID(projectID)
 		evp_obj = EVP(fm_obj, videoIndices)
 		#evp_obj.downloadProjectData()
 		#evp_obj.validateInputData()
-		#evp_obj.editVideos()
+		evp_obj.editVideos()
 		evp_obj.uploadProjectData(delete = False)
 		
 		fm_obj = FM(analysisID, projectID)
