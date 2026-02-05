@@ -71,6 +71,7 @@ class AssociateTracksPreparer:
 				sub_dt = dt[(dt.TimeStamp > row.TimeStamp - datetime.timedelta(seconds = 0.2)) & (dt.TimeStamp < row.TimeStamp + datetime.timedelta(seconds = 0.2))]
 				if len(sub_dt) == 0:
 					continue
+				pdb.set_trace()
 				track_index = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).idxmin()
 				c_dt.loc[lid,'TrackID'] = int(dt.loc[track_index]['TrackID'])
 			
