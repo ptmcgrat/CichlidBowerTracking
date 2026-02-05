@@ -54,7 +54,7 @@ class EditVideosPreparer():
 			except FileNotFoundError:
 				pass
 
-	def editVideos(self):
+	def editVideos(self, length = 15):
 		
 		self.cl_obj = CA(self.fileManager)
 		
@@ -66,6 +66,15 @@ class EditVideosPreparer():
 			outAll = cv2.VideoWriter(out_file, cv2.VideoWriter_fourcc(*"mp4v"), videoObj.framerate, (videoObj.width, videoObj.height))
 			t_dt = pd.read_csv(self.fileManager.localAllFishTracksFile)
 			t_dt = t_dt[(t_dt.VideoID == videoObj.baseName)]
+			c_dt = self.cl_obj.clusterData
+			gc_dt = c_dt[(c_dt.VideoID == videoObj.baseName) & (c_dt.InFrame == True) & (c_dt.ClipCreated == 'Yes') & (c_dt.TrackID != 0)]
+			
+			data = {}
+			begin_time = videoObj.startTime
+			end_time = videoObj.startTime + datetime.timedelta(minutes = length)
+			while end_time < videoObj.endTime:
+				pdb.set_trace()
+				
 			pdb.set_trace()
 			for i in range(int(videoObj.framerate*60*135)):
 				current_time = videoObj.startTime + datetime.timedelta(seconds = i/videoObj.framerate)
