@@ -74,6 +74,8 @@ class AssociateTracksPreparer:
 				min_distance = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).min()
 				if min_distance < 60:
 					track_index = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).idxmin()
+				else:
+					continue
 				try:
 					c_dt.loc[lid,'TrackID'] = int(dt.loc[track_index]['TrackID'])
 				except:
