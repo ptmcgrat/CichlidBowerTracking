@@ -67,7 +67,7 @@ class AssociateTracksPreparer:
 			dt['InFrame'] = dt.apply(lambda row: polygon.contains(Point(row['X_center'],row['Y_center'])), axis = 1)
 			dt['TimeStamp'] = dt.apply(lambda row: videoObj.startTime + datetime.timedelta(seconds = row.FrameNum / videoObj.framerate), axis = 1)
 
-			for lid, row in c_dt[(c_dt.InFrame == True) && (c_dt.ClipCreated == 'Yes')].iterrows():
+			for lid, row in c_dt[(c_dt.InFrame == True) & (c_dt.ClipCreated == 'Yes')].iterrows():
 				sub_dt = dt[(dt.TimeStamp > row.TimeStamp - datetime.timedelta(seconds = 0.2)) & (dt.TimeStamp < row.TimeStamp + datetime.timedelta(seconds = 0.2))]
 				if len(sub_dt) == 0:
 					continue
