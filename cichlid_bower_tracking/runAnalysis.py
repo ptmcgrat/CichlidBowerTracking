@@ -354,7 +354,7 @@ elif args.AnalysisType == 'AssociateTracksWithClusters':
 		atp_obj.downloadData()
 		atp_obj.validateInputData()
 		atp_obj.createAssociations()
-		atp_obj.uploadData(delete=True)
+		atp_obj.uploadData(delete=False)
 
 
 elif args.AnalysisType == 'Summary':
