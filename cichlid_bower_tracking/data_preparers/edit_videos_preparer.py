@@ -86,6 +86,7 @@ class EditVideosPreparer():
 				current_time = videoObj.startTime + datetime.timedelta(seconds = i/videoObj.framerate)
 				ret, frame = cap.read()
 				if current_time < begin_time:
+					i=i+1
 					continue
 				out_dt = self.cl_obj.addClusterLabels(current_time, videoObj)
 				
