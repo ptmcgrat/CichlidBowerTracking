@@ -403,8 +403,8 @@ elif args.AnalysisType == 'EditVideos':
 		fm_obj.setProjectID(projectID)
 		evp_obj = EVP(fm_obj, videoIndices)
 		#evp_obj.downloadProjectData()
-		evp_obj.validateInputData()
-		evp_obj.editVideos()
+		#evp_obj.validateInputData()
+		#evp_obj.editVideos()
 		evp_obj.uploadProjectData(delete = False)
 		
 		fm_obj = FM(analysisID, projectID)
