@@ -77,11 +77,11 @@ class EditVideosPreparer():
 				begin_time += datetime.timedelta(minutes = length)				
 				end_time += datetime.timedelta(minutes = length)				
 
-			pdb.set_trace()
 			begin_time, end_time = max(data, key=data.get)
 			
 			current_time = videoObj.startTime + datetime.timedelta(seconds = 0/videoObj.framerate)
-				
+			
+			i = 0	
 			while current_time < end_time:
 				current_time = videoObj.startTime + datetime.timedelta(seconds = i/videoObj.framerate)
 				ret, frame = cap.read()
@@ -108,5 +108,5 @@ class EditVideosPreparer():
 				else:
 					break
 					print('VideoError: BadFrame')
-
+				i+=1
 			outAll.release()
