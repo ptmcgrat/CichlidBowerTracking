@@ -75,7 +75,7 @@ class EditVideosPreparer():
 				
 				sub_dt = t_dt[(t_dt.FrameNum == i)]
 				if ret:
-					cv2.putText(frame, str(current_time), (10, 10), cv2.FONT_HERSHEY_SIMPLEX, 1, row.color, 2)
+					cv2.putText(frame, str(current_time), (10, 10), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
 					for time, row in out_dt.iterrows():
 						cv2.rectangle(frame, (row.x1, row.y1), (row.x2, row.y2), color=row.color, thickness=2)
 						cv2.putText(frame, row.label, (row.x1, row.y1), cv2.FONT_HERSHEY_SIMPLEX, 1, row.color, 2)
