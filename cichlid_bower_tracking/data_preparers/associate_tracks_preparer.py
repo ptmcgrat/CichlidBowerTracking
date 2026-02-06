@@ -94,11 +94,10 @@ class AssociateTracksPreparer:
 		summarized_tracks_dt['InFrameTrack'] = True
 		summarized_tracks_dt.loc[summarized_tracks_dt.aggInFrame <= 0.5,'InFrameTrack'] = False
 		summarized_tracks_dt.to_csv(self.fileManager.localAllTracksSummaryFile)
-		pdb.set_trace()
 		c_dt = pd.merge(c_dt, summarized_tracks_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
 		c_dt.loc[c_dt.TrackID==0, 'Sex'] = 'Unknown'
 		c_dt.loc[c_dt.TrackID==0, 'InFrameTrack'] = False
-		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Predicted','Probability','TrackID','Sex','InFrameTrack']]
+		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Prediction','Probability','TrackID','Sex','InFrameTrack']]
 		
 		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 
