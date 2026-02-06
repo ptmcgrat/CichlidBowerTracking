@@ -263,7 +263,7 @@ class ClusterAnalyzer:
 		dt = self.clusterData
 		dt = dt.sort_index()
 		if sex is not None:
-			dt = dt[dt.Sex>sex]
+			dt = dt[dt.Sex==sex]
 		if confidence is not None:
 			dt = dt[dt.Probability>confidence]
 		if N is not None:

@@ -76,7 +76,7 @@ class SummaryPreparer:
 		for i,trial in enumerate(self.lp.trials):
 			localTrialFigureFile = self.fileManager.localSummaryDir + trial.figureFile
 			num_days = len(trial.days)
-			figTrial, axes = plt.subplots(nrows = 25, ncols = num_days, figsize=(num_days, 25), squeeze=False)
+			figTrial, axes = plt.subplots(nrows = 25, ncols = num_days, figsize=(num_days, 26), squeeze=False)
 			figTrial.suptitle(self.lp.projectID + ' Trial ' + str(i+1) + ' Summary File')
 			start_frame = trial.days[0][0]
 
@@ -257,7 +257,7 @@ class SummaryPreparer:
 					axes[k+14,j].set_ylim(0,self.da_obj.height)
 					axes[k+14,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 					if j == 0:
-						axes[k+7,j].set_ylabel(self.cl_obj.bid_labels[bid])
+						axes[k+14,j].set_ylabel(self.cl_obj.bid_labels[bid])
 					e_dt.loc[len(e_dt)] = [self.lp.projectID, 'Trial_' + str(i+1), j, self.cl_obj.bid_labels[bid], len(x)]
 				
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid=None, in_frame=False, created=True)
@@ -281,10 +281,10 @@ class SummaryPreparer:
 					axes[7,j].set_ylabel('>1pm Feed')
 					axes[8,j].set_ylabel('Male Build')
 					axes[9,j].set_ylabel('Male Feed')
-					axes[10,j].set_ylabel('Female Build')
-					axes[11,j].set_ylabel('Female Feed')
-					axes[12,j].set_ylabel('Unknown Build')
-					axes[13,j].set_ylabel('Unknown Feed')
+					axes[10,j].set_ylabel('Fem Build')
+					axes[11,j].set_ylabel('Fem Feed')
+					axes[12,j].set_ylabel('Unk Build')
+					axes[13,j].set_ylabel('Unk Feed')
 					
 					#axes[2,j].set_ylabel('Daily bower')
 					axes[23,j].set_ylabel('Cropped clips')
