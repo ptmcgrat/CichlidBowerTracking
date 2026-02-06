@@ -262,6 +262,7 @@ class ClusterAnalyzer:
 		# cropped: If True, events that occur within the area defined by the video crop
 		dt = self.clusterData
 		dt = dt.sort_index()
+		pdb.set_trace()
 		if confidence is not None:
 			dt = dt[dt.Probability>confidence]
 		if N is not None:
