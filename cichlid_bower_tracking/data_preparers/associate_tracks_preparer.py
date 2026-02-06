@@ -53,6 +53,7 @@ class AssociateTracksPreparer:
 
 	def createAssociations(self):
 		c_dt = pd.read_csv(self.fileManager.localAllLabeledClustersFile, index_col = 0, parse_dates=['TimeStamp'])
+		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Predicted','Probability']]
 		c_dt['TrackID'] = 0
 		with open(self.fileManager.localVideoCropFile) as f:
 			for line in f:
@@ -97,5 +98,7 @@ class AssociateTracksPreparer:
 		c_dt = pd.merge(c_dt, summarized_tracks_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
 		c_dt.loc[c_dt.TrackID==0, 'Sex'] = 'Unknown'
 		c_dt.loc[c_dt.TrackID==0, 'InFrameTrack'] = False
+		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Predicted','Probability','TrackID','Sex','InFrameTrack']]
+		
 		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 
