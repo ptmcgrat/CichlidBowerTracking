@@ -398,7 +398,7 @@ elif args.AnalysisType == 'EditVideos':
 			continue
 		else:
 			videoIndices = [int(x) for x in row.videoIDsToAnnotate.split(': ')[1].split(',') if x in videoIndices2]
-		videoIndices = [0,1,2]
+		#videoIndices = [0,1,2]
 		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
 		fm_obj.setProjectID(projectID)
 		evp_obj = EVP(fm_obj, videoIndices)
