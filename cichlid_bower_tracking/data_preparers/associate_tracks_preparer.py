@@ -85,9 +85,17 @@ class AssociateTracksPreparer:
 				track_dt = pd.concat([track_dt, dt], ignore_index=True)
 			except NameError:
 				track_dt = dt
-		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
-		pdb.set_trace()
 		track_dt.to_csv(self.fileManager.localAllFishTracksFile)
+		
 		summarized_tracks_dt = track_dt.groupby(['ProjectID','VideoID','TrackID']).agg(nFrames=('TrackID','count'), aggSex=('SexID','mean'), aggInFrame = ('InFrame','mean')).reset_index()
+		summarized_tracks_dt['Sex'] = 'Male'
+		summarized_tracks_dt.loc[summarized_tracks_dt.aggSex <= 0.5,'Sex'] = 'Female'
+		summarized_tracks_dt['InFrameTrack'] = True
+		summarized_tracks_dt.loc[summarized_tracks_dt.aggInFrame <= 0.5,'InFrameTrack'] = False
 		summarized_tracks_dt.to_csv(self.fileManager.localAllTracksSummaryFile)
+
+		c_dt = pd.merge(c_dt, summarized_tracks_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
+		c_dt.loc[c_dt.TrackID==0, 'Sex'] = 'Unknown'
+		c_dt.loc[c_dt.TrackID==0, 'InFrameTrack'] = False
+		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 
