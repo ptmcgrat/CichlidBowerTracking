@@ -86,6 +86,7 @@ class AssociateTracksPreparer:
 			except NameError:
 				track_dt = dt
 		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
+		pdb.set_trace()
 		track_dt.to_csv(self.fileManager.localAllFishTracksFile)
 		summarized_tracks_dt = track_dt.groupby(['ProjectID','VideoID','TrackID']).agg(nFrames=('TrackID','count'), aggSex=('SexID','mean'), aggInFrame = ('InFrame','mean')).reset_index()
 		summarized_tracks_dt.to_csv(self.fileManager.localAllTracksSummaryFile)
