@@ -76,7 +76,7 @@ class SummaryPreparer:
 		for i,trial in enumerate(self.lp.trials):
 			localTrialFigureFile = self.fileManager.localSummaryDir + trial.figureFile
 			num_days = len(trial.days)
-			figTrial, axes = plt.subplots(nrows = 19, ncols = num_days, figsize=(num_days, 19), squeeze=False)
+			figTrial, axes = plt.subplots(nrows = 24, ncols = num_days, figsize=(num_days, 24), squeeze=False)
 			figTrial.suptitle(self.lp.projectID + ' Trial ' + str(i+1) + ' Summary File')
 			start_frame = trial.days[0][0]
 
@@ -90,7 +90,8 @@ class SummaryPreparer:
 				#current_axs[0].set_title(str(first_frame.time.month) + '/' + str(first_frame.time.day) + ':' + trial.days_videos[trial.num_days - j - 1])
 				axes[1,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v/2, vmax=v/2)
 				#axes[2,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
-				# k = 2 Scoops plus spits
+				
+				# k = 2 Bower events
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c')
 				y = self.da_obj.height - y
 				axes[2,j].scatter(x,y,s = 0.05, color = 'blue')
@@ -100,77 +101,194 @@ class SummaryPreparer:
 				axes[2,j].set_xlim(0,self.da_obj.width)
 				axes[2,j].set_ylim(0,self.da_obj.height)
 				axes[2,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
-
-				# k = 2 Scoops plus spits (high confidence)
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', N = 200)
+				
+				# k = 2 Feed events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'f')
 				y = self.da_obj.height - y
 				axes[3,j].scatter(x,y,s = 0.05, color = 'blue')
-				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', N = 200)
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 't')
 				y2 = self.da_obj.height - y2
 				axes[3,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				x3,y3 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'm')
+				y3 = self.da_obj.height - y3
+				axes[3,j].scatter(x3,y3,s = 0.05, color = 'green')
+				
 				axes[3,j].set_xlim(0,self.da_obj.width)
 				axes[3,j].set_ylim(0,self.da_obj.height)
-				axes[3,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
-				# k = 2 Scoops plus spits (day time)
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', peak_bower = True)
+				axes[3,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
+
+				# k = 2 Early Bower events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', earlyEvents=True)
 				y = self.da_obj.height - y
 				axes[4,j].scatter(x,y,s = 0.05, color = 'blue')
-				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', peak_bower = True)
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', earlyEvents=True)
 				y2 = self.da_obj.height - y2
 				axes[4,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				axes[4,j].set_xlim(0,self.da_obj.width)
 				axes[4,j].set_ylim(0,self.da_obj.height)
 				axes[4,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
 				
-				# k = 2 Scoops plus spits (day time)
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, ['f','t','m'])
+				# k = 2 Early feed events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'f', earlyEvents=True)
 				y = self.da_obj.height - y
 				axes[5,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 't', earlyEvents=True)
+				y2 = self.da_obj.height - y2
+				axes[5,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				x3,y3 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'm', earlyEvents=True)
+				y3 = self.da_obj.height - y3
+				axes[5,j].scatter(x3,y3,s = 0.05, color = 'green')
+				
 				axes[5,j].set_xlim(0,self.da_obj.width)
 				axes[5,j].set_ylim(0,self.da_obj.height)
-				axes[5,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+				axes[5,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
 
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, ['f','t','m'], peak_bower = True)
+				# k = 2 Late Bower events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', lateEvents=True)
 				y = self.da_obj.height - y
 				axes[6,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', lateEvents=True)
+				y2 = self.da_obj.height - y2
+				axes[6,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				axes[6,j].set_xlim(0,self.da_obj.width)
 				axes[6,j].set_ylim(0,self.da_obj.height)
-				axes[6,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+				axes[6,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
+				
+				# k = 2 Late feed events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'f', lateEvents=True)
+				y = self.da_obj.height - y
+				axes[7,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 't', lateEvents=True)
+				y2 = self.da_obj.height - y2
+				axes[7,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				x3,y3 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'm', lateEvents=True)
+				y3 = self.da_obj.height - y3
+				axes[7,j].scatter(x3,y3,s = 0.05, color = 'green')
+				
+				axes[7,j].set_xlim(0,self.da_obj.width)
+				axes[7,j].set_ylim(0,self.da_obj.height)
+				axes[7,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
 
+				# k = 2 Male Bower events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', sex = 'Male')
+				y = self.da_obj.height - y
+				axes[8,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', sex = 'Male')
+				y2 = self.da_obj.height - y2
+				axes[8,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				axes[8,j].set_xlim(0,self.da_obj.width)
+				axes[8,j].set_ylim(0,self.da_obj.height)
+				axes[8,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
+				
+				# k = 2 Male feed events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'f', sex = 'Male')
+				y = self.da_obj.height - y
+				axes[9,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 't', sex = 'Male')
+				y2 = self.da_obj.height - y2
+				axes[9,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				x3,y3 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'm', sex = 'Male')
+				y3 = self.da_obj.height - y3
+				axes[9,j].scatter(x3,y3,s = 0.05, color = 'green')
+
+				axes[9,j].set_xlim(0,self.da_obj.width)
+				axes[9,j].set_ylim(0,self.da_obj.height)
+				axes[9,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
+				
+				# k = 2 Female Bower events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', sex = 'Female')
+				y = self.da_obj.height - y
+				axes[10,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', sex = 'Female')
+				y2 = self.da_obj.height - y2
+				axes[10,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				axes[10,j].set_xlim(0,self.da_obj.width)
+				axes[10,j].set_ylim(0,self.da_obj.height)
+				axes[10,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
+				
+				# k = 2 Female feed events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'f', sex = 'Female')
+				y = self.da_obj.height - y
+				axes[11,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 't', sex = 'Female')
+				y2 = self.da_obj.height - y2
+				axes[11,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				x3,y3 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'm', sex = 'Female')
+				y3 = self.da_obj.height - y3
+				axes[11,j].scatter(x3,y3,s = 0.05, color = 'green')
+
+				axes[11,j].set_xlim(0,self.da_obj.width)
+				axes[11,j].set_ylim(0,self.da_obj.height)
+				axes[11,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
+				
+				# k = 2 Unknown Bower events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', sex = 'Unknown')
+				y = self.da_obj.height - y
+				axes[12,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'p', sex = 'Unknown')
+				y2 = self.da_obj.height - y2
+				axes[12,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				axes[12,j].set_xlim(0,self.da_obj.width)
+				axes[12,j].set_ylim(0,self.da_obj.height)
+				axes[12,j].set_title('Events: ' + str(len(x) + len(x2)), fontsize = 6)
+				
+				# k = 2 Unknown feed events
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'f', sex = 'Unknown')
+				y = self.da_obj.height - y
+				axes[13,j].scatter(x,y,s = 0.05, color = 'blue')
+				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 't', sex = 'Unknown')
+				y2 = self.da_obj.height - y2
+				axes[13,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				x3,y3 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'm', sex = 'Unknown')
+				y3 = self.da_obj.height - y3
+				axes[13,j].scatter(x3,y3,s = 0.05, color = 'green')
+
+				axes[13,j].set_xlim(0,self.da_obj.width)
+				axes[13,j].set_ylim(0,self.da_obj.height)
+				axes[13,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
+				
+	
 				for k,bid in enumerate(['c', 'p', 'b', 'f', 't', 'm', 's', 'd','o']):
 					x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid)
 					y = self.da_obj.height - y
 
-					axes[k+7,j].scatter(x,y,s = 0.05)
-					axes[k+7,j].set_xlim(0,self.da_obj.width)
-					axes[k+7,j].set_ylim(0,self.da_obj.height)
-					axes[k+7,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+					axes[k+14,j].scatter(x,y,s = 0.05)
+					axes[k+14,j].set_xlim(0,self.da_obj.width)
+					axes[k+14,j].set_ylim(0,self.da_obj.height)
+					axes[k+14,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 					if j == 0:
 						axes[k+7,j].set_ylabel(self.cl_obj.bid_labels[bid])
 					e_dt.loc[len(e_dt)] = [self.lp.projectID, 'Trial_' + str(i+1), j, self.cl_obj.bid_labels[bid], len(x)]
 				
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, None, False, True)
-				axes[17,j].scatter(x,y,s = 0.05)
-				axes[17,j].set_xlim(0,self.da_obj.width)
-				axes[17,j].set_ylim(0,self.da_obj.height)
-				axes[17,j].set_title('Events: ' + str(len(x)), fontsize = 6)
-				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, None, None, False)
-				axes[18,j].scatter(x,y,s = 0.05)
-				axes[18,j].set_xlim(0,self.da_obj.width)
-				axes[18,j].set_ylim(0,self.da_obj.height)
-				axes[18,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid=None, in_frame=False, created=True)
+				axes[23,j].scatter(x,y,s = 0.05)
+				axes[23,j].set_xlim(0,self.da_obj.width)
+				axes[23,j].set_ylim(0,self.da_obj.height)
+				axes[23,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid=None, in_frame=None, created=False)
+				axes[24,j].scatter(x,y,s = 0.05)
+				axes[24,j].set_xlim(0,self.da_obj.width)
+				axes[24,j].set_ylim(0,self.da_obj.height)
+				axes[24,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 				if j==0:
 					axes[0,j].set_ylabel('Total depth')
 					axes[1,j].set_ylabel('Daily depth')
 					axes[2,j].set_ylabel('All Build')
-					axes[3,j].set_ylabel('N>200 Build')
-					axes[4,j].set_ylabel('Peak Build')
-					axes[5,j].set_ylabel('All Feed')
-					axes[6,j].set_ylabel('Peek Feed')
+					axes[3,j].set_ylabel('All Feed')
+					axes[4,j].set_ylabel('<1pm Build')
+					axes[5,j].set_ylabel('<1pm Feed')
+					axes[6,j].set_ylabel('>1pm Build')
+					axes[7,j].set_ylabel('>1pm Feed')
+					axes[8,j].set_ylabel('Male Build')
+					axes[9,j].set_ylabel('Male Feed')
+					axes[10,j].set_ylabel('Female Build')
+					axes[11,j].set_ylabel('Female Feed')
+					axes[12,j].set_ylabel('Unknown Build')
+					axes[13,j].set_ylabel('Unknown Feed')
 					
 					#axes[2,j].set_ylabel('Daily bower')
-					axes[17,j].set_ylabel('Cropped clips')
-					axes[18,j].set_ylabel('Not created')
+					axes[23,j].set_ylabel('Cropped clips')
+					axes[24,j].set_ylabel('Not created')
 
 				for hour in range(8,20):
 					start = day_stamp + datetime.timedelta(hours=hour)
