@@ -285,9 +285,9 @@ class ClusterAnalyzer:
 			try:
 				if earlyEvents:
 					t0 = t0.replace(hour = 8, minute=0, second=0, microsecond=0)
-					t1 = t1.replace(hour = 13, minute=0, second=0, microsecond=0)
+					t1 = t1.replace(hour = 14, minute=0, second=0, microsecond=0)
 				elif lateEvents:
-					t0 = t0.replace(hour = 13, minute=0, second=0, microsecond=0)
+					t0 = t0.replace(hour = 14, minute=0, second=0, microsecond=0)
 					t1 = t1.replace(hour = 20, minute=0, second=0, microsecond=0)
 				dt = dt[t0:t1]
 			except KeyError:
