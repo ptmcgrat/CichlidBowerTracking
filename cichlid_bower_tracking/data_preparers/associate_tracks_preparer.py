@@ -85,7 +85,6 @@ class AssociateTracksPreparer:
 				track_dt = pd.concat([track_dt, dt], ignore_index=True)
 			except NameError:
 				track_dt = dt
-		pdb.set_trace()
 		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 		track_dt.to_csv(self.fileManager.localAllFishTracksFile)
 		summarized_tracks_dt = track_dt.groupby(['ProjectID','VideoID','TrackID']).agg(nFrames=('TrackID','count'), aggSex=('SexID','mean'), aggInFrame = ('InFrame','mean')).reset_index()
