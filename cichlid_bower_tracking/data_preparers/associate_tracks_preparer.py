@@ -38,7 +38,15 @@ class AssociateTracksPreparer:
 		self.fileManager.uploadData(self.fileManager.localAllTracksSummaryFile)
 
 		if delete:
-			shutil.rmtree(self.fileManager.localProjectDir)
+			os.remove(self.fileManager.localAllLabeledClustersFile)
+			os.remove(self.fileManager.localAllFishTracksFile)
+			os.remove(self.fileManager.localAllTracksSummaryFile)
+			os.remove(self.fileManager.localVideoCropFile)
+
+			for videoIndex in self.videoIndices:
+				videoObj = self.fileManager.returnVideoObject(videoIndex)
+				os.remove(videoObj.localFishDetectionsFile)
+
 
 	def createLogFile(self):
 		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
@@ -55,6 +63,7 @@ class AssociateTracksPreparer:
 		c_dt = pd.read_csv(self.fileManager.localAllLabeledClustersFile, index_col = 0, parse_dates=['TimeStamp'])
 		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Prediction','Probability']]
 		c_dt['TrackID'] = 0
+		c_dt['MinDistance'] = 0
 		with open(self.fileManager.localVideoCropFile) as f:
 			for line in f:
 				video_crop_points = eval(line.rstrip())
@@ -73,12 +82,12 @@ class AssociateTracksPreparer:
 				if len(sub_dt) == 0:
 					continue
 				min_distance = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).min()
-				if min_distance < 60:
-					track_index = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).idxmin()
-				else:
-					continue
+	
+				track_index = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).idxmin()
 				try:
 					c_dt.loc[lid,'TrackID'] = int(dt.loc[track_index]['TrackID'])
+					c_dt.loc[lid,'MinDistance'] = min_distance
+					
 				except:
 					pdb.set_trace()		
 			try:
@@ -97,7 +106,7 @@ class AssociateTracksPreparer:
 		c_dt = pd.merge(c_dt, summarized_tracks_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
 		c_dt.loc[c_dt.TrackID==0, 'Sex'] = 'Unknown'
 		c_dt.loc[c_dt.TrackID==0, 'InFrameTrack'] = False
-		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Prediction','Probability','TrackID','Sex','InFrameTrack']]
+		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Prediction','Probability','TrackID','MinDistance','Sex','InFrameTrack']]
 		
 		c_dt.to_csv(self.fileManager.localAllLabeledClustersFile)
 
