@@ -58,7 +58,7 @@ class TrackFishPreparer():
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			assert os.path.exists(videoObj.localVideoFile)
-			processes.append(subprocess.Popen(['unit_scripts/track_video.py', videoObj.localVideoFile, videoObj.localFishDetectionsFile, self.fileManager.localYOLOModelFile]))
+			processes.append(subprocess.Popen(['python3', 'unit_scripts/track_video.py', videoObj.localVideoFile, videoObj.localFishDetectionsFile, self.fileManager.localYOLOModelFile]))
 		
 		for p1 in processes:
 			p1.communicate()
