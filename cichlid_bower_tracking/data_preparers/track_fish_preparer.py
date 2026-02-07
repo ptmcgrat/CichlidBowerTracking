@@ -34,7 +34,7 @@ class TrackFishPreparer():
 		assert os.path.exists(self.fileManager.localYOLOModelFile)
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			assert os.path.exists(self.videoObj.localVideoFile)
+			assert os.path.exists(videoObj.localVideoFile)
 
 
 	def createLogFile(self):
