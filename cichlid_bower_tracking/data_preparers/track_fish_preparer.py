@@ -22,7 +22,7 @@ class TrackFishPreparer():
 		
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			self.fileManager.downloadData(self.videoObj.localVideoFile)
+			self.fileManager.downloadData(videoObj.localVideoFile)
 
 		self.fileManager.downloadData(self.fileManager.localYOLOModelDir)
 		#self.createLogFile()

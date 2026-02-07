@@ -315,7 +315,8 @@ elif args.AnalysisType == 'TrackFish':
 		videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 		already_run = [] if row.TrackFish == 'VideoIndices: ' else row.TrackFish.split(': ')[1].split(',')
 		videoIndices = [int(x) for x in videoIndices if x not in already_run]
-
+		if len(videoIndices) == 0:
+			continue
 		fm_obj.setProjectID(projectID)
 
 		print('Running: ' + projectID)
