@@ -318,26 +318,29 @@ elif args.AnalysisType == 'TrackFish':
 
 		fm_obj.setProjectID(projectID)
 
-		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)
+		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)	
+		
+		tfp_obj = TFP(fm_obj, videoIndices)
 
-		for videoIndex in videoIndices:
-			
-			tfp_obj = TFP(fm_obj, videoIndex)
-			tfp_obj.downloadProjectData()
-			tfp_obj.validateInputData()
-			tfp_obj.runYOLOAnalysis()
-			tfp_obj.uploadProjectData(delete = True)
+		print('Downloading data: ' + str(datetime.datetime.now()))
+		tfp_obj.downloadProjectData()
+		tfp_obj.validateInputData()
+		print('Tracking: ' + str(datetime.datetime.now()))
+		tfp_obj.runYOLOAnalysis()
+		print('Uploading: ' + str(datetime.datetime.now()))		
+		tfp_obj.uploadProjectData(delete = True)
+		print('Done: ' + str(datetime.datetime.now()))
 
-			fm_obj = FM(analysisID, projectID)
-			s_dt = fm_obj.s_dt
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
 
-			if s_dt.loc[projectID,'TrackFish'] == 'VideoIndices: ':
-				s_dt.loc[projectID,'TrackFish'] +=  str(videoIndex)
-			else:
-				s_dt.loc[projectID,'TrackFish'] +=  ',' + str(videoIndex)
+		if s_dt.loc[projectID,'TrackFish'] == 'VideoIndices: ':
+			s_dt.loc[projectID,'TrackFish'] +=  ','.join([str(x) for x in videoIndices])
+		else:
+			s_dt.loc[projectID,'TrackFish'] +=  ',' + ','.join([str(x) for x in videoIndices])
 
-			s_dt.to_csv(fm_obj.localSummaryFile, index = True)
-			fm_obj.uploadData(fm_obj.localSummaryFile)
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
 
 elif args.AnalysisType == 'AssociateTracksWithClusters':
 	from data_preparers.associate_tracks_preparer import AssociateTracksPreparer as ATP

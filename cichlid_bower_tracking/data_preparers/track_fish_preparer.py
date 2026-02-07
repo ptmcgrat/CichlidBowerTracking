@@ -8,41 +8,34 @@ class TrackFishPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, videoIndex):
+	def __init__(self, fileManager, videoIndices):
 
 		self.__version__ = '1.0.0'
 
 		self.fileManager = fileManager
-		self.videoObj = self.fileManager.returnVideoObject(videoIndex)
-		self.videoIndex = videoIndex
+		self.videoIndices = videoIndices
 
 	def downloadProjectData(self):
 		self.fileManager.createDirectory(self.fileManager.localMasterDir)
 		self.fileManager.createDirectory(self.fileManager.localTroubleshootingDir)
 		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
-		try:
+		
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			self.fileManager.downloadData(self.videoObj.localVideoFile)
-		except FileNotFoundError:
-			print(self.videoObj.localVideoFile + ' not found on cloud. Trying h264 file')
-			self.fileManager.downloadData(self.videoObj.localh264File)
-			command = ['ffmpeg', '-r', str(self.videoObj.framerate), '-i', self.videoObj.localh264File, '-threads', str(self.workers), '-c:v', 'copy', '-r', str(self.videoObj.framerate), self.videoObj.localVideoFile]
-			ffmpeg_output = subprocess.run(command, capture_output = True)
-			if ffmpeg_output.returncode != 0:
-				print(ffmpeg_output.stderr.decode('utf-8'))
-			assert os.path.isfile(self.videoObj.localVideoFile)
-			assert os.path.getsize(self.videoObj.localVideoFile) > os.path.getsize(self.videoObj.localh264File)
-			#self.fileManager.uploadData(self.videoObj.localVideoFile)
-			subprocess.run(['rm', '-f', self.videoObj.localh264File])
 
 		self.fileManager.downloadData(self.fileManager.localYOLOModelDir)
 		self.createLogFile()
 
 	def validateInputData(self):
 
-		assert os.path.exists(self.videoObj.localVideoFile)
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
 		assert os.path.exists(self.fileManager.localLogfileDir)
 		assert os.path.exists(self.fileManager.localYOLOModelFile)
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			assert os.path.exists(self.videoObj.localVideoFile)
+
 
 	def createLogFile(self):
 		
@@ -57,32 +50,24 @@ class TrackFishPreparer():
 
 	def runYOLOAnalysis(self):
 
-		model = YOLO(self.fileManager.localYOLOModelFile)
-
-		with open(self.videoObj.localFishDetectionsFile, 'w', newline='') as f:
+		processes = []
 		
-			writer = csv.writer(f)
-			writer.writerow(['FrameNum', 'TrackID', 'X_center', 'Y_center', 'Width', 'Height', 'SexID', 'Sex'])
-
-			results = model.track(self.videoObj.localVideoFile, stream = True, save=False, show=False, persist = True, verbose = False)  # Tracking with default tracker
-			print('TrackingStart: ' + str(datetime.datetime.now()))
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			assert os.path.exists(videoObj.localVideoFile)
+			processes.append(subprocess.Popen(['unit_scripts/track_video.py', videoObj.localVideoFile, videoObj.localFishDetectionsFile, self.fileManager.localYOLOModelFile]))
 		
-			for frame_idx, result in enumerate(results):
-				if result.boxes.id is not None:
-					boxes = result.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
-					track_ids = result.boxes.id.cpu().numpy().astype(int)
-					classes = result.boxes.cls.cpu().numpy()
-					for box, track_id, class_id in zip(boxes, track_ids, classes):
-						x_center, y_center, width, height = box
-						# Write frame, ID, and coordinates to the CSV file
-						writer.writerow([frame_idx, track_id, x_center, y_center, width, height,class_id, result.names[class_id]])
-
-		print('TrackingEnd: ' + str(datetime.datetime.now()))
+		for p1 in processes:
+			p1.communicate()
 
 	def uploadProjectData(self, delete = True):
-		self.fileManager.uploadData(self.videoObj.localFishDetectionsFile)
-		self.fileManager.uploadData(self.videoObj.localYOLOLogfile)
+		
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+		
+			self.fileManager.uploadData(videoObj.localFishDetectionsFile)
+			self.fileManager.uploadData(videoObj.localYOLOLogfile)
 
-		if delete:
-			os.remove(self.videoObj.localVideoFile)
-			os.remove(self.videoObj.localFishDetectionsFile)
+			if delete:
+				os.remove(videoObj.localVideoFile)
+				os.remove(videoObj.localFishDetectionsFile)
