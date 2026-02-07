@@ -25,7 +25,7 @@ class TrackFishPreparer():
 			self.fileManager.downloadData(self.videoObj.localVideoFile)
 
 		self.fileManager.downloadData(self.fileManager.localYOLOModelDir)
-		self.createLogFile()
+		#self.createLogFile()
 
 	def validateInputData(self):
 
@@ -40,13 +40,16 @@ class TrackFishPreparer():
 	def createLogFile(self):
 		
 		# with open(self.fileManager.localClusterLogfile,'w') as f:
-		with open(self.videoObj.localYOLOLogfile,'w') as f:
-			print('GitBranch: ' + self.fileManager.branch_name, file = f)
-			print('Username: ' + os.getenv('USER'), file = f)
-			print('Nodename: ' + os.uname().nodename, file = f)
-			print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
-			output = subprocess.run(['conda','list'], capture_output = True)
-			print(output.stdout.decode('utf-8'), file = f)
+		for videoIndex in self.videoIndices:
+			videoObj = self.fileManager.returnVideoObject(videoIndex)
+
+			with open(videoObj.localYOLOLogfile,'w') as f:
+				print('GitBranch: ' + self.fileManager.branch_name, file = f)
+				print('Username: ' + os.getenv('USER'), file = f)
+				print('Nodename: ' + os.uname().nodename, file = f)
+				print('DateAnalyzed: ' + str(datetime.datetime.now()), file = f)
+				output = subprocess.run(['conda','list'], capture_output = True)
+				print(output.stdout.decode('utf-8'), file = f)
 
 	def runYOLOAnalysis(self):
 
