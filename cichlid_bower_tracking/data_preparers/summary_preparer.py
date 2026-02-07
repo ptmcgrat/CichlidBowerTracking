@@ -47,7 +47,12 @@ class SummaryPreparer:
 		self.fileManager.uploadData(self.fileManager.localSummarizedHourlyClusterFigure)
 		self.fileManager.uploadData(self.fileManager.localSummarizedHistogramFigure)
 		if delete:
-			shutil.rmtree(self.fileManager.localProjectDir)
+			os.remove(self.fileManager.localSmoothDepthFile)
+			os.remove(self.fileManager.localAllLabeledClustersFile)
+			os.remove(self.fileManager.localSummarizedClustersEvents)
+			os.remove(self.fileManager.localSummarizedBuildingFigure)
+			os.remove(self.fileManager.localSummarizedHourlyClusterFigure)
+			os.remove(self.fileManager.localSummarizedHistogramFigure)
 
 	def createLogFile(self):
 		self.fileManager.createDirectory(self.fileManager.localLogfileDir)
