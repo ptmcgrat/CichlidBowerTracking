@@ -263,8 +263,7 @@ class ClusterAnalyzer:
 		dt = self.clusterData
 		dt = dt.sort_index()
 		if sex is not None:
-			dt.loc[dt.MinDistance > 150,'Sex'] == 'Unknown'
-			dt[dt.Sex==sex]
+			dt.loc[dt.MinDistance > 100,'Sex'] = 'Unknown'
 			dt = dt[dt.Sex==sex]
 		if confidence is not None:
 			dt = dt[dt.Probability>confidence]
