@@ -318,7 +318,8 @@ elif args.AnalysisType == 'TrackFish':
 
 		fm_obj.setProjectID(projectID)
 
-		print('Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)	
+		print('Running: ' + projectID)
+		print('   Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)	
 		
 		tfp_obj = TFP(fm_obj, videoIndices)
 
