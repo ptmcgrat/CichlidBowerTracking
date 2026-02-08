@@ -330,7 +330,7 @@ elif args.AnalysisType == 'TrackFish':
 		print('Tracking: ' + str(datetime.datetime.now()))
 		tfp_obj.runYOLOAnalysis()
 		print('Uploading: ' + str(datetime.datetime.now()))		
-		tfp_obj.uploadProjectData(delete = False)
+		tfp_obj.uploadProjectData(delete = True)
 		print('Done: ' + str(datetime.datetime.now()))
 
 		fm_obj = FM(analysisID, projectID)
