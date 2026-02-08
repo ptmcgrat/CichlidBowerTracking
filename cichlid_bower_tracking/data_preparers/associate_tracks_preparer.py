@@ -45,7 +45,7 @@ class AssociateTracksPreparer:
 
 			for videoIndex in self.videoIndices:
 				videoObj = self.fileManager.returnVideoObject(videoIndex)
-				os.remove(videoObj.localFishDetectionsFile)
+				#os.remove(videoObj.localFishDetectionsFile)
 
 
 	def createLogFile(self):
