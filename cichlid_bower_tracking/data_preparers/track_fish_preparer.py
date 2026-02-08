@@ -69,7 +69,7 @@ class TrackFishPreparer():
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 		
 			self.fileManager.uploadData(videoObj.localFishDetectionsFile)
-			self.fileManager.uploadData(videoObj.localYOLOLogfile)
+			#self.fileManager.uploadData(videoObj.localYOLOLogfile)
 
 			if delete:
 				os.remove(videoObj.localVideoFile)

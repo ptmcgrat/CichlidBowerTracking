@@ -325,10 +325,10 @@ elif args.AnalysisType == 'TrackFish':
 		tfp_obj = TFP(fm_obj, videoIndices)
 
 		print('Downloading data: ' + str(datetime.datetime.now()))
-		tfp_obj.downloadProjectData()
-		tfp_obj.validateInputData()
+		#tfp_obj.downloadProjectData()
+		#tfp_obj.validateInputData()
 		print('Tracking: ' + str(datetime.datetime.now()))
-		tfp_obj.runYOLOAnalysis()
+		#tfp_obj.runYOLOAnalysis()
 		print('Uploading: ' + str(datetime.datetime.now()))		
 		tfp_obj.uploadProjectData(delete = False)
 		print('Done: ' + str(datetime.datetime.now()))
