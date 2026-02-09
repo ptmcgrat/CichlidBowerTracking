@@ -1,5 +1,4 @@
 import pdb, subprocess, os, csv, datetime, shutil
-from ultralytics import YOLO
 
 class TrackFishPreparer():
 	# This class takes in directory information and a logfile containing depth information and performs the following:

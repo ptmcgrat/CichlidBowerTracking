@@ -1,5 +1,6 @@
 import argparse, datetime, pdb, multiprocessing, random, subprocess, os
 from helper_modules.file_manager import FileManager as FM
+from itertools import batched
 
 # Create arguments for the script
 parser = argparse.ArgumentParser(description='This script is used to analyze bower building data taken using PiCameras and Realsense Depth Sensors') 
@@ -320,18 +321,23 @@ elif args.AnalysisType == 'TrackFish':
 		fm_obj.setProjectID(projectID)
 
 		print('Running: ' + projectID)
-		print('   Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)	
+		print(' Running: ' + ','.join([str(x) for x in videoIndices]), flush = True)	
 		
-		tfp_obj = TFP(fm_obj, videoIndices)
 
-		print('Downloading data: ' + str(datetime.datetime.now()))
-		tfp_obj.downloadProjectData()
-		tfp_obj.validateInputData()
-		print('Tracking: ' + str(datetime.datetime.now()))
-		tfp_obj.runYOLOAnalysis()
-		print('Uploading: ' + str(datetime.datetime.now()))		
-		tfp_obj.uploadProjectData(delete = True)
-		print('Done: ' + str(datetime.datetime.now()))
+
+		for sub_list in batched(videoIndices, 15):
+			print('   Running: ' + ','.join([str(x) for x in sub_list]), flush = True)	
+			
+			tfp_obj = TFP(fm_obj, sub_list)
+
+			print('   Downloading data: ' + str(datetime.datetime.now()))
+			tfp_obj.downloadProjectData()
+			tfp_obj.validateInputData()
+			print('   Tracking: ' + str(datetime.datetime.now()))
+			tfp_obj.runYOLOAnalysis()
+			print('   Uploading: ' + str(datetime.datetime.now()))		
+			tfp_obj.uploadProjectData(delete = True)
+			print('   Done: ' + str(datetime.datetime.now()))
 
 		fm_obj = FM(analysisID, projectID)
 		s_dt = fm_obj.s_dt
