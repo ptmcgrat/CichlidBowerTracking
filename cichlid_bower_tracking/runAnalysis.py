@@ -43,6 +43,7 @@ cc.add_argument('--ModelID', type=str, nargs='+', help='Optional name of project
 
 trackfish = subparser.add_parser('TrackFish', description = 'Run YOLO to track and sex fish')
 trackfish.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+trackfish.add_argument('--BatchID', type=int, help='Restrict the analysis to a subset that share the batchID')
 trackfish.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
 
 atwcfish = subparser.add_parser('AssociateTracksWithClusters', description = 'Identify fish responsible for manipulations')
@@ -245,6 +246,9 @@ elif args.AnalysisType == 'DLCVideos':
 	for projectID, row in fm_obj.s_dt.iterrows():
 		if projectID not in projectIDs:
 			continue
+		if args.BatchID is not None:
+			if row.BatchID != args.BatchID:
+				continue
 		print(projectID)
 		if row.videoIDsToAnnotate == 'VideoIndices: ':
 			print('Warning: No videos specified for this project. Skipping')
