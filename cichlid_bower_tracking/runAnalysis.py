@@ -246,9 +246,6 @@ elif args.AnalysisType == 'DLCVideos':
 	for projectID, row in fm_obj.s_dt.iterrows():
 		if projectID not in projectIDs:
 			continue
-		if args.BatchID is not None:
-			if row.BatchID != args.BatchID:
-				continue
 		print(projectID)
 		if row.videoIDsToAnnotate == 'VideoIndices: ':
 			print('Warning: No videos specified for this project. Skipping')
@@ -316,7 +313,10 @@ elif args.AnalysisType == 'TrackFish':
 	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
 			continue
-		
+		if args.BatchID is not None:
+			if row.BatchID != args.BatchID:
+				continue
+
 		videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 		already_run = [] if row.TrackFish == 'VideoIndices: ' else row.TrackFish.split(': ')[1].split(',')
 		videoIndices = [int(x) for x in videoIndices if x not in already_run]
