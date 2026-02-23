@@ -23,6 +23,7 @@ class FileManager():
         if analysisID is not None:
             self.localMasterAnalysisDir = self.localMasterDir + '__AnalysisStates/'
             self.localAnalysisStatesDir = self.localMasterAnalysisDir + analysisID + '/'
+            self.localAnalysisOutPicsDir = self.localAnalysisStatesDir + 'OutPics/'
             self.localSummaryFile = self.localAnalysisStatesDir + analysisID + '.csv'
             self.localAnalysisFinalDataDir = self.localAnalysisStatesDir + 'SummarizedBuilds/'
 

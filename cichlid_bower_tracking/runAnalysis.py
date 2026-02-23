@@ -371,6 +371,12 @@ elif args.AnalysisType == 'AssociateTracksWithClusters':
 		atp_obj.createAssociations()
 		atp_obj.uploadData(delete=False)
 
+		fm_obj = FM(analysisID, projectID)
+		s_dt = fm_obj.s_dt
+		s_dt.loc[projectID,'AssociateTracksWithClusters'] = True
+		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
+		fm_obj.uploadData(fm_obj.localSummaryFile)
+
 
 elif args.AnalysisType == 'Summary':
 	from data_preparers.summary_preparer import SummaryPreparer as SP
