@@ -1,6 +1,9 @@
 import argparse, datetime, pdb, multiprocessing, random, subprocess, os
 from helper_modules.file_manager import FileManager as FM
-from itertools import batched
+try:
+	from itertools import batched
+except ImportError
+	from more_itertools import batched
 
 # Create arguments for the script
 parser = argparse.ArgumentParser(description='This script is used to analyze bower building data taken using PiCameras and Realsense Depth Sensors') 
