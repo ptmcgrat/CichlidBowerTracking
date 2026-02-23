@@ -2,7 +2,7 @@ import argparse, datetime, pdb, multiprocessing, random, subprocess, os
 from helper_modules.file_manager import FileManager as FM
 try:
 	from itertools import batched
-except ImportError
+except ImportError:
 	from more_itertools import batched
 
 # Create arguments for the script
