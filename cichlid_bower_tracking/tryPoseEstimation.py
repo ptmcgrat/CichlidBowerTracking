@@ -2,7 +2,7 @@ import subprocess,pdb,shutil,os,csv, datetime
 from helper_modules.file_manager import FileManager as FM
 from ultralytics import YOLO
 
-directories = ['CVxMC-tucker-2025-11-13','MC-tucker-2025-11-03','MCxYH-tucker-2025-11-03/','PD-tucker-2025-11-10','YH-tucker-2025-11-03']
+directories = ['CVxMC-tucker-2025-11-13/','MC-tucker-2025-11-03/','MCxYH-tucker-2025-11-03/','PD-tucker-2025-11-10/','YH-tucker-2025-11-03/']
 fm_obj = FM(analysisID = 'YH_MC_Parentals')
 
 for directory in directories:
