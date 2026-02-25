@@ -7,6 +7,6 @@ trial_data = fm_obj.localPoseDir + 'MCxYH-tucker-2025-11-03/'
 fm_obj.downloadData(trial_data)
 
 yaml_file = trial_data + 'data.yaml'
-model = YOLO("yolo26n-pose.yaml")  # build a new model from YAML
+model = YOLO("yolo26n-pose.pt")  # build a new model from YAML
 results = model.train(data=yaml_file, epochs = 500, imgsz=640)
 
