@@ -5,7 +5,7 @@ from ultralytics import YOLO
 directories = ['CVxMC-tucker-2025-11-13/','MC-tucker-2025-11-03/','MCxYH-tucker-2025-11-03/','PD-tucker-2025-11-10/','YH-tucker-2025-11-03/']
 directories = ['Benthics/']
 fm_obj = FM(analysisID = 'YH_MC_Parentals')
-fm_obj.uploadData(fm_obj.localMLPoseDir + directory)
+fm_obj.uploadData(fm_obj.localMLPoseDir + 'Benthics/')
 pdb.set_trace()
 for directory in directories:
 	trial_data = fm_obj.localPoseDir + directory
