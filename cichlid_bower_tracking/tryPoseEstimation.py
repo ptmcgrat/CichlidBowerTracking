@@ -3,7 +3,7 @@ from helper_modules.file_manager import FileManager as FM
 from ultralytics import YOLO
 
 fm_obj = FM(analysisID = 'YH_MC_Parentals')
-trial_data = self.localPoseDir + 'MCxYH-tucker-2025-11-03/'
+trial_data = fm_obj.localPoseDir + 'MCxYH-tucker-2025-11-03/'
 fm_obj.downloadData(trial_data)
 
 yaml_file = trial_data + 'data.yaml'
