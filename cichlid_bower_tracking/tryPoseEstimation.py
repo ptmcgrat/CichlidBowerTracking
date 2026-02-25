@@ -11,4 +11,5 @@ for directory in directories:
 
 	yaml_file = trial_data + 'data.yaml'
 	model = YOLO("yolo26n-pose.pt")  # build a new model from YAML
-	results = model.train(data=yaml_file, epochs = 200, imgsz=640,name=directory)
+	results = model.train(data=yaml_file, epochs = 200, imgsz=640, project = fm_obj.localMLPoseDir, name=directory)
+	fm_obj.uploadData(fm_obj.localMLPoseDir + directory)

@@ -297,6 +297,7 @@ class FileManager():
 
         self.localMLDir = self.localMasterDir + '__MachineLearningModels/'
         self.localYOLODir = self.localMLDir + 'YOLOModels/'
+        self.localMLPoseDir = self.localPoseDir + 'PoseDir/'
 
         self.localYOLOModelDir = self.localYOLODir + self.analysisID + '/'
         self.localYOLOModelFile = self.localYOLOModelDir + '/weights/best.pt'
