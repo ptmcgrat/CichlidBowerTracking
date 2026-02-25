@@ -8,5 +8,5 @@ fm_obj.downloadData(trial_data)
 
 yaml_file = trial_data + 'data.yaml'
 model = YOLO("yolo26n-pose.pt")  # build a new model from YAML
-results = model.train(data=yaml_file, epochs = 500, imgsz=640)
-
+results = model.train(data=yaml_file, epochs = 200, imgsz=640)
+pdb.set_trace()
