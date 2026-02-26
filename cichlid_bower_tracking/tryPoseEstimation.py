@@ -2,6 +2,16 @@ import subprocess,pdb,shutil,os,csv, datetime
 from helper_modules.file_manager import FileManager as FM
 from ultralytics import YOLO
 
+projectID = 'MC_874_t011_tr1'
+fm_obj = FM(analysisID = 'YH_MC_Parentals', projectID = projectID)
+videoObj = fm_obj.returnVideoObject(6)
+fm_obj.downloadData(videoObj.localVideoFile)
+
+model = YOLO(fm_obj.localMLPoseDir + 'Benthics/weights/best.pt')
+model.predict(videoObj.localVideoFile, save=True, save_txt = True, show_labels = True)
+
+pdb.set_trace()
+
 directories = ['CVxMC-tucker-2025-11-13/','MC-tucker-2025-11-03/','MCxYH-tucker-2025-11-03/','PD-tucker-2025-11-10/','YH-tucker-2025-11-03/']
 directories = ['Benthics/']
 fm_obj = FM(analysisID = 'YH_MC_Parentals')
