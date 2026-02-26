@@ -8,7 +8,10 @@ videoObj = fm_obj.returnVideoObject(6)
 fm_obj.downloadData(videoObj.localVideoFile)
 
 model = YOLO(fm_obj.localMLPoseDir + 'Benthics/weights/best.pt')
-model.predict(videoObj.localVideoFile, save=True, save_txt = True, show_labels = True)
+results = model.predict(videoObj.localVideoFile, save=True, save_txt = True, show_labels = True, stream=True)
+
+for result in results:
+	pass
 
 pdb.set_trace()
 
