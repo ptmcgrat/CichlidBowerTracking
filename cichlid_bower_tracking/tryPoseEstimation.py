@@ -8,12 +8,11 @@ videoObj = fm_obj.returnVideoObject(6)
 fm_obj.downloadData(videoObj.localVideoFile)
 
 model = YOLO(fm_obj.localMLPoseDir + 'Benthics_l/weights/best.pt')
-results = model.predict(videoObj.localVideoFile, stream=True, conf = 0.005)
+results = model.predict(videoObj.localVideoFile, stream=True, save=True, conf = 0.005)
 
 for i,result in enumerate(results):
-	if i == 186:
-		pdb.set_trace()
-
+	if i == 1000:
+		break
 pdb.set_trace()
 
 directories = ['CVxMC-tucker-2025-11-13/','MC-tucker-2025-11-03/','MCxYH-tucker-2025-11-03/','PD-tucker-2025-11-10/','YH-tucker-2025-11-03/']
