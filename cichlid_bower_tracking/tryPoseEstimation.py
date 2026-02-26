@@ -7,11 +7,12 @@ fm_obj = FM(analysisID = 'YH_MC_Parentals', projectID = projectID)
 videoObj = fm_obj.returnVideoObject(6)
 fm_obj.downloadData(videoObj.localVideoFile)
 
-model = YOLO(fm_obj.localMLPoseDir + 'Benthics/weights/best.pt')
+model = YOLO(fm_obj.localMLPoseDir + 'Benthics_l/weights/best.pt')
 results = model.predict(videoObj.localVideoFile, stream=True)
 
-for result in results:
-	pdb.set_trace()
+for i,result in enumerate(results):
+	if i == 20:
+		pdb.set_trace()
 	next(results)
 
 pdb.set_trace()
