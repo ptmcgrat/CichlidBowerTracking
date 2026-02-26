@@ -8,7 +8,7 @@ videoObj = fm_obj.returnVideoObject(6)
 fm_obj.downloadData(videoObj.localVideoFile)
 
 model = YOLO(fm_obj.localMLPoseDir + 'Benthics_l/weights/best.pt')
-results = model.predict(videoObj.localVideoFile, stream=True)
+results = model.predict(videoObj.localVideoFile, stream=True, conf = 0.005)
 
 for i,result in enumerate(results):
 	if i == 20:
