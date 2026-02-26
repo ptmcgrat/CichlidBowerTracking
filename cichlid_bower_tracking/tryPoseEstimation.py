@@ -11,7 +11,7 @@ model = YOLO(fm_obj.localMLPoseDir + 'Benthics_l/weights/best.pt')
 results = model.predict(videoObj.localVideoFile, stream=True, conf = 0.005)
 
 for i,result in enumerate(results):
-	if i == 20:
+	if result.probs is not None:
 		pdb.set_trace()
 	next(results)
 
