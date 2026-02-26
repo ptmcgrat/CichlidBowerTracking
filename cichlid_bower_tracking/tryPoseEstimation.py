@@ -13,7 +13,6 @@ results = model.predict(videoObj.localVideoFile, stream=True, conf = 0.005)
 for i,result in enumerate(results):
 	if i == 186:
 		pdb.set_trace()
-	next(results)
 
 pdb.set_trace()
 
