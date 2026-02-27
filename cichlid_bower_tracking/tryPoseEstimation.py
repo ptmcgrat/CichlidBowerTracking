@@ -1,31 +1,31 @@
 import subprocess,pdb,shutil,os,csv, datetime
 from helper_modules.file_manager import FileManager as FM
 from ultralytics import YOLO
+import torch
 
-projectID = 'MC_874_t011_tr1'
-fm_obj = FM(analysisID = 'YH_MC_Parentals', projectID = projectID)
-videoObj = fm_obj.returnVideoObject(6)
-fm_obj.downloadData(videoObj.localVideoFile)
+"""
+# Check for MPS
+device = 'cpu' if torch.backends.mps.is_available() else 'cpu'
+print(f"Using device: {device}")
 
-model = YOLO(fm_obj.localMLPoseDir + 'Benthics_l/weights/best.pt')
-results = model.predict(videoObj.localVideoFile, stream=True, save=True, conf = 0.005)
 
-for i,result in enumerate(results):
-	if i == 1000:
-		break
-pdb.set_trace()
-
-directories = ['CVxMC-tucker-2025-11-13/','MC-tucker-2025-11-03/','MCxYH-tucker-2025-11-03/','PD-tucker-2025-11-10/','YH-tucker-2025-11-03/']
-directories = ['Benthics/']
 fm_obj = FM(analysisID = 'YH_MC_Parentals')
-fm_obj.uploadData(fm_obj.localMLPoseDir + 'Benthics/')
-pdb.set_trace()
-for directory in directories:
-	trial_data = fm_obj.localPoseDir + directory
-	fm_obj.downloadData(trial_data)
+test_file = fm_obj.localLabeledDLCClipsDir + 'MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'
+fm_obj.downloadData(test_file)
+fm_obj.downloadData(fm_obj.localYOLOModelDir)
+fm_obj.downloadData(fm_obj.localMLPoseDir + 'Benthics_l/weights/best.pt')
 
-	yaml_file = trial_data + 'data.yaml'
-	model = YOLO("yolo26l-pose.pt")  # build a new model from YAML
-	results = model.train(data=yaml_file, epochs = 200, imgsz=640, project = fm_obj.localMLPoseDir, name=directory.replace('/','_l/'), batch=-1)
-	fm_obj.uploadData(fm_obj.localMLPoseDir + directory.replace('/','_l/'))
-	fm_obj.uploadData(fm_obj.localMLPoseDir + directory)
+model_pose = YOLO(fm_obj.localMLPoseDir + 'Benthics_l/weights/best.pt')
+model_track = YOLO(fm_obj.localYOLOModelFile)
+
+results = model_pose.track(test_file, show=True, device=device)
+"""
+# Train model
+
+fm_obj = FM(analysisID = 'YH_MC_Parentals')
+
+fm_obj.downloadData(fm_obj.localPoseDir + 'Benthics/')
+model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
+
+results = model.train(data=fm_obj.localPoseDir + 'Benthics/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'Benthics')
+fm_obj.uploadData(fm_obj.localMLPoseDir + 'Benthics/')
