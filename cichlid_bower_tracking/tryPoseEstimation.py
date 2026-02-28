@@ -38,7 +38,7 @@ def modifyTuckerObjectDetections():
 			subprocess.run(['cp', subdir + 'images/val/' + ti, outdir + 'images/val/' + ti])
 		print(project + ',Num_train: ' + str(len(train_images)) + ',Num_val: ' + str(len(val_images)))
 
-		train_labels = os.listdir(hybrid_indata + 'labels/train/') 
+		train_labels = os.listdir(subdir + 'labels/train/') 
 		for ti in train_labels:
 			with open(subdir + 'labels/train/' + ti) as infile, open(outdir + 'labels/train/' + ti, 'w') as outfile:
 				for line in infile:
@@ -50,9 +50,9 @@ def modifyTuckerObjectDetections():
 					else:
 						raise Exception
 
-		val_labels = os.listdir(hybrid_indata + 'labels/val/') 
+		val_labels = os.listdir(subdir + 'labels/val/') 
 		for ti in val_labels:
-			with open(hybrid_indata + 'labels/val/' + ti) as infile, open(hybrid_outdata + 'labels/val/' + ti, 'w') as outfile:
+			with open(subdir + 'labels/val/' + ti) as infile, open(outdir + 'labels/val/' + ti, 'w') as outfile:
 				for line in infile:
 					line = line.rstrip()
 					if line[0] == '0':
@@ -112,7 +112,7 @@ def modifyTuckerLabels():
 			subprocess.run(['cp', subdir + 'images/val/' + ti, outdir + 'images/val/' + ti])
 		print(project + ',Num_train: ' + str(len(train_images)) + ',Num_val: ' + str(len(val_images)))
 
-		train_labels = os.listdir(hybrid_indata + 'labels/train/') 
+		train_labels = os.listdir(subdir + 'labels/train/') 
 		for ti in train_labels:
 			with open(subdir + 'labels/train/' + ti) as infile, open(outdir + 'labels/train/' + ti, 'w') as outfile:
 				for line in infile:
@@ -124,9 +124,9 @@ def modifyTuckerLabels():
 					else:
 						raise Exception
 
-		val_labels = os.listdir(hybrid_indata + 'labels/val/') 
+		val_labels = os.listdir(subdir + 'labels/val/') 
 		for ti in val_labels:
-			with open(hybrid_indata + 'labels/val/' + ti) as infile, open(hybrid_outdata + 'labels/val/' + ti, 'w') as outfile:
+			with open(subdir + 'labels/val/' + ti) as infile, open(outdir + 'labels/val/' + ti, 'w') as outfile:
 				for line in infile:
 					line = line.rstrip()
 					if line[0] == '0':
