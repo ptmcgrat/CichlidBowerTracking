@@ -129,7 +129,8 @@ def modifyTuckerLabels():
 		for ti in train_images:
 			subprocess.run(['cp', subdir + 'images/train/' + ti, outdir_pose1 + 'images/train/' + ti])
 			subprocess.run(['cp', subdir + 'images/train/' + ti, outdir_detect1 + 'images/train/' + ti])
-			with open(subdir + 'labels/train/' + ti) as infile, open(outdir_detect1 + 'labels/train/' + ti, 'w') as outfile_detect, open(outdir_pose1 + 'labels/train/' + ti, 'w') as outfile_pose:
+			ti_l = ti.replace('.png','.txt')
+			with open(subdir + 'labels/train/' + ti_l) as infile, open(outdir_detect1 + 'labels/train/' + ti_l, 'w') as outfile_detect, open(outdir_pose1 + 'labels/train/' + ti_l, 'w') as outfile_pose:
 				for line in infile:
 					line = line.rstrip()
 					tokens = line.split(' ')
@@ -148,7 +149,7 @@ def modifyTuckerLabels():
 				subprocess.run(['cp', subdir + 'images/train/' + ti, outdir_pose2 + 'images/train/' + ti])
 				subprocess.run(['cp', subdir + 'images/train/' + ti, outdir_detect2 + 'images/train/' + ti])
 
-				with open(subdir + 'labels/train/' + ti) as infile, open(outdir_detect2 + 'labels/train/' + ti, 'w') as outfile_detect, open(outdir_pose2 + 'labels/train/' + ti, 'w') as outfile_pose:
+				with open(subdir + 'labels/train/' + ti_l) as infile, open(outdir_detect2 + 'labels/train/' + ti_l, 'w') as outfile_detect, open(outdir_pose2 + 'labels/train/' + ti_l, 'w') as outfile_pose:
 					for line in infile:
 						line = line.rstrip()
 						tokens = line.split(' ')
