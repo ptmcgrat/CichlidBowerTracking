@@ -87,7 +87,7 @@ def modifyTuckerLabels():
 
 	for d in [outdir_pose1,outdir_pose2]:
 		with open(d + 'data.yaml', 'w') as f:
-			print('path: ' + outdir, file = f)
+			print('path: ' + d, file = f)
 			print('train: images/train', file = f)
 			print('val: images/val', file = f)
 			print('', file = f)
@@ -111,7 +111,7 @@ def modifyTuckerLabels():
 
 	for d in [outdir_detect1,outdir_detect2]:
 		with open(d + 'data.yaml', 'w') as f:
-			print('path: ' + outdir, file = f)
+			print('path: ' + d, file = f)
 			print('train: images/train', file = f)
 			print('val: images/val', file = f)
 			print('', file = f)
