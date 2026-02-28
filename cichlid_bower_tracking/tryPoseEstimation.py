@@ -170,7 +170,7 @@ def modifyTuckerLabels():
 		for vi in val_images:
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_pose1 + 'images/val/' + vi])
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_detect1 + 'images/val/' + vi])
-			vi_l = ti.replace('.png','.txt')
+			vi_l = vi.replace('.png','.txt')
 
 			with open(subdir + 'labels/val/' + vi_l) as infile, open(outdir_detect1 + 'labels/val/' + vi_l, 'w') as outfile_detect, open(outdir_pose1 + 'labels/val/' + vi_l, 'w') as outfile_pose:
 				for line in infile:
