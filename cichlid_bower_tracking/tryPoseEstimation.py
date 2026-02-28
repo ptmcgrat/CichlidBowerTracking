@@ -76,8 +76,8 @@ def modifyTuckerLabels():
 
 	outdir_pose1 = fm_obj.localPoseDir + 'GenericPose1/'
 	outdir_pose2 = fm_obj.localPoseDir + 'GenericPose2/'
-	outdir_detect1 = fm_obj.localPoseDir + 'GenericSex1/'
-	outdir_detect2 = fm_obj.localPoseDir + 'GenericSex2/'
+	outdir_detect1 = fm_obj.localObjectDetectionDir + 'GenericSex1/'
+	outdir_detect2 = fm_obj.localObjectDetectionDir + 'GenericSex2/'
 	
 	for d in [outdir_pose1,outdir_pose2,outdir_detect1,outdir_detect2]:
 		fm_obj.createDirectory(d)
@@ -137,10 +137,10 @@ def modifyTuckerLabels():
 
 					if line[0] == '0':
 						print('1' + line[1:], file = outfile_pose)
-						print('1' + ' '.join(tokens[1:5]), file = outfile_detect)
+						print('1 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 					elif line[0] == '1':
 						print('0' + line[1:], file = outfile_pose)
-						print('0' + ' '.join(tokens[1:5]), file = outfile_detect)
+						print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 
 					else:
 						raise Exception
@@ -156,10 +156,10 @@ def modifyTuckerLabels():
 
 						if line[0] == '0':
 							print('1' + line[1:], file = outfile_pose)
-							print('1' + ' '.join(tokens[1:5]), file = outfile_detect)
+							print('1 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 						elif line[0] == '1':
 							print('0' + line[1:], file = outfile_pose)
-							print('0' + ' '.join(tokens[1:5]), file = outfile_detect)
+							print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 
 						else:
 							raise Exception
@@ -179,10 +179,10 @@ def modifyTuckerLabels():
 
 					if line[0] == '0':
 						print('1' + line[1:], file = outfile_pose)
-						print('1' + ' '.join(tokens[1:5]), file = outfile_detect)
+						print('1 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 					elif line[0] == '1':
 						print('0' + line[1:], file = outfile_pose)
-						print('0' + ' '.join(tokens[1:5]), file = outfile_detect)
+						print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 
 					else:
 						raise Exception
@@ -198,11 +198,10 @@ def modifyTuckerLabels():
 
 						if line[0] == '0':
 							print('1' + line[1:], file = outfile_pose)
-							print('1' + ' '.join(tokens[1:5]), file = outfile_detect)
+							print('1 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 						elif line[0] == '1':
 							print('0' + line[1:], file = outfile_pose)
-							print('0' + ' '.join(tokens[1:5]), file = outfile_detect)
-
+							print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 						else:
 							raise Exception
 		
@@ -213,13 +212,8 @@ def modifyTuckerLabels():
 
 def train_model(mode):
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
-	pdb.set_trace()
-	if mode == 'pose':
-		output = subprocess.run(['rclone','lsf','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/__AnnotatedData/ObjectDetection/YOLO_Annotations/bbbox_only/GenericSex/images/train/'], capture_output = True)
-		output2 = subprocess.run(['rclone','lsf','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/__AnnotatedData/PoseData/Benthics/images/train/'], capture_output = True)
-
-		fm_obj.downloadData(fm_obj.localPoseDir + 'Benthics/')
-		model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
+	fm_obj.downloadData(fm_obj.localPoseDir + 'Benthics/')
+	model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
 
 		results = model.train(data=fm_obj.localPoseDir + 'Benthics/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'Benthics', batch = -1, exist_ok=True)
 		fm_obj.uploadData(fm_obj.localMLPoseDir + 'Benthics/')
