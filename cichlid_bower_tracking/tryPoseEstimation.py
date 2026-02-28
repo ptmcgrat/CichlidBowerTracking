@@ -28,7 +28,7 @@ def trackData(mode):
 	test_file = fm_obj.localLabeledDLCClipsDir + 'MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'
 	fm_obj.downloadData(test_file)
 	
-	if mode == 'pose'
+	if mode == 'pose':
 		fm_obj.downloadData(fm_obj.localMLPoseDir + 'Benthics/')
 		#fm_obj.downloadData(fm_obj.localMLPoseDir + 'Benthics/weights/best.pt')
 
