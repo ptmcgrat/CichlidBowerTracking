@@ -15,7 +15,7 @@ def train_model(mode):
 		fm_obj.uploadData(fm_obj.localMLPoseDir + 'Benthics/')
 
 	elif mode == 'detect':
-		fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'GenericSex/')
+		fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'bbbox_only/GenericSex/')
 		model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
 		results = model.train(data=fm_obj.localYOLOAnnotationDir + 'GenericSex/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSexTest', batch = -1, exist_ok=True)
 		fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSexTest/')
@@ -37,5 +37,5 @@ def trackData():
 
 	results = model_pose.track(test_file, show=True, device=device)
 
-train_model('pose')
+#train_model('pose')
 train_model('detect')
