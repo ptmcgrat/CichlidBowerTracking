@@ -70,7 +70,7 @@ def modifyTuckerLabels():
 	#for dtype,outdir in zip(['bbbox_only/OriginalTuckerData/','bbox_and_pose/'],[fm_obj.localObjectDetectionDir + 'GenericSex/', fm_obj.localPoseDir + 'GenericPose/']):
 
 	outdir = fm_obj.localPoseDir + 'GenericPose/'
-	main_dir = fm_obj.localAnnotationDir + 'TuckerAnnotations/bbox_and_pose/' + dtype
+	main_dir = fm_obj.localAnnotationDir + 'TuckerAnnotations/bbox_and_pose/'
 	fm_obj.downloadData(main_dir)
 	fm_obj.createDirectory(outdir)
 	for d in ['images/train','images/val','labels/train','labels/val']:
@@ -178,7 +178,7 @@ def trackData(mode):
 		model_track = YOLO(fm_obj.localMLPoseDir + 'GenericSexTest/weights/best.pt')
 		results = model_track.track(test_file, show=True, device=device)
 
-modifyTuckerObjectDetections()
+#modifyTuckerObjectDetections()
 modifyTuckerLabels()
 
 #train_model('pose')
