@@ -158,7 +158,7 @@ def modifyTuckerLabels():
 							print('1' + line[1:], file = outfile_pose)
 							print('1' + ' '.join(tokens[1:5]), file = outfile_detect)
 						elif line[0] == '1':
-							print('0' + line.split(' '), file = outfile_pose)
+							print('0' + line[1:], file = outfile_pose)
 							print('0' + ' '.join(tokens[1:5]), file = outfile_detect)
 
 						else:
