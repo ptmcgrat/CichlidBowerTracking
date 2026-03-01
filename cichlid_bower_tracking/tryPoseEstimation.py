@@ -166,7 +166,7 @@ def modifyTuckerLabels():
 
 		val_images = os.listdir(subdir + 'images/val/') 
 		val_images_filter = os.listdir(main_dir_detect + project + 'images/val/')
-
+		pdb.set_trace()
 		for vi in val_images:
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_pose1 + 'images/val/' + vi])
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_detect1 + 'images/val/' + vi])
