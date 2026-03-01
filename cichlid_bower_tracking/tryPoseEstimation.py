@@ -166,7 +166,6 @@ def modifyTuckerLabels():
 
 		val_images = os.listdir(subdir + 'images/val/') 
 		val_images_filter = os.listdir(main_dir_detect + project + 'images/val/')
-		pdb.set_trace()
 		for vi in val_images:
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_pose1 + 'images/val/' + vi])
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_detect1 + 'images/val/' + vi])
@@ -204,7 +203,8 @@ def modifyTuckerLabels():
 							print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 						else:
 							raise Exception
-		
+			else:
+				pdb.set_trace()
 
 	for d in [outdir_pose1,outdir_pose2,outdir_detect1,outdir_detect2]:
 		fm_obj.uploadData(d)
