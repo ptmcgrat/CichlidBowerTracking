@@ -196,35 +196,31 @@ def train_models():
 	#model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
 	#results2 = model.train(data=fm_obj.localPoseDir + 'GenericPose2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose2', batch = -1, exist_ok=True)
 	
-	model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
-	results3 = model.train(data=fm_obj.localObjectDetectionDir + 'GenericSex1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex1', batch = -1, exist_ok=True)
-	model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
-	results4 = model.train(data=fm_obj.localObjectDetectionDir + 'GenericSex2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex2', batch = -1, exist_ok=True)
-	pdb.set_trace()
+	#model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
+	#results3 = model.train(data=fm_obj.localObjectDetectionDir + 'GenericSex1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex1', batch = -1, exist_ok=True)
+	#model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
+	#results4 = model.train(data=fm_obj.localObjectDetectionDir + 'GenericSex2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex2', batch = -1, exist_ok=True)
 	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose1/')
 	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose2/')
-	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex1/')
-	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex2/')
+	fm_obj.uploadData(fm_obj.localObjectDetectionDir + 'GenericSex1/')
+	fm_obj.uploadData(fm_obj.localObjectDetectionDir + 'GenericSex2/')
 
 def trackData(mode):
 	# Check for MPS
 	device = 'cpu' if torch.backends.mps.is_available() else 'cpu'
 
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
+
 	test_file = fm_obj.localLabeledDLCClipsDir + 'MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'
 	fm_obj.downloadData(test_file)
-	
-	if mode == 'pose':
-		fm_obj.downloadData(fm_obj.localMLPoseDir + 'Benthics/')
-		#fm_obj.downloadData(fm_obj.localMLPoseDir + 'Benthics/weights/best.pt')
 
-		model_pose = YOLO(fm_obj.localMLPoseDir + 'Benthics/weights/best.pt')
-		results = model_pose.track(test_file, show=True, device=device)
+	models = [fm_obj.localObjectDetectionDir + 'GenericSex1/', fm_obj.localObjectDetectionDir + 'GenericSex2/']
+	models += [fm_obj.localMLPoseDir + 'GenericPose1/',fm_obj.localMLPoseDir + 'GenericPose2/']
 
-	if mode == 'detect':
-		fm_obj.downloadData(fm_obj.localYOLODir + 'GenericSexTest/')
-		model_track = YOLO(fm_obj.localMLPoseDir + 'GenericSexTest/weights/best.pt')
-		results = model_track.track(test_file, show=True, device=device)
+	for model_dir in models:
+		fm_obj.downloadData(model_dir)	
+		model = YOLO(model_dir + 'weights/best.pt')
+		results = model.track(test_file, show=True, device=device)
 
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
