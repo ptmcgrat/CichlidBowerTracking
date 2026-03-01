@@ -188,8 +188,8 @@ def train_models():
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
 	fm_obj.downloadData(fm_obj.localPoseDir + 'GenericPose1/')
 	fm_obj.downloadData(fm_obj.localPoseDir + 'GenericPose2/')
-	fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'GenericSex1/')
-	fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'GenericSex2/')
+	fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex1/')
+	fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex2/')
 
 	model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
 	results1 = model.train(data=fm_obj.localPoseDir + 'GenericPose1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose1', batch = -1, exist_ok=True)
