@@ -125,6 +125,7 @@ def modifyTuckerLabels():
 		
 		train_images = os.listdir(subdir + 'images/train/') 
 		train_images_filter = os.listdir(main_dir_detect + project + 'images/train/')
+		val_images_filter = os.listdir(main_dir_detect + project + 'images/val/')
 
 		for ti in train_images:
 			subprocess.run(['cp', subdir + 'images/train/' + ti, outdir_pose1 + 'images/train/' + ti])
@@ -164,8 +165,27 @@ def modifyTuckerLabels():
 						else:
 							raise Exception
 
+			if ti in val_images_filter:
+				subprocess.run(['cp', subdir + 'images/train/' + ti, outdir_pose2 + 'images/val/' + ti])
+				subprocess.run(['cp', subdir + 'images/train/' + ti, outdir_detect2 + 'images/val/' + ti])
+
+				with open(subdir + 'labels/train/' + ti_l) as infile, open(outdir_detect2 + 'labels/val/' + ti_l, 'w') as outfile_detect, open(outdir_pose2 + 'labels/val/' + ti_l, 'w') as outfile_pose:
+					for line in infile:
+						line = line.rstrip()
+						tokens = line.split(' ')
+
+						if line[0] == '0':
+							print('1' + line[1:], file = outfile_pose)
+							print('1 ' + ' '.join(tokens[1:5]), file = outfile_detect)
+						elif line[0] == '1':
+							print('0' + line[1:], file = outfile_pose)
+							print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
+
+						else:
+							raise Exception
+
+
 		val_images = os.listdir(subdir + 'images/val/') 
-		val_images_filter = os.listdir(main_dir_detect + project + 'images/val/')
 		for vi in val_images:
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_pose1 + 'images/val/' + vi])
 			subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_detect1 + 'images/val/' + vi])
@@ -203,8 +223,24 @@ def modifyTuckerLabels():
 							print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
 						else:
 							raise Exception
-			else:
-				pdb.set_trace()
+			
+			if vi in train_images_filter:
+				subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_pose2 + 'images/train/' + vi])
+				subprocess.run(['cp', subdir + 'images/val/' + vi, outdir_detect2 + 'images/train/' + vi])
+
+				with open(subdir + 'labels/val/' + vi_l) as infile, open(outdir_detect2 + 'labels/train/' + vi_l, 'w') as outfile_detect, open(outdir_pose2 + 'labels/train/' + vi_l, 'w') as outfile_pose:
+					for line in infile:
+						line = line.rstrip()
+						tokens = line.split(' ')
+
+						if line[0] == '0':
+							print('1' + line[1:], file = outfile_pose)
+							print('1 ' + ' '.join(tokens[1:5]), file = outfile_detect)
+						elif line[0] == '1':
+							print('0' + line[1:], file = outfile_pose)
+							print('0 ' + ' '.join(tokens[1:5]), file = outfile_detect)
+						else:
+							raise Exception
 
 	for d in [outdir_pose1,outdir_pose2,outdir_detect1,outdir_detect2]:
 		fm_obj.uploadData(d)
