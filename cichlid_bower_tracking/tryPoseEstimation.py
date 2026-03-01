@@ -3,67 +3,6 @@ from helper_modules.file_manager import FileManager as FM
 from ultralytics import YOLO
 import torch
 
-def modifyTuckerObjectDetections():
-	fm_obj = FM(analysisID = 'YH_MC_Parentals')
-	indatas = ['CVxMC-tucker-2025-11-13/', 'MC-tucker-2025-11-03/', 'MCxYH-tucker-2025-11-03/', 'YH-tucker-2025-11-03/']
-	#for dtype,outdir in zip(['bbbox_only/OriginalTuckerData/','bbox_and_pose/'],[fm_obj.localObjectDetectionDir + 'GenericSex/', fm_obj.localPoseDir + 'GenericPose/']):
-
-	outdir = fm_obj.localObjectDetectionDir + 'GenericSex/'
-	main_dir = fm_obj.localAnnotationDir + 'TuckerAnnotations/bbbox_only/OriginalTuckerData/'
-	fm_obj.downloadData(main_dir)
-	fm_obj.createDirectory(outdir)
-	for d in ['images/train','images/val','labels/train','labels/val']:
-		fm_obj.createDirectory(outdir + d)
-
-	with open(outdir + 'data.yaml', 'w') as f:
-		print('path: ' + outdir, file = f)
-		print('train: images/train', file = f)
-		print('val: images/val', file = f)
-		print('', file = f)
-		print('names:', file = f)
-		print('  0: female', file = f)
-		print('  1: male', file = f)
-
-
-	for project in indatas:
-		subdir = main_dir + project
-
-		train_images = os.listdir(subdir + 'images/train/') 
-		
-		for ti in train_images:
-			subprocess.run(['cp', subdir + 'images/train/' + ti, outdir + 'images/train/' + ti])
-		
-		val_images = os.listdir(subdir + 'images/val/') 
-		for ti in val_images:
-			subprocess.run(['cp', subdir + 'images/val/' + ti, outdir + 'images/val/' + ti])
-		print(project + ',Num_train: ' + str(len(train_images)) + ',Num_val: ' + str(len(val_images)))
-
-		train_labels = os.listdir(subdir + 'labels/train/') 
-		for ti in train_labels:
-			with open(subdir + 'labels/train/' + ti) as infile, open(outdir + 'labels/train/' + ti, 'w') as outfile:
-				for line in infile:
-					line = line.rstrip()
-					if line[0] == '0':
-						print('1' + line[1:], file = outfile)
-					elif line[0] == '1':
-						print('0' + line[1:], file = outfile)
-					else:
-						raise Exception
-
-		val_labels = os.listdir(subdir + 'labels/val/') 
-		for ti in val_labels:
-			with open(subdir + 'labels/val/' + ti) as infile, open(outdir + 'labels/val/' + ti, 'w') as outfile:
-				for line in infile:
-					line = line.rstrip()
-					if line[0] == '0':
-						print('1' + line[1:], file = outfile)
-					elif line[0] == '1':
-						print('0' + line[1:], file = outfile)
-					else:
-						raise Exception
-
-	fm_obj.uploadData(outdir)
-
 def modifyTuckerLabels():
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
 	main_dir_pose = fm_obj.localAnnotationDir + 'TuckerAnnotations/bbox_and_pose/'
@@ -245,21 +184,27 @@ def modifyTuckerLabels():
 	for d in [outdir_pose1,outdir_pose2,outdir_detect1,outdir_detect2]:
 		fm_obj.uploadData(d)
 
-
-def train_model(mode):
+def train_models():
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
-	fm_obj.downloadData(fm_obj.localPoseDir + 'Benthics/')
+	fm_obj.downloadData(fm_obj.localPoseDir + 'GenericPose1/')
+	fm_obj.downloadData(fm_obj.localPoseDir + 'GenericPose2/')
+	fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'GenericSex1/')
+	fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'GenericSex2/')
+
 	model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
-
-	if mode == 'pose':
-		results = model.train(data=fm_obj.localPoseDir + 'Benthics/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'Benthics', batch = -1, exist_ok=True)
-		fm_obj.uploadData(fm_obj.localMLPoseDir + 'Benthics/')
-
-	elif mode == 'detect':
-		fm_obj.downloadData(fm_obj.localYOLOAnnotationDir + 'bbbox_only/GenericSex/')
-		model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
-		results = model.train(data=fm_obj.localYOLOAnnotationDir + 'GenericSex/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSexTest', batch = -1, exist_ok=True)
-		fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSexTest/')
+	results1 = model.train(data=fm_obj.localPoseDir + 'GenericPose1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose1', batch = -1, exist_ok=True)
+	model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
+	results2 = model.train(data=fm_obj.localPoseDir + 'GenericPose2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose2', batch = -1, exist_ok=True)
+	
+	model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
+	results3 = model.train(data=fm_obj.localYOLOAnnotationDir + 'GenericSex1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex1', batch = -1, exist_ok=True)
+	model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
+	results4 = model.train(data=fm_obj.localYOLOAnnotationDir + 'GenericSex2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex2', batch = -1, exist_ok=True)
+	pdb.set_trace()
+	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose1/')
+	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose2/')
+	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex1/')
+	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex2/')
 
 def trackData(mode):
 	# Check for MPS
@@ -282,7 +227,7 @@ def trackData(mode):
 		results = model_track.track(test_file, show=True, device=device)
 
 #modifyTuckerObjectDetections()
-modifyTuckerLabels()
+#modifyTuckerLabels()
 
-#train_model('pose')
+train_models()
 #train_model('detect')
