@@ -252,7 +252,7 @@ def trackData():
 			video_crop_points = eval(line.rstrip())
 		polygon = Polygon(video_crop_points)
 		
-		dt['InFrame'] = self.clusterData.apply(lambda row: polygon.contains(Point(row['X_c'],row['Y_c'])), axis = 1)
+		dt['InFrame'] = dt.apply(lambda row: polygon.contains(Point(row['X_c'],row['Y_c'])), axis = 1)
 	track_dt = dt.groupby('TrackID').agg({'Frame':['min','max'],'X_c':'count','ClassID':'mean','InFrame':'mean'})
 	pdb.set_trace()
 #modifyTuckerObjectDetections()
