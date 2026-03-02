@@ -2,6 +2,8 @@ import subprocess,pdb,shutil,os,csv, datetime
 from helper_modules.file_manager import FileManager as FM
 from ultralytics import YOLO
 import torch
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 def modifyTuckerLabels():
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
@@ -209,7 +211,7 @@ def trackData():
 	# Check for MPS
 	#device = 'cpu' if torch.backends.mps.is_available() else 'cpu'
 
-	fm_obj = FM(analysisID = 'YH_MC_Parentals')
+	fm_obj = FM(analysisID = 'YH_MC_Parentals', projectID = 'MCYHF1_549_t011_tr1')
 
 	models = [fm_obj.localYOLODir + 'GenericSex1/', fm_obj.localYOLODir + 'GenericSex2/']
 	models += [fm_obj.localMLPoseDir + 'GenericPose1/',fm_obj.localMLPoseDir + 'GenericPose2/']
@@ -218,10 +220,10 @@ def trackData():
 	fm_obj.downloadData(test_file)
 
 	model_dir = models[2]
-
+	"""
 	fm_obj.downloadData(model_dir)	
 	model = YOLO(model_dir + 'weights/best.pt')
-	results = model.track(test_file, stream = True, save = True, agnostic_nms = True)
+	results = model.track(test_file, stream = True, save = True, agnostic_nms = True, with_reid = True)
 	with open('TestTracking.csv', 'w', newline='') as f:
 
 		writer = csv.writer(f)
@@ -238,10 +240,23 @@ def trackData():
 					# Write frame, ID, and coordinates to the CSV file
 					writer.writerow([frame_idx, track_id, x_center, y_center, width, height, class_id, result.names[class_id]] + [(x[0],x[1]) for x in pose])
 
-	subprocess.run(['ffmpeg','-i','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.avi','-c:v','libx264','-c:a','aac','-crf','18','-b:a','224k','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'])
-	subprocess.run(['rclone','copy','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.mp4','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/'])
+	subprocess.run(['mv','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.avi','.'])
+	subprocess.run(['ffmpeg','-i','MCYHF1_549_t011_tr1__0009_vid__DLC.avi','-c:v','libx264','-c:a','aac','-crf','18','-b:a','224k','MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'])
+	subprocess.run(['rclone','copy','MCYHF1_549_t011_tr1__0009_vid__DLC.mp4','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/'])
+	"""
+	dt = pd.read_csv('TestTracking.csv')
+
+	fm_obj.downloadData(fm_obj.localVideoCropFile)
+	with open(fm_obj.localVideoCropFile) as f:
+		for line in f:
+			video_crop_points = eval(line.rstrip())
+		polygon = Polygon(video_crop_points)
+		
+		dt['InFrame'] = self.clusterData.apply(lambda row: polygon.contains(Point(row['X_c'],row['Y_c'])), axis = 1)
+	track_dt = dt.groupby('TrackID').agg({'Frame':['min','max'],'X_c':'count','ClassID':'mean','InFrame':'mean'})
+
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
 
-train_models()
+#train_models()
 trackData()
