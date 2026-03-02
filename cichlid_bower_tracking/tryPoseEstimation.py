@@ -202,28 +202,45 @@ def train_models():
 	#results4 = model.train(data=fm_obj.localObjectDetectionDir + 'GenericSex2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex2', batch = -1, exist_ok=True)
 	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose1/')
 	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose2/')
-	fm_obj.uploadData(fm_obj.localObjectDetectionDir + 'GenericSex1/')
-	fm_obj.uploadData(fm_obj.localObjectDetectionDir + 'GenericSex2/')
+	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex1/')
+	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex2/')
 
-def trackData(mode):
+def trackData():
 	# Check for MPS
 	device = 'cpu' if torch.backends.mps.is_available() else 'cpu'
 
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
 
+	models = [fm_obj.localYOLODir + 'GenericSex1/', fm_obj.localYOLODir + 'GenericSex2/']
+	models += [fm_obj.localMLPoseDir + 'GenericPose1/',fm_obj.localMLPoseDir + 'GenericPose2/']
+
 	test_file = fm_obj.localLabeledDLCClipsDir + 'MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'
 	fm_obj.downloadData(test_file)
 
-	models = [fm_obj.localObjectDetectionDir + 'GenericSex1/', fm_obj.localObjectDetectionDir + 'GenericSex2/']
-	models += [fm_obj.localMLPoseDir + 'GenericPose1/',fm_obj.localMLPoseDir + 'GenericPose2/']
+	model_dir = models[2]
 
-	for model_dir in models:
-		fm_obj.downloadData(model_dir)	
-		model = YOLO(model_dir + 'weights/best.pt')
-		results = model.track(test_file, show=True, device=device)
+	fm_obj.downloadData(model_dir)	
+	model = YOLO(model_dir + 'weights/best.pt')
+	results = model.track(test_file, device=device, stream = True, save = True)
+	with open('TestTracking.csv', 'w', newline='') as f:
+
+		writer = csv.writer(f)
+		csv.writerow(['Frame','TrackID','X_c','Y_c','Width','Height','ClassID','Sex','Pose_Nose','Pose_LeftEye','Pose_RightEye', 'Pose_Head','Pose_Spine1','Pose_Spine2','Pose_Spine3','Pose_Spine4','Pose_Peduncle','Pose_TailTip'])
+		for frame_idx, result in enumerate(results):
+
+			if result.boxes.id is not None:
+				boxes = result.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
+				track_ids = result.boxes.id.cpu().numpy().astype(int)
+				classes = result.boxes.cls.cpu().numpy()
+				poses = result.keypoints.xy.cpu().numpy()
+				for box, track_id, class_id, pose in zip(boxes, track_ids, classes, poses):
+					x_center, y_center, width, height = box
+					# Write frame, ID, and coordinates to the CSV file
+					writer.writerow([frame_idx, track_id, x_center, y_center, width, height, class_id, result.names[class_id]] + [(x[0],x[1]) for x in pose])
+
 
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
 
-train_models()
-#train_model('detect')
+#train_models()
+trackData()
