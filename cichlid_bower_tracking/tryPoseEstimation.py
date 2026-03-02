@@ -187,12 +187,12 @@ def modifyTuckerLabels():
 def train_models():
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
 	fm_obj.downloadData(fm_obj.localPoseDir + 'GenericPose1/')
-	fm_obj.downloadData(fm_obj.localPoseDir + 'GenericPose2/')
-	fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex1/')
-	fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex2/')
+	#fm_obj.downloadData(fm_obj.localPoseDir + 'GenericPose2/')
+	#fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex1/')
+	#fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex2/')
 
-	#model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
-	#results1 = model.train(data=fm_obj.localPoseDir + 'GenericPose1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose1', batch = -1, exist_ok=True)
+	model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
+	results1 = model.train(data=fm_obj.localPoseDir + 'GenericPose1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose1', batch = -1, exist_ok=True)
 	#model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
 	#results2 = model.train(data=fm_obj.localPoseDir + 'GenericPose2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose2', batch = -1, exist_ok=True)
 	
@@ -201,9 +201,9 @@ def train_models():
 	#model = YOLO("yolo26n.pt")  # load a pretrained model (recommended for training)
 	#results4 = model.train(data=fm_obj.localObjectDetectionDir + 'GenericSex2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localYOLODir, name = 'GenericSex2', batch = -1, exist_ok=True)
 	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose1/')
-	fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose2/')
-	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex1/')
-	fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex2/')
+	#fm_obj.uploadData(fm_obj.localMLPoseDir + 'GenericPose2/')
+	#fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex1/')
+	#fm_obj.uploadData(fm_obj.localYOLODir + 'GenericSex2/')
 
 def trackData():
 	# Check for MPS
@@ -221,7 +221,7 @@ def trackData():
 
 	fm_obj.downloadData(model_dir)	
 	model = YOLO(model_dir + 'weights/best.pt')
-	results = model.track(test_file, stream = True, save = True)
+	results = model.track(test_file, stream = True, save = True, agnostic_nms = True)
 	with open('TestTracking.csv', 'w', newline='') as f:
 
 		writer = csv.writer(f)
@@ -238,7 +238,8 @@ def trackData():
 					# Write frame, ID, and coordinates to the CSV file
 					writer.writerow([frame_idx, track_id, x_center, y_center, width, height, class_id, result.names[class_id]] + [(x[0],x[1]) for x in pose])
 
-
+	subprocess.run(['ffmpeg','-i','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.avi','-c:v','libx264','-c:a','aac','-crf','18','-b:a','224k','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'])
+	subprocess.run(['rclone','copy','runs/plose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.mp4','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/'])
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
 
