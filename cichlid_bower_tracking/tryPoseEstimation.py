@@ -225,7 +225,7 @@ def trackData():
 	with open('TestTracking.csv', 'w', newline='') as f:
 
 		writer = csv.writer(f)
-		csv.writerow(['Frame','TrackID','X_c','Y_c','Width','Height','ClassID','Sex','Pose_Nose','Pose_LeftEye','Pose_RightEye', 'Pose_Head','Pose_Spine1','Pose_Spine2','Pose_Spine3','Pose_Spine4','Pose_Peduncle','Pose_TailTip'])
+		writer.writerow(['Frame','TrackID','X_c','Y_c','Width','Height','ClassID','Sex','Pose_Nose','Pose_LeftEye','Pose_RightEye', 'Pose_Head','Pose_Spine1','Pose_Spine2','Pose_Spine3','Pose_Spine4','Pose_Peduncle','Pose_TailTip'])
 		for frame_idx, result in enumerate(results):
 
 			if result.boxes.id is not None:
