@@ -223,7 +223,7 @@ def trackData():
 	
 	fm_obj.downloadData(model_dir)	
 	model = YOLO(model_dir + 'weights/best.pt')
-	results = model.track(test_file, stream = True, save = True, agnostic_nms = True, with_reid = True)
+	results = model.track(test_file, stream = True, save = True, agnostic_nms = True, tracker = 'custom_track.yaml')
 	with open('TestTracking.csv', 'w', newline='') as f:
 
 		writer = csv.writer(f)
