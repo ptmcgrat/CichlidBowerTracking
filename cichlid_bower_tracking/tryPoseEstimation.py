@@ -254,7 +254,7 @@ def trackData():
 		
 		dt['InFrame'] = self.clusterData.apply(lambda row: polygon.contains(Point(row['X_c'],row['Y_c'])), axis = 1)
 	track_dt = dt.groupby('TrackID').agg({'Frame':['min','max'],'X_c':'count','ClassID':'mean','InFrame':'mean'})
-
+	pdb.set_trace()
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
 
