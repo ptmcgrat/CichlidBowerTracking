@@ -207,7 +207,7 @@ def train_models():
 
 def trackData():
 	# Check for MPS
-	device = 'cpu' if torch.backends.mps.is_available() else 'cpu'
+	#device = 'cpu' if torch.backends.mps.is_available() else 'cpu'
 
 	fm_obj = FM(analysisID = 'YH_MC_Parentals')
 
