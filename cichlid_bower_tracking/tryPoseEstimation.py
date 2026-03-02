@@ -191,7 +191,7 @@ def train_models():
 	#fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex1/')
 	#fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex2/')
 
-	model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
+	model = YOLO("yolo26x-pose.pt")  # load a pretrained model (recommended for training)
 	results1 = model.train(data=fm_obj.localPoseDir + 'GenericPose1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose1', batch = -1, exist_ok=True)
 	#model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
 	#results2 = model.train(data=fm_obj.localPoseDir + 'GenericPose2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose2', batch = -1, exist_ok=True)
@@ -239,9 +239,9 @@ def trackData():
 					writer.writerow([frame_idx, track_id, x_center, y_center, width, height, class_id, result.names[class_id]] + [(x[0],x[1]) for x in pose])
 
 	subprocess.run(['ffmpeg','-i','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.avi','-c:v','libx264','-c:a','aac','-crf','18','-b:a','224k','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'])
-	subprocess.run(['rclone','copy','runs/plose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.mp4','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/'])
+	subprocess.run(['rclone','copy','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.mp4','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/'])
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
 
-#train_models()
+train_models()
 trackData()
