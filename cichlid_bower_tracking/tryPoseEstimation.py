@@ -220,7 +220,7 @@ def trackData():
 	fm_obj.downloadData(test_file)
 
 	model_dir = models[2]
-	"""
+	
 	fm_obj.downloadData(model_dir)	
 	model = YOLO(model_dir + 'weights/best.pt')
 	results = model.track(test_file, stream = True, save = True, agnostic_nms = True, with_reid = True)
@@ -243,7 +243,7 @@ def trackData():
 	subprocess.run(['mv','runs/pose/track/MCYHF1_549_t011_tr1__0009_vid__DLC.avi','.'])
 	subprocess.run(['ffmpeg','-i','MCYHF1_549_t011_tr1__0009_vid__DLC.avi','-c:v','libx264','-c:a','aac','-crf','18','-b:a','224k','MCYHF1_549_t011_tr1__0009_vid__DLC.mp4'])
 	subprocess.run(['rclone','copy','MCYHF1_549_t011_tr1__0009_vid__DLC.mp4','ptm_dropbox:/CoS/BioSci/BioSci-McGrath/'])
-	"""
+	
 	dt = pd.read_csv('TestTracking.csv')
 
 	fm_obj.downloadData(fm_obj.localVideoCropFile)
@@ -254,6 +254,11 @@ def trackData():
 		
 		dt['InFrame'] = dt.apply(lambda row: polygon.contains(Point(row['X_c'],row['Y_c'])), axis = 1)
 	track_dt = dt.groupby('TrackID').agg({'Frame':['min','max'],'X_c':'count','ClassID':'mean','InFrame':'mean'})
+	all_tracks = track_dt.sum()[('X_c','count')]
+	in_frame_tracks = track_dt[track_dt[('InFrame','mean')] > .80].sum()[('X_c','count')]
+	three_sec_tracks = track_dt[track_dt[('X_c','count')] > 90].sum()[('X_c','count')]
+	in_frame_three_sec_tracks = track_dt[(track_dt[('X_c','count')] > 90) & (track_dt[('InFrame','mean')] > 0.8)].sum()[('X_c','count')]
+
 	pdb.set_trace()
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
