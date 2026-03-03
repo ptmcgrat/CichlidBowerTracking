@@ -18,17 +18,6 @@ with open(args.OutputCSV, 'w', newline='') as f:
 
 	results = model.track(args.InputVideo, stream = True, save=False, show=False, persist = True, verbose = False, agnostic_nms = True, tracker = 'custom_track.yaml')  # Tracking with default tracker
 
-			if result.boxes.id is not None:
-				boxes = result.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
-				track_ids = result.boxes.id.cpu().numpy().astype(int)
-				classes = result.boxes.cls.cpu().numpy()
-				poses = result.keypoints.xy.cpu().numpy()
-				for box, track_id, class_id, pose in zip(boxes, track_ids, classes, poses):
-					x_center, y_center, width, height = box
-					# Write frame, ID, and coordinates to the CSV file
-					writer.writerow([frame_idx, track_id, x_center, y_center, width, height, class_id, result.names[class_id]] + [(x[0],x[1]) for x in pose])
-
-
 	for frame_idx, result in enumerate(results):
 		if result.boxes.id is not None:
 			boxes = result.boxes.xywh.cpu().numpy()  # Convert to numpy for easy manipulation
