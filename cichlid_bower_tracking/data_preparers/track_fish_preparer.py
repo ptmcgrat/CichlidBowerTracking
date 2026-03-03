@@ -7,12 +7,13 @@ class TrackFishPreparer():
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, videoIndices):
+	def __init__(self, fileManager, videoIndices, mode):
 
 		self.__version__ = '1.0.0'
 
 		self.fileManager = fileManager
 		self.videoIndices = videoIndices
+		self.mode = mode
 
 	def downloadProjectData(self):
 		self.fileManager.createDirectory(self.fileManager.localMasterDir)
@@ -24,6 +25,8 @@ class TrackFishPreparer():
 			self.fileManager.downloadData(videoObj.localVideoFile)
 
 		self.fileManager.downloadData(self.fileManager.localYOLOModelDir)
+		self.fileManager.downloadData(self.fileManager.localPoseModelDir)
+
 		#self.createLogFile()
 
 	def validateInputData(self):
@@ -31,6 +34,8 @@ class TrackFishPreparer():
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
 		assert os.path.exists(self.fileManager.localLogfileDir)
 		assert os.path.exists(self.fileManager.localYOLOModelFile)
+		assert os.path.exists(self.fileManager.localPoseModelFile)
+
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			assert os.path.exists(videoObj.localVideoFile)
@@ -54,10 +59,17 @@ class TrackFishPreparer():
 
 		processes = []
 		
+		if args.mode == 'TrackFish':
+			input_model = self.fileManager.localYOLOModelFile
+			output_file = videoObj.localFishDetectionsFile
+		elif args.mode == 'PoseFish':
+			input_model = self.fileManager.localPoseModelFile
+			output_file = videoObj.localFishPoseFile
+
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 			assert os.path.exists(videoObj.localVideoFile)
-			processes.append(subprocess.Popen(['python3', 'unit_scripts/track_video.py', videoObj.localVideoFile, videoObj.localFishDetectionsFile, self.fileManager.localYOLOModelFile]))
+			processes.append(subprocess.Popen(['python3', 'unit_scripts/track_video.py', videoObj.localVideoFile, output_file, input_model]))
 		
 		for p1 in processes:
 			p1.communicate()
@@ -67,7 +79,11 @@ class TrackFishPreparer():
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
 		
-			self.fileManager.uploadData(videoObj.localFishDetectionsFile)
+			if self.mode == 'TrainFish':
+				self.fileManager.uploadData(videoObj.localFishDetectionsFile)
+			elif self.mode == 'PoseFish':
+				self.fileManager.uploadData(videoObj.localFishPoseFile)
+			
 			#self.fileManager.uploadData(videoObj.localYOLOLogfile)
 
 			if delete:

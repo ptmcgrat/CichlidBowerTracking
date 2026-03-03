@@ -49,6 +49,11 @@ trackfish.add_argument('AnalysisID', type=str, help='The AnalysisID you want to 
 trackfish.add_argument('--BatchID', type=int, help='Restrict the analysis to a subset that share the batchID')
 trackfish.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
 
+posefish = subparser.add_parser('PoseFish', description = 'Run YOLO to track and sex fish')
+posefish.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
+posefish.add_argument('--BatchID', type=int, help='Restrict the analysis to a subset that share the batchID')
+posefish.add_argument('--ProjectIDs', type=str, nargs='+', help='Optional name of projectIDs to restrict the analysis to')
+
 atwcfish = subparser.add_parser('AssociateTracksWithClusters', description = 'Identify fish responsible for manipulations')
 atwcfish.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
 
@@ -311,7 +316,7 @@ elif args.AnalysisType == 'ClassifyClusters':
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
 
-elif args.AnalysisType == 'TrackFish':
+elif args.AnalysisType == 'TrackFish' or args.AnalysisType == 'PoseFish':
 	from data_preparers.track_fish_preparer import TrackFishPreparer as TFP
 	for projectID, row in s_dt.loc[projectIDs].iterrows():
 		if projectID not in projectIDs:
@@ -321,7 +326,7 @@ elif args.AnalysisType == 'TrackFish':
 				continue
 
 		videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
-		already_run = [] if row.TrackFish == 'VideoIndices: ' else row.TrackFish.split(': ')[1].split(',')
+		already_run = [] if row[args.AnalysisType] == 'VideoIndices: ' else row[args.AnalysisType].split(': ')[1].split(',')
 		videoIndices = [int(x) for x in videoIndices if x not in already_run]
 		if len(videoIndices) == 0:
 			continue
@@ -332,10 +337,10 @@ elif args.AnalysisType == 'TrackFish':
 		
 
 
-		for sub_list in batched(videoIndices, 15):
+		for sub_list in batched(videoIndices, 10):
 			print('   Running: ' + ','.join([str(x) for x in sub_list]), flush = True)	
 			
-			tfp_obj = TFP(fm_obj, sub_list)
+			tfp_obj = TFP(fm_obj, sub_list, args.AnalysisType)
 
 			print('   Downloading data: ' + str(datetime.datetime.now()))
 			tfp_obj.downloadProjectData()
@@ -349,10 +354,10 @@ elif args.AnalysisType == 'TrackFish':
 		fm_obj = FM(analysisID, projectID)
 		s_dt = fm_obj.s_dt
 
-		if s_dt.loc[projectID,'TrackFish'] == 'VideoIndices: ':
-			s_dt.loc[projectID,'TrackFish'] +=  ','.join([str(x) for x in videoIndices])
+		if s_dt.loc[projectID,args.AnalysisType] == 'VideoIndices: ':
+			s_dt.loc[projectID,args.AnalysisType] +=  ','.join([str(x) for x in videoIndices])
 		else:
-			s_dt.loc[projectID,'TrackFish'] +=  ',' + ','.join([str(x) for x in videoIndices])
+			s_dt.loc[projectID,args.AnalysisType] +=  ',' + ','.join([str(x) for x in videoIndices])
 
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
