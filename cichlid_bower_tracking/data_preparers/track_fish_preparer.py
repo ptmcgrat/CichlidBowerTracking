@@ -65,12 +65,12 @@ class TrackFishPreparer():
 			if self.mode == 'TrackFish':
 				input_model = self.fileManager.localYOLOModelFile
 				output_file = videoObj.localFishDetectionsFile
+				processes.append(subprocess.Popen(['python3', 'unit_scripts/track_video.py', videoObj.localVideoFile, output_file, input_model]))
+
 			elif self.mode == 'PoseFish':
 				input_model = self.fileManager.localPoseModelFile
 				output_file = videoObj.localFishPoseFile
-
-			assert os.path.exists(videoObj.localVideoFile)
-			processes.append(subprocess.Popen(['python3', 'unit_scripts/track_video.py', videoObj.localVideoFile, output_file, input_model]))
+				processes.append(subprocess.Popen(['python3', 'unit_scripts/pose_video.py', videoObj.localVideoFile, output_file, input_model]))
 		
 		for p1 in processes:
 			p1.communicate()
