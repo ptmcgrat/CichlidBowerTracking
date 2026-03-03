@@ -193,7 +193,7 @@ def train_models():
 	#fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex1/')
 	#fm_obj.downloadData(fm_obj.localObjectDetectionDir + 'GenericSex2/')
 
-	model = YOLO("yolo26x-pose.pt")  # load a pretrained model (recommended for training)
+	model = YOLO("yolo26l-pose.pt")  # load a pretrained model (recommended for training)
 	results1 = model.train(data=fm_obj.localPoseDir + 'GenericPose1/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose1', batch = -1, exist_ok=True)
 	#model = YOLO("yolo26n-pose.pt")  # load a pretrained model (recommended for training)
 	#results2 = model.train(data=fm_obj.localPoseDir + 'GenericPose2/data.yaml', epochs=100, imgsz=640, project = fm_obj.localMLPoseDir, name = 'GenericPose2', batch = -1, exist_ok=True)
@@ -263,5 +263,5 @@ def trackData():
 #modifyTuckerObjectDetections()
 #modifyTuckerLabels()
 
-#train_models()
+train_models()
 trackData()

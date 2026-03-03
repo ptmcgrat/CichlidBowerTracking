@@ -302,6 +302,9 @@ class FileManager():
         self.localYOLOModelDir = self.localYOLODir + self.analysisID + '/'
         self.localYOLOModelFile = self.localYOLOModelDir + '/weights/best.pt'
 
+        self.localPoseModelDir = self.localMLPoseDir + self.analysisID + '/'
+        self.localPoseModelFile = self.localPoseModelDir + '/weights/best.pt'
+
         self.local3DModelDir = self.localMLDir + 'VideoModels/' + self.analysisID + '/'
         self.local3DModelTempDir = self.local3DModelDir + 'Temp/'
 
