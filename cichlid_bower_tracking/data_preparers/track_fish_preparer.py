@@ -59,15 +59,16 @@ class TrackFishPreparer():
 
 		processes = []
 		
-		if self.mode == 'TrackFish':
-			input_model = self.fileManager.localYOLOModelFile
-			output_file = videoObj.localFishDetectionsFile
-		elif self.mode == 'PoseFish':
-			input_model = self.fileManager.localPoseModelFile
-			output_file = videoObj.localFishPoseFile
 
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
+			if self.mode == 'TrackFish':
+				input_model = self.fileManager.localYOLOModelFile
+				output_file = videoObj.localFishDetectionsFile
+			elif self.mode == 'PoseFish':
+				input_model = self.fileManager.localPoseModelFile
+				output_file = videoObj.localFishPoseFile
+
 			assert os.path.exists(videoObj.localVideoFile)
 			processes.append(subprocess.Popen(['python3', 'unit_scripts/track_video.py', videoObj.localVideoFile, output_file, input_model]))
 		
