@@ -179,6 +179,8 @@ class FileManager():
                 projectIDs = s_dt[(s_dt.Cluster != 'VideoIndices: ') & (s_dt.RunAnalysis == True) & (s_dt.ClassifyClusters == False)].index.to_list()
             elif analysisType == 'TrackFish':
                 projectIDs = s_dt[(s_dt.RunAnalysis == True)].index.to_list()
+            elif analysisType == 'PoseFish':
+                projectIDs = s_dt[(s_dt.RunAnalysis == True)].index.to_list()
             elif analysisType == 'AssociateTracksWithClusters':
                 projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.TrackFish != 'VideoIndices: ') & (s_dt[analysisType] == False)].index.to_list()
             elif analysisType == 'Summary':
