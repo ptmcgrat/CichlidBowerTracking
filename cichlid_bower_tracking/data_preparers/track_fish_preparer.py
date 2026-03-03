@@ -59,10 +59,10 @@ class TrackFishPreparer():
 
 		processes = []
 		
-		if args.mode == 'TrackFish':
+		if self.mode == 'TrackFish':
 			input_model = self.fileManager.localYOLOModelFile
 			output_file = videoObj.localFishDetectionsFile
-		elif args.mode == 'PoseFish':
+		elif self.mode == 'PoseFish':
 			input_model = self.fileManager.localPoseModelFile
 			output_file = videoObj.localFishPoseFile
 
