@@ -89,4 +89,8 @@ class TrackFishPreparer():
 
 			if delete:
 				os.remove(videoObj.localVideoFile)
-				os.remove(videoObj.localFishDetectionsFile)
+				if self.mode == 'TrackFish':
+					os.remove(videoObj.localFishDetectionsFile)
+				elif self.mode == 'PoseFish':
+					os.remove(videoObj.localFishPoseFile)
+
