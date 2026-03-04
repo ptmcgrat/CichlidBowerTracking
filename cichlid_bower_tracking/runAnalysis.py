@@ -337,7 +337,7 @@ elif args.AnalysisType == 'TrackFish' or args.AnalysisType == 'PoseFish':
 		
 
 
-		for sub_list in batched(videoIndices, 10):
+		for sub_list in batched(videoIndices, 20):
 			print('   Running: ' + ','.join([str(x) for x in sub_list]), flush = True)	
 			
 			tfp_obj = TFP(fm_obj, sub_list, args.AnalysisType)
