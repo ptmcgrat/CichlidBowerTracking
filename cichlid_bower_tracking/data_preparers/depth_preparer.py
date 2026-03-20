@@ -226,7 +226,7 @@ class DepthPreparer:
 			# Show picture of total depth change
 			topAx1 = figDaily.add_subplot(topGrid[0])
 			build_rgb = plt.imread(build_photo)
-			topAx1_ax = topAX1.imshow(build_rgb)
+			topAx1_ax = topAx1.imshow(build_rgb)
 			topAx1.set_title('Final bower')
 			#topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
 			#	start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
