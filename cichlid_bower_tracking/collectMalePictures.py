@@ -16,6 +16,8 @@ for projectID in fm_obj.s_dt.index:
 	build_photos = fm_obj.getCloudFiles(fm_obj.localBuildPhotosDir)
 	for i, trial in enumerate(fm_obj.lp.trials):
 		out_photo = fm_obj.localBuildPhotosDir + fm_obj.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
+		if out_photo in build_photos:
+			continue
 		if trial.tempName in build_photos:
 			trial_photo = fm_obj.localBuildPhotosDir + trial.tempName
 		elif trial.tempName.replace('jpeg','jpg') in build_photos:
