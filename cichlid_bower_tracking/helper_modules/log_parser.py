@@ -44,7 +44,11 @@ class LogParser:
                         self.projectID
                         self.analysisID
                     except AttributeError:
-                        self.system, self.device, self.camera, self.uname, self.tankID, self.projectID, self.analysisID = self._ret_data(line, ['System', 'Device', 'Camera','Uname', 'TankID', 'ProjectID', 'AnalysisID'])
+                        try:
+                            self.system, self.device, self.camera, self.uname, self.tankID, self.projectID, self.analysisID, self.sampleID = self._ret_data(line, ['System', 'Device', 'Camera','Uname', 'TankID', 'ProjectID', 'AnalysisID','SampleID'])
+                        except:
+                            self.system, self.device, self.camera, self.uname, self.tankID, self.projectID, self.analysisID = self._ret_data(line, ['System', 'Device', 'Camera','Uname', 'TankID', 'ProjectID', 'AnalysisID'])
+                            self.sampleID = None
                     else:
                         self.malformed_file.append('MasterStart is present more than once in the Logfile')
 
@@ -94,17 +98,17 @@ class LogParser:
             end_time = dt.datetime.now()
             try:
                 self.num_trials = len(self.tankresetstop) + 1
-                self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies)]
+                self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies, self.sampleID)]
                 for j in range(self.num_trials-2):
-                    self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
-                self.trials.append(Trial(self.tankresetstop[-1], end_time, None, self.frames, self.movies))
+                    self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movie, self.sampleID))
+                self.trials.append(Trial(self.tankresetstop[-1], end_time, None, self.frames, self.movies, self.sampleID))
             except IndexError:
-                self.trials = [Trial(self.master_start, end_time, None, self.frames, self.movies)]
+                self.trials = [Trial(self.master_start, end_time, None, self.frames, self.movies, self.sampleID)]
         else:
             self.num_trials = len(self.tankresetstop)
-            self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies)]
+            self.trials = [Trial(self.master_start, self.tankresetstart[0], self.tankresetstop[0], self.frames, self.movies, self.sampleID)]
             for j in range(self.num_trials - 1):
-                self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies))
+                self.trials.append(Trial(self.tankresetstop[j], self.tankresetstart[j+1], self.tankresetstop[j+1], self.frames, self.movies, self.sampleID))
 
         daylight_frames = [x for x in self.frames if x.lof == True]
         for frame in self.frames:
@@ -278,10 +282,12 @@ class MovieObj:
         self.index = int(movie_file.split('_vid')[0].split('/')[-1]) - 1
 
 class Trial:
-    def __init__(self, start_time, stop_time, reset_time, all_frames, all_movies):
+    def __init__(self, start_time, stop_time, reset_time, all_frames, all_movies, sampleID):
         self.startTime = start_time
         self.stopTime = stop_time
         self.resetTime = reset_time
+        self.sampleID = sampleID
+        self.tempName = sampleID.split('-')[1] + '_TR_' + str(reset_time.month) + '.' + str(reset_time.day) + '.' + str(reset_time.year)[-2:] +'.jpeg'
         if reset_time is not None:
             try:
                 self.reset_frame = [x for x in all_frames if x.time > reset_time][0]

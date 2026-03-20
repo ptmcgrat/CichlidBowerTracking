@@ -232,14 +232,13 @@ class FileManager():
         self.localAnalysisDir = self.localProjectDir + 'MasterAnalysisFiles/'
         self.localSummaryDir = self.localProjectDir + 'Summary/'
         self.localEditVideosDir = self.localProjectDir + 'EditedVideos/'
-
         self.localAllClipsDir = self.localProjectDir + 'AllClips/'
         self.localManualLabelClipsDir = self.localProjectDir + 'MLClips/'
         self.localManualLabelFramesDir = self.localProjectDir + 'MLFrames/'
         self.localTroubleshootingDir = self.localProjectDir + 'Troubleshooting/'
         self.localTempDir = self.localProjectDir + 'Temp/'
         self.localPaceDir = self.localProjectDir + 'Pace/'
-
+        self.localBuildPhotosDir = self.localProjectDir + 'TRImages/'
         # Files created by prep preparer
         self.localDepthCropFile = self.localAnalysisDir + 'DepthCrop.txt'
         self.localTransMFile = self.localAnalysisDir + 'TransMFile.npy'
