@@ -52,12 +52,12 @@ for projectID in fm_obj.s_dt.index:
 					int(r_original[0]):int(r_original[0]+r_original[2])]
 
 		# Display cropped original image (or do whatever you need with it)
-		cv2.namedWindow('Scalable Window', cv2.WINDOW_NORMAL)
+		#cv2.namedWindow('Scalable Window', cv2.WINDOW_NORMAL)
 
-		cv2.resizeWindow('Scalable Window', 800, 600)
+		#cv2.resizeWindow('Scalable Window', 800, 600)
 
-		cv2.imshow('Scalable Window', imCrop_original)
-		cv2.waitKey(0)
+		#cv2.imshow('Scalable Window', imCrop_original)
+		#cv2.waitKey(0)
 		cv2.destroyAllWindows()
 		output_path = "cropped_and_resized.jpg"
 		cv2.imwrite(out_photo, imCrop_original)
