@@ -208,13 +208,18 @@ class DepthPreparer:
 		# Create summary figure of daily values
 		figDaily = plt.figure(num=1, figsize=(11, total_rows*3 + 3))
 		figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
-		gridDaily = gridspec.GridSpec(num_trials + total_rows + 1, 1)
+		gridDaily = gridspec.GridSpec(2*num_trials + total_rows + 1, 1)
 
 		current_grid_idx = 0
 		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
-
+			newTopGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[current_grid_idx])
+			picAx = figDaily.add_subplot(newTopGrid[0])
+			current_grid_idx += 1
 			build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
+			build_rgb = plt.imread(build_photo)
+			picAx_ax = picAx.imshow(build_rgb)
+			picAx_ax.set_title('Final bower')
 			
 			start_frame = trial.daylight_frames[0]
 			last_frame = trial.daylight_frames[-1]
@@ -225,15 +230,12 @@ class DepthPreparer:
 
 			# Show picture of total depth change
 			topAx1 = figDaily.add_subplot(topGrid[0])
-			build_rgb = plt.imread(build_photo)
-			topAx1_ax = topAx1.imshow(build_rgb)
-			topAx1.set_title('Final bower')
-			#topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
-			#	start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
-			#bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
-			#topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
+			topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
+				start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
+			bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
+			topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
 			topAx1.tick_params(colors=[0, 0, 0, 0])
-			#plt.colorbar(topAx1_ax, ax=topAx1)
+			plt.colorbar(topAx1_ax, ax=topAx1)
 
 			# Show picture of reset depth change
 			topAx2 = figDaily.add_subplot(topGrid[1])
