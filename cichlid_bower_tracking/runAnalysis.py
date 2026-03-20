@@ -149,7 +149,7 @@ elif args.AnalysisType == 'Depth':
 		dp_obj = DP(fm_obj)
 		#dp_obj.downloadProjectData()
 		dp_obj.validateInputData()
-		dp_obj.createSmoothedArray()
+		#dp_obj.createSmoothedArray()
 		dp_obj.createDepthFigures()
 		#dp_obj.createRGBVideo()
 		dp_obj.uploadProjectData(delete = True)

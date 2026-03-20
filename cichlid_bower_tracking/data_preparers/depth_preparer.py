@@ -214,7 +214,7 @@ class DepthPreparer:
 		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
 
-			build_photo = self.fileManager.localDepthCropFile + self.fileManager.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
+			build_photo = self.fileManager.localDepthCropFile + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
 			
 			start_frame = trial.daylight_frames[0]
 			last_frame = trial.daylight_frames[-1]
