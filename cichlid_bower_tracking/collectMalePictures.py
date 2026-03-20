@@ -59,8 +59,8 @@ for projectID in fm_obj.s_dt.index:
 		cv2.imshow('Scalable Window', imCrop_original)
 		cv2.waitKey(0)
 		cv2.destroyAllWindows()
-		
-		pdb.set_trace()
+		output_path = "cropped_and_resized.jpg"
+		cv2.imwrite(out_photo, imCrop_original)
+		fm_obj.uploadData(out_photo)
 
-pdb.set_trace()
 	
