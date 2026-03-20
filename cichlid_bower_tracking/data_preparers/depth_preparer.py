@@ -209,14 +209,14 @@ class DepthPreparer:
 		# Create summary figure of daily values
 		figDaily = plt.figure(num=1, figsize=(11, total_rows*3 + 3))
 		figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
-		gridDaily = gridspec.GridSpec(2*num_trials + total_rows + 1, 1)
+		gridDaily = gridspec.GridSpec(4*num_trials + total_rows + 1, 1)
 
 		current_grid_idx = 0
 		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
 			newTopGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[current_grid_idx])
-			picAx = figDaily.add_subplot(newTopGrid[0])
-			current_grid_idx += 1
+			picAx = figDaily.add_subplot(newTopGrid[0:3])
+			current_grid_idx += 3
 			build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
 			build_rgb = plt.imread(build_photo)
 			picAx_ax = picAx.imshow(build_rgb)
