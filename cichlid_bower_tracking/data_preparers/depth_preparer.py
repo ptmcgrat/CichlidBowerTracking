@@ -40,6 +40,7 @@ class DepthPreparer:
 		self.fileManager.downloadData(self.fileManager.localLogfile)
 		self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
 		self.fileManager.downloadData(self.fileManager.localDepthCropFile)
+		self.fileManager.downloadData(self.fileManager.localBuildPhotosDir)
 
 	def validateInputData(self):
 		assert os.path.exists(self.fileManager.localLogfile)
@@ -213,6 +214,8 @@ class DepthPreparer:
 		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
 
+			build_photo = self.fileManager.localDepthCropFile + self.fileManager.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
+			
 			start_frame = trial.daylight_frames[0]
 			last_frame = trial.daylight_frames[-1]
 			reset_frame = trial.reset_frame
@@ -222,12 +225,15 @@ class DepthPreparer:
 
 			# Show picture of total depth change
 			topAx1 = figDaily.add_subplot(topGrid[0])
-			topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
-				start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
-			bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
-			topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
+			build_rgb = plt.imread(build_photo)
+			topAx1_ax = topAX1.imshow(build_rgb)
+			topAx1.set_title('Final bower')
+			#topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
+			#	start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
+			#bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
+			#topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
 			topAx1.tick_params(colors=[0, 0, 0, 0])
-			plt.colorbar(topAx1_ax, ax=topAx1)
+			#plt.colorbar(topAx1_ax, ax=topAx1)
 
 			# Show picture of reset depth change
 			topAx2 = figDaily.add_subplot(topGrid[1])
