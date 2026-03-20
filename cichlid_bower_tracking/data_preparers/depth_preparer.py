@@ -220,7 +220,7 @@ class DepthPreparer:
 			build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
 			build_rgb = plt.imread(build_photo)
 			picAx_ax = picAx.imshow(build_rgb)
-			picAx_ax.set_title('Final bower')
+			picAx.set_title('Final bower')
 			
 			start_frame = trial.daylight_frames[0]
 			last_frame = trial.daylight_frames[-1]
