@@ -60,7 +60,7 @@ class DepthPreparer:
 		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
 		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
-		self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
+		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
 		self.fileManager.uploadData(self.fileManager.localDepthLogfile)
 		self.fileManager.uploadData(self.fileManager.localDailyDepthSummaryFigure)
 		#self.fileManager.uploadData(self.fileManager.localHourlyDepthSummaryFigure)
