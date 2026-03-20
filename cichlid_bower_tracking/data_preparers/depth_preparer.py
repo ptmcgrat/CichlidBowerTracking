@@ -38,7 +38,8 @@ class DepthPreparer:
 		self.fileManager.createDirectory(self.fileManager.localSummaryDir)
 
 		self.fileManager.downloadData(self.fileManager.localLogfile)
-		self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
+		#self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
+		self.fileManager.downloadData(self.fileManager.localSmoothDepthFile)
 		self.fileManager.downloadData(self.fileManager.localDepthCropFile)
 		self.fileManager.downloadData(self.fileManager.localBuildPhotosDir)
 
