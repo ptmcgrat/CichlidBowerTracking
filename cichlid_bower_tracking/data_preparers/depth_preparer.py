@@ -210,7 +210,7 @@ class DepthPreparer:
 		figDaily = plt.figure(num=1, figsize=(11, total_rows*3 + 3))
 		figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
 		gridDaily = gridspec.GridSpec(num_trials + total_rows + 1, 1)
-
+		print(num_trials + total_rows + 1)
 		current_grid_idx = 0
 		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
