@@ -15,7 +15,7 @@ for projectID in fm_obj.s_dt.index:
 	fm_obj.setProjectID(projectID)
 	build_photos = fm_obj.getCloudFiles(fm_obj.localBuildPhotosDir)
 	for i, trial in enumerate(fm_obj.lp.trials):
-		out_photo = fm_obj.localBuildPhotosDir + fm_obj.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
+		out_photo = fm_obj.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
 		if out_photo in build_photos:
 			continue
 		if trial.tempName in build_photos:
@@ -27,9 +27,10 @@ for projectID in fm_obj.s_dt.index:
 		elif trial.tempName.replace('jpeg','png') in build_photos:
 			trial_photo = fm_obj.localBuildPhotosDir + trial.tempName.replace('jpeg','png')
 		else:
-			print('Cant find ' + trial.tempName)
-			print(build_photos)
+			print('Cant find ' + trial.tempName + ' ' + projectID + '_' + fm_obj.lp.sampleID + ' ' + str(i))
 			continue
+		print(trial_photo)
+		continue
 
 		fm_obj.downloadData(trial_photo)
 		image = cv2.imread(trial_photo)
@@ -62,7 +63,7 @@ for projectID in fm_obj.s_dt.index:
 		#cv2.waitKey(0)
 		cv2.destroyAllWindows()
 		output_path = "cropped_and_resized.jpg"
-		cv2.imwrite(out_photo, imCrop_original)
-		fm_obj.uploadData(out_photo)
+		cv2.imwrite(fm_obj.localBuildPhotosDir + out_photo, imCrop_original)
+		fm_obj.uploadData(fm_obj.localBuildPhotosDir + out_photo)
 
 	

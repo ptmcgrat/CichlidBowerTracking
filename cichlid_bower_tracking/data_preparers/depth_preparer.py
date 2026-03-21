@@ -38,8 +38,8 @@ class DepthPreparer:
 		self.fileManager.createDirectory(self.fileManager.localSummaryDir)
 
 		self.fileManager.downloadData(self.fileManager.localLogfile)
-		self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
-		#self.fileManager.downloadData(self.fileManager.localSmoothDepthFile)
+		#self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
+		self.fileManager.downloadData(self.fileManager.localSmoothDepthFile)
 		self.fileManager.downloadData(self.fileManager.localDepthCropFile)
 		self.fileManager.downloadData(self.fileManager.localBuildPhotosDir)
 
@@ -58,10 +58,10 @@ class DepthPreparer:
 		assert os.path.exists(self.fileManager.localDepthCropFile)
 
 	def uploadProjectData(self, delete = True):
-		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
+		#self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
 		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
-		self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
+		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
 		self.fileManager.uploadData(self.fileManager.localDepthLogfile)
 		self.fileManager.uploadData(self.fileManager.localDailyDepthSummaryFigure)
 		#self.fileManager.uploadData(self.fileManager.localHourlyDepthSummaryFigure)
@@ -210,13 +210,12 @@ class DepthPreparer:
 		figDaily = plt.figure(num=1, figsize=(11, total_rows*3 + 3))
 		figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
 		gridDaily = gridspec.GridSpec(num_trials + total_rows + 1, 1)
-		print(num_trials + total_rows + 1)
+		#print(num_trials + total_rows + 1)
 		current_grid_idx = 0
 		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
 		for i,trial in enumerate(reversed(self.lp.trials)):
-			build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
-			build_rgb = plt.imread(build_photo)
 			
+
 			start_frame = trial.daylight_frames[0]
 			last_frame = trial.daylight_frames[-1]
 			reset_frame = trial.reset_frame
@@ -225,15 +224,20 @@ class DepthPreparer:
 			topGrid = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gridDaily[current_grid_idx])
 
 			# Show picture of total depth change
-			topAx1 = figDaily.add_subplot(topGrid[0])
-			topAx1_ax = topAx1.imshow(build_rgb)
-			#topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
-			#	start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
-			#bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
-			#topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
-			topAx1.tick_params(colors=[0, 0, 0, 0])
-			#plt.colorbar(topAx1_ax, ax=topAx1)
-
+			try:
+				build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
+				build_rgb = plt.imread(build_photo)
+				
+				topAx1 = figDaily.add_subplot(topGrid[0])
+				topAx1_ax = topAx1.imshow(build_rgb)
+				#topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
+				#	start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
+				#bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
+				#topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
+				topAx1.tick_params(colors=[0, 0, 0, 0])
+				#plt.colorbar(topAx1_ax, ax=topAx1)
+			except FileNotFoundError:
+				pass
 			# Show picture of reset depth change
 			topAx2 = figDaily.add_subplot(topGrid[1])
 			topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(reset_frame.time, last_frame.time, cropped = False), vmin = -3, vmax = 3)

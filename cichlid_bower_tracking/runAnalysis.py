@@ -148,11 +148,11 @@ elif args.AnalysisType == 'Depth':
 		fm_obj.setProjectID(projectID)
 		dp_obj = DP(fm_obj)
 		dp_obj.downloadProjectData()
-		dp_obj.validateInputData()
-		dp_obj.createSmoothedArray()
+		#dp_obj.validateInputData()
+		#dp_obj.createSmoothedArray()
 		dp_obj.createDepthFigures()
-		dp_obj.createRGBVideo()
-		dp_obj.uploadProjectData(delete = False)
+		#dp_obj.createRGBVideo()
+		dp_obj.uploadProjectData(delete = True)
 		fm_obj = FM(analysisID, projectID)
 		s_dt = fm_obj.s_dt
 		s_dt.loc[projectID,'Depth'] = True
