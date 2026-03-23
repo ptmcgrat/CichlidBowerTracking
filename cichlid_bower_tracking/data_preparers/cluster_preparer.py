@@ -3,6 +3,9 @@ import datetime
 import numpy as np
 import scipy
 import shutil
+import pandas as pd
+from shapely.geometry.polygon import Polygon
+from shapely.geometry import Point
 
 class ClusterPreparer():
 	# This class takes in directory information and a logfile containing depth information and performs the following:
