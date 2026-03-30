@@ -287,7 +287,7 @@ class Trial:
         self.stopTime = stop_time
         self.resetTime = reset_time
         self.sampleID = sampleID
-        self.tempName = sampleID.split('-')[1] + '_TR_' + str(reset_time.month) + '.' + str(reset_time.day) + '.' + str(reset_time.year)[-2:] +'.jpeg'
+        #self.tempName = sampleID.split('-')[1] + '_TR_' + str(reset_time.month) + '.' + str(reset_time.day) + '.' + str(reset_time.year)[-2:] +'.jpeg'
         if reset_time is not None:
             try:
                 self.reset_frame = [x for x in all_frames if x.time > reset_time][0]
