@@ -22,9 +22,10 @@ class DepthPreparer:
 	# 3. Automatically identifies bower location
 	# 4. Analyze building, shape, and other pertinent info of the bower
 
-	def __init__(self, fileManager, workers = None):
+	def __init__(self, fileManager, picture = True, workers = None):
 		
 		self.__version__ = '1.0.0'
+		self.picture = picture
 		self.fileManager = fileManager
 		self.device = self.fileManager.lp.device
 		self.lp = self.fileManager.lp
@@ -38,10 +39,11 @@ class DepthPreparer:
 		self.fileManager.createDirectory(self.fileManager.localSummaryDir)
 
 		self.fileManager.downloadData(self.fileManager.localLogfile)
-		#self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
+		self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
 		self.fileManager.downloadData(self.fileManager.localSmoothDepthFile)
 		self.fileManager.downloadData(self.fileManager.localDepthCropFile)
-		self.fileManager.downloadData(self.fileManager.localBuildPhotosDir)
+		if self.picture:
+			self.fileManager.downloadData(self.fileManager.localBuildPhotosDir)
 
 	def validateInputData(self):
 		assert os.path.exists(self.fileManager.localLogfile)
@@ -58,7 +60,7 @@ class DepthPreparer:
 		assert os.path.exists(self.fileManager.localDepthCropFile)
 
 	def uploadProjectData(self, delete = True):
-		#self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
+		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
 		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
 		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
@@ -225,17 +227,23 @@ class DepthPreparer:
 
 			# Show picture of total depth change
 			try:
-				build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
-				build_rgb = plt.imread(build_photo)
+				if self.picture:
+					build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
+					build_rgb = plt.imread(build_photo)
 				
-				topAx1 = figDaily.add_subplot(topGrid[0])
-				topAx1_ax = topAx1.imshow(build_rgb)
-				#topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
-				#	start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
-				#bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
-				#topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
+					topAx1 = figDaily.add_subplot(topGrid[0])
+					topAx1_ax = topAx1.imshow(build_rgb)
+				else:
+					topAx1 = figDaily.add_subplot(topGrid[0])
+
+					topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
+						start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
+					bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
+					topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
+					plt.colorbar(topAx1_ax, ax=topAx1)
 				topAx1.tick_params(colors=[0, 0, 0, 0])
-				#plt.colorbar(topAx1_ax, ax=topAx1)
+
+				
 			except FileNotFoundError:
 				pass
 			# Show picture of reset depth change
@@ -247,12 +255,12 @@ class DepthPreparer:
 			plt.colorbar(topAx2_ax, ax=topAx2)
 
 			# Show picture of reset depth change
-			#topAx3 = figDaily.add_subplot(topGrid[2])
-			#data = [self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time,thresh = x) for x in [.1,.5,1,1.5,2,2.5,3]]
-			#topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthCastleVolume for x in data], '-o', color = 'yellow', label = 'Castle volume')
-			#topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthPitVolume for x in data], '-o', color = 'blue', label = 'Pit volume')
-			#topAx3.set_title('Pit/castle volume by threshold')
-			#topAx3.set_xticklabels([]) 
+			topAx3 = figDaily.add_subplot(topGrid[2])
+			data = [self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time,thresh = x) for x in [.1,.5,1,1.5,2,2.5,3]]
+			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthCastleVolume for x in data], '-o', color = 'yellow', label = 'Castle volume')
+			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthPitVolume for x in data], '-o', color = 'blue', label = 'Pit volume')
+			topAx3.set_title('Pit/castle volume by threshold')
+			topAx3.set_xticklabels([]) 
 
 			#day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last')).sort_index(ascending = False)
 

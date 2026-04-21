@@ -143,11 +143,14 @@ class FileManager():
             row_data['Cluster'] += append
         row_data['Cluster'] = row_data['Cluster'].rstrip(',')
         
-        labeled_dt = pd.read_csv(self.localLabeledClipsFile, index_col = 'LID')
+        try:
+            labeled_dt = pd.read_csv(self.localLabeledClipsFile, index_col = 'LID')
         
-        labeled_dt['ProjectID'] = labeled_dt['ClipName'].str.split('__').str[0]
-        row_data['ManualAnnotation'] = len(labeled_dt[labeled_dt.ProjectID == self.projectID])
-
+            labeled_dt['ProjectID'] = labeled_dt['ClipName'].str.split('__').str[0]
+            row_data['ManualAnnotation'] = len(labeled_dt[labeled_dt.ProjectID == self.projectID])
+        except FileNotFoundError:
+            row_data['ManualAnnotation'] = 0
+            
         remotefiles = self.getCloudFiles(self.localLabeledDLCClipsDir)
         if len([x for x in remotefiles if self.projectID in x]) == 3:
             row_data['DLCVideos'] = True
