@@ -150,7 +150,7 @@ class FileManager():
             row_data['ManualAnnotation'] = len(labeled_dt[labeled_dt.ProjectID == self.projectID])
         except FileNotFoundError:
             row_data['ManualAnnotation'] = 0
-            
+
         remotefiles = self.getCloudFiles(self.localLabeledDLCClipsDir)
         if len([x for x in remotefiles if self.projectID in x]) == 3:
             row_data['DLCVideos'] = True
@@ -257,7 +257,7 @@ class FileManager():
         self.localRGBDepthVideo = self.localAnalysisDir + 'DepthRGBVideo.mp4'
         self.localRawDepthFile = self.localTroubleshootingDir + 'rawDepthData.npy'
         self.localInterpDepthFile = self.localTroubleshootingDir + 'interpDepthData.npy'
-        self.localDepthSummaryFile = self.localSummaryDir + 'DataSummary.xlsx'
+        self.localDepthSummaryFile = self.localSummaryDir + 'DataSummary.csv'
         self.localDailyDepthSummaryFigure = self.localSummaryDir + 'DailyDepthSummary.pdf'
         self.localHourlyDepthSummaryFigure = self.localSummaryDir + 'HourlyDepthSummary.pdf'
 
@@ -380,7 +380,7 @@ class FileManager():
 
         # Depth related parameters
         self.hourlyDepthThreshold = 0.3  # cm
-        self.dailyDepthThreshold = 0.4  # cm
+        self.dailyDepthThreshold = 1  # cm
         self.totalDepthThreshold = 1.0  # cm
 
         # Cluster related parameters
@@ -389,9 +389,9 @@ class FileManager():
         self.totalClusterThreshold = 3.0  # events/cm^2
 
         # Parameters related to both depth and cluster analysis
-        self.hourlyMinPixels = 1000
-        self.dailyMinPixels = 1000
-        self.totalMinPixels = 1000
+        self.hourlyMinPixels = 100
+        self.dailyMinPixels = 100
+        self.totalMinPixels = 100
         self.pixelLength = 0.1030168618  # cm / pixel
         self.bowerIndexFraction = 0.1
 

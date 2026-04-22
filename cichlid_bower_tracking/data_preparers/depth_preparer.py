@@ -10,6 +10,7 @@ from helper_modules.depth_analyzer import DepthAnalyzer as DA
 from matplotlib import (cm, colors, gridspec, ticker)
 import pandas as pd 
 from skimage import morphology
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 warnings.filterwarnings('ignore')
 
@@ -40,7 +41,7 @@ class DepthPreparer:
 
 		self.fileManager.downloadData(self.fileManager.localLogfile)
 		self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
-		self.fileManager.downloadData(self.fileManager.localSmoothDepthFile)
+		#self.fileManager.downloadData(self.fileManager.localSmoothDepthFile)
 		self.fileManager.downloadData(self.fileManager.localDepthCropFile)
 		if self.picture:
 			self.fileManager.downloadData(self.fileManager.localBuildPhotosDir)
@@ -66,6 +67,7 @@ class DepthPreparer:
 		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
 		self.fileManager.uploadData(self.fileManager.localDepthLogfile)
 		self.fileManager.uploadData(self.fileManager.localDailyDepthSummaryFigure)
+		self.fileManager.uploadData(self.fileManager.localDepthSummaryFile)
 		#self.fileManager.uploadData(self.fileManager.localHourlyDepthSummaryFigure)
 
 			#self.uploadData(self.localPaceDir)
@@ -205,16 +207,18 @@ class DepthPreparer:
 		self.da_obj = DA(self.fileManager)
 
 		num_trials = self.lp.num_trials
-		total_rows = sum([x.num_rows for x in self.lp.trials])
+		total_rows = sum([4*x.num_rows for x in self.lp.trials]) + 2*num_trials
 
 		# figures based on the depth data
 		# Create summary figure of daily values
-		figDaily = plt.figure(num=1, figsize=(11, total_rows*3 + 3))
+		figDaily = plt.figure(num=1, figsize=(11, 1.5*total_rows))
 		figDaily.suptitle(self.lp.projectID + ' Daily Depth Summary')
-		gridDaily = gridspec.GridSpec(num_trials + total_rows + 1, 1)
+		gridDaily = gridspec.GridSpec(1, 1)
 		#print(num_trials + total_rows + 1)
-		current_grid_idx = 0
-		hourly_dt = pd.DataFrame(columns = ['Trial_ID','Time','Volume'])
+		daily_dt = pd.DataFrame(columns = ['ProjectID','Trial_ID','Day','Threshold','CastleVolume','PitVolume'])
+		masterGrid = gridspec.GridSpecFromSubplotSpec(total_rows, 6, subplot_spec=gridDaily[0])
+		current_row = 0
+		
 		for i,trial in enumerate(reversed(self.lp.trials)):
 			
 
@@ -223,69 +227,85 @@ class DepthPreparer:
 			reset_frame = trial.reset_frame
 			#totalChangeData = vars(self.da_obj.returnVolumeSummary(self.lp.frames[start_index].time, self.lp.frames[last_index].time))
 
-			topGrid = gridspec.GridSpecFromSubplotSpec(1, 2, subplot_spec=gridDaily[current_grid_idx])
-
+			topAx1 = figDaily.add_subplot(masterGrid[current_row:current_row+2,0:2])
 			# Show picture of total depth change
 			try:
 				if self.picture:
 					build_photo = self.fileManager.localBuildPhotosDir + self.fileManager.lp.sampleID + '_TR_Trial' + str(i+1) + '.jpg'
 					build_rgb = plt.imread(build_photo)
-				
-					topAx1 = figDaily.add_subplot(topGrid[0])
 					topAx1_ax = topAx1.imshow(build_rgb)
 				else:
-					topAx1 = figDaily.add_subplot(topGrid[0])
-
 					topAx1_ax = topAx1.imshow(self.da_obj.returnHeightChange(
-						start_frame.time, last_frame.time, cropped=False), vmin=-3, vmax=3)
+						start_frame.time, last_frame.time, cropped=False), vmin=-2, vmax=2)
 					bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
 					topAx1.set_title('Total Depth Change (' + str(int(bowerVolume)) + 'cm3)')
-					plt.colorbar(topAx1_ax, ax=topAx1)
+					divider = make_axes_locatable(topAx1)
+					cax1 = divider.append_axes("right", size="5%", pad=0.05)
+					plt.colorbar(topAx1_ax, cax=cax1)
+
 				topAx1.tick_params(colors=[0, 0, 0, 0])
 
 				
 			except FileNotFoundError:
 				pass
 			# Show picture of reset depth change
-			topAx2 = figDaily.add_subplot(topGrid[1])
-			topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(reset_frame.time, last_frame.time, cropped = False), vmin = -3, vmax = 3)
+			topAx2 = figDaily.add_subplot(masterGrid[current_row:current_row+2,2:4])
+			topAx2_ax = topAx2.imshow(self.da_obj.returnHeightChange(reset_frame.time, last_frame.time, cropped = False), vmin = -2, vmax = 2)
 			bowerVolume = self.da_obj.returnVolumeSummary(reset_frame.time,last_frame.time).depthBowerVolume
 			topAx2.set_title('Reset Depth Change ('+ str(int(bowerVolume)) + 'cm3)')
 			topAx2.tick_params(colors=[0, 0, 0, 0])
-			plt.colorbar(topAx2_ax, ax=topAx2)
+			divider = make_axes_locatable(topAx2)
+			cax2 = divider.append_axes("right", size="5%", pad=0.05)
+			plt.colorbar(topAx1_ax, cax=cax2)
 
 			# Show picture of reset depth change
-			topAx3 = figDaily.add_subplot(topGrid[2])
+			topAx3 = figDaily.add_subplot(masterGrid[current_row:current_row+2,4:6])
 			data = [self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time,thresh = x) for x in [.1,.5,1,1.5,2,2.5,3]]
-			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthCastleVolume for x in data], '-o', color = 'yellow', label = 'Castle volume')
+			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthCastleVolume for x in data], '-o', color = 'gold', label = 'Castle volume')
 			topAx3.plot([.1,.5,1,1.5,2,2.5,3],[x.depthPitVolume for x in data], '-o', color = 'blue', label = 'Pit volume')
 			topAx3.set_title('Pit/castle volume by threshold')
-			topAx3.set_xticklabels([]) 
+			#topAx3.set_xticklabels([]) 
+			#topAx3.set_figheight(3)
 
 			#day_info = self.depth_dt[(self.depth_dt.DaytimeData == True)&(self.depth_dt.Trial == 'Trial_' + str(i))].groupby('RelativeDay').agg(day_start = ('Index','first'), day_stop = ('Index','last')).sort_index(ascending = False)
 
-			num_days = min(trial.num_days,7)
+			num_days = min(trial.num_days,6)
 
 			v = 2.0
-
+			current_row += 2
+			offset = 0
 			for j, (first_frame,last_frame) in enumerate(reversed(trial.days)):
-				if j % num_days == 0:
+				if j % 6 == 0:
 					if j!=0:
-						cax = figDaily.add_subplot(midGrid[:, -1])
-						plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
+						current_row += 4
+						offset += 6
 
-					current_grid_idx += 1
-					midGrid = gridspec.GridSpecFromSubplotSpec(3, num_days + 1, subplot_spec=gridDaily[current_grid_idx])
-
-				current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
-				current_axs[0].imshow(self.da_obj.returnHeightChange(start_frame.time, last_frame.time, cropped=True), vmin=-v, vmax=v)
+				totalAx = figDaily.add_subplot(masterGrid[current_row,-1*(j-offset+1)])
+				changeAx = figDaily.add_subplot(masterGrid[current_row + 1,-1*(j-offset+1)])
+				bowerAx = figDaily.add_subplot(masterGrid[current_row + 2,-1*(j-offset+1)])
+				threshAx = figDaily.add_subplot(masterGrid[current_row + 3,-1*(j-offset+1)])
+				
+				totalAx.imshow(self.da_obj.returnHeightChange(start_frame.time, last_frame.time, cropped=True), vmin=-v, vmax=v)
 				bowerVolume = self.da_obj.returnVolumeSummary(first_frame.time,last_frame.time).depthBowerVolume
-				current_axs[0].set_title(str(first_frame.time.month) + '/' + str(first_frame.time.day) + ':' + trial.days_videos[trial.num_days - j - 1])
-				current_axs[1].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v/2, vmax=v/2)
-				current_axs[2].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
-				[ax.tick_params(colors=[0, 0, 0, 0]) for ax in current_axs]
-				[ax.set_adjustable('box') for ax in current_axs]
+				totalAx.set_title(str(first_frame.time.month) + '/' + str(first_frame.time.day) + ':' + trial.days_videos[trial.num_days - j - 1])
+				changeAx.imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v, vmax=v)
+				bowerAx.imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-1, vmax=1)
+				[ax.tick_params(colors=[0, 0, 0, 0]) for ax in [totalAx,changeAx,bowerAx]]
+				[ax.set_adjustable('box') for ax in [totalAx,changeAx,bowerAx]]
 
+				data = [self.da_obj.returnVolumeSummary(first_frame.time,last_frame.time,thresh = x) for x in [.1,.5,1,1.5,2,2.5,3]]
+				threshAx.plot([.1,.5,1,1.5,2,2.5,3],[x.depthCastleVolume for x in data], '-o', color = 'gold', label = 'Castle volume')
+				threshAx.plot([.1,.5,1,1.5,2,2.5,3],[x.depthPitVolume for x in data], '-o', color = 'blue', label = 'Pit volume')
+				threshAx.set_ylim([0,250])
+				daily_dt.loc[len(daily_dt)] = [self.lp.projectID,trial.number, trial.days_videos[trial.num_days - j - 1], 0.5, data[1].depthCastleVolume, data[1].depthPitVolume]
+				daily_dt.loc[len(daily_dt)] = [self.lp.projectID,trial.number, trial.days_videos[trial.num_days - j - 1], 1.0, data[2].depthCastleVolume, data[2].depthPitVolume]
+				daily_dt.loc[len(daily_dt)] = [self.lp.projectID,trial.number, trial.days_videos[trial.num_days - j - 1], 1.5, data[3].depthCastleVolume, data[3].depthPitVolume]
+
+				#threshAx.set_xticklabels([]) 
+			if j % 6 != 1:
+				current_row += 4
+
+				"""
 				#good_data_start = self.lp.frames[day_start].time
 				#good_data_stop = self.lp.frames[day_stop].time
 				day_stamp = first_frame.time.replace(hour = 0, minute=0, second=0, microsecond=0)
@@ -296,12 +316,10 @@ class DepthPreparer:
 						continue
 					volume = self.da_obj.returnVolumeSummary(start,stop).depthBowerVolume
 					hourly_dt.loc[len(hourly_dt.index)] = ['Trial_' + str(num_trials - i),start.replace(minute = 30),volume]
+				"""
 
 
-			cax = figDaily.add_subplot(midGrid[:, -1])
-			plt.colorbar(cm.ScalarMappable(norm=colors.Normalize(vmin=-v, vmax=v), cmap='viridis'), cax=cax)
-			current_grid_idx += 1
-
+		"""
 		hourly_dt['NewTime'] = [x.hour + 0.5 for x in hourly_dt.Time]
 		bottomGrid = gridspec.GridSpecFromSubplotSpec(1, 1, subplot_spec=gridDaily[-1], hspace=0.05)
 		bIAx = figDaily.add_subplot(bottomGrid[0])
@@ -309,8 +327,12 @@ class DepthPreparer:
 		bIAx.scatter(hourly_dt['NewTime'], hourly_dt['Volume'])
 		bIAx.set_xlabel('Hour')
 		bIAx.set_ylabel('Volume (cm3)')
+		"""
+		daily_dt.to_csv(self.fileManager.localDepthSummaryFile)
+		plt.tight_layout()
 		figDaily.savefig(self.fileManager.localDailyDepthSummaryFigure)
 		plt.close('all')
+		
 
 	def createRGBVideo(self):
 		lp = self.fileManager.lp

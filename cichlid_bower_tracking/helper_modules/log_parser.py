@@ -161,6 +161,7 @@ class LogParser:
 
         for i,trial in enumerate(self.trials):
             trial.figureFile = 'Trial_' + str(i+1) + '_SummaryFigure.pdf'
+            trial.number = i+1
             for day_start,day_stop in trial.days:
                 expected_frames = int((day_stop.time - day_start.time).total_seconds()/60/5)
                 if expected_frames == 0:
@@ -331,7 +332,7 @@ class Trial:
             movie_idxs = [x.index for x in all_movies if x.endTime > start.time and x.startTime < stop.time]
             self.days_videos.append(','.join([str(x) for x in movie_idxs]))
         self.num_days = len(self.days)
-        self.num_rows = int((self.num_days - 1)/ 7) + 1 # Also a row for the top
+        self.num_rows = int((self.num_days - 1) / 6) + 1 # Also a row for the top
         for frame in self.frames:
             if not frame.lof:
                 try:
