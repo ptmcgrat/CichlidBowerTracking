@@ -107,7 +107,7 @@ class ClusterPreparer():
 	def addCropAndDepthCoordinates(self):
 		transM = np.load(self.fileManager.localTransMFile)
 
-		clusterData = pd.read_csv(videoObj.localLabeledClustersFile)
+		clusterData = pd.read_csv(self.videoObj.localLabeledClustersFile)
 		clusterData['X_depth'] = clusterData.apply(
 			lambda row: (transM[0][0] * row.Y + transM[0][1] * row.X + transM[0][2]) / (
 					transM[2][0] * row.Y + transM[2][1] * row.X + transM[2][2]), axis=1)
@@ -120,7 +120,7 @@ class ClusterPreparer():
 		polygon = Polygon(video_crop_points)
 		buffered_polygon = polygon.buffer(40, join_style=2)
 		clusterData['InFrame'] = self.clusterData.apply(lambda row: buffered_polygon.contains(Point(row['Y'],row['X'])), axis = 1)
-		clusterData.to_csv(videoObj.localLabeledClustersFile)
+		clusterData.to_csv(self.videoObj.localLabeledClustersFile)
 
 	def uploadProjectData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localTroubleshootingDir)
