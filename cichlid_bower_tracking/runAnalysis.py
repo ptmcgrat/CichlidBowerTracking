@@ -204,7 +204,7 @@ elif args.AnalysisType == 'Cluster':
 			cp_obj.downloadProjectData()
 			cp_obj.validateInputData()
 			cp_obj.runClusterAnalysis()
-			#cp_obj.addCropAndDepthCoordinates()
+			cp_obj.addCropAndDepthCoordinates()
 			cp_obj.uploadProjectData(delete = True)
 
 			fm_obj = FM(analysisID, projectID)
