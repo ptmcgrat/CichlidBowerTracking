@@ -16,9 +16,9 @@ s_dt = fm_obj.s_dt
 
 projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster != 'VideoIndices: ')].index.tolist()
 
-fm_obj.downloadData(fm_obj.localLabeledClipsFile)
-ma_dt = pd.read_csv(fm_obj.localLabeledClipsFile, index_col = 0)
-ma_dt['ProjectID'] = ma_dt.ClipName.str.split('__').str[0]
+#fm_obj.downloadData(fm_obj.localLabeledClipsFile)
+#ma_dt = pd.read_csv(fm_obj.localLabeledClipsFile, index_col = 0)
+#ma_dt['ProjectID'] = ma_dt.ClipName.str.split('__').str[0]
 
 for projectID, row in s_dt.loc[projectIDs].iterrows():
 	if projectID not in projectIDs:
@@ -28,11 +28,11 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 	# Add DepthX, DepthY, InFrame to individual video cluster data
 	fm_obj.downloadData(fm_obj.localVideoCropFile)
 	fm_obj.downloadData(fm_obj.localTransMFile)
-	fm_obj.downloadData(fm_obj.localLabeledClipsProjectDir, tarred = True)
+	#fm_obj.downloadData(fm_obj.localLabeledClipsProjectDir, tarred = True)
 	
 	videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
 	videoAnnotations = row.videoIDsToAnnotate.split(': ')[1].split(',')
-	p_dt = ma_dt[ma_dt.ProjectID == projectID]
+	#p_dt = ma_dt[ma_dt.ProjectID == projectID]
 	for videoIndex in videoIndices:
 		videoObj = fm_obj.returnVideoObject(int(videoIndex))
 		#fm_obj.downloadData(videoObj.localAllClipsDir, tarred = True)
@@ -54,6 +54,7 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 		clusterData.to_csv(videoObj.localLabeledClustersFile)
 		fm_obj.uploadData(videoObj.localLabeledClustersFile)
 
+		"""
 		clusterData['NewClipName'] = projectID + '__' + clusterData['ClipName']
 		if videoIndex not in videoAnnotations:
 			continue
@@ -64,11 +65,11 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 			out_video = fm_obj.localLabeledClipsProjectDir + row.NewClipName + '_ManualLabel.mp4'
 			shutil.move(in_video,out_video) #changed for windows
 			ma_dt.loc[ma_dt.ClipName == row.NewClipName,'InFrame'] = clusterData.loc[clusterData.NewClipName == row.NewClipName,'InFrame'].values[0]
-		
-	fm_obj.uploadData(fm_obj.localLabeledClipsProjectDir, tarred = True)	
+		"""
+	#fm_obj.uploadData(fm_obj.localLabeledClipsProjectDir, tarred = True)	
 	shutil.rmtree(fm_obj.localProjectDir)
-	shutil.rmtree(fm_obj.localLabeledClipsProjectDir)
+	#shutil.rmtree(fm_obj.localLabeledClipsProjectDir)
 
-ma_dt.to_csv(fm_obj.localLabeledClipsFile)
-fm_obj.uploadData(fm_obj.localLabeledClipsFile)
+#ma_dt.to_csv(fm_obj.localLabeledClipsFile)
+#fm_obj.uploadData(fm_obj.localLabeledClipsFile)
 
