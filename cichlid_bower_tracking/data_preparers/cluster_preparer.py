@@ -101,6 +101,7 @@ class ClusterPreparer():
 		print('Running CichlidActionDetection on: ' + self.videoObj.localVideoFile.replace(self.fileManager.localMasterDir, ''))
 		os.chdir('CichlidActionDetection')
 		subprocess.run(['git', 'pull'], capture_output = True)
+		print(' '.join(command))
 		subprocess.run(command)
 		os.chdir('..')
 

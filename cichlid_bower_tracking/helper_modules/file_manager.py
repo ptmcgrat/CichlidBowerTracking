@@ -281,7 +281,7 @@ class FileManager():
         # Files created by fish_tracking preparer
         self.localAllFishTracksFile = self.localAnalysisDir + 'AllTrackedFish.csv'
         self.localAllTracksSummaryFile = self.localAnalysisDir + 'AllSummarizedTracks.csv'
-        
+        self.localPoseDir = self.localProjectDir + 'PoseData/'
 
         try:
             self.downloadData(self.localLogfile)
