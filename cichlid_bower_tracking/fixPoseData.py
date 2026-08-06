@@ -32,7 +32,6 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 		command = [str(x) for x in command]
 		print(command)
 		subprocess.run(command)
+	fm_obj.uploadData(fm_obj.localPoseDir)
 	pdb.set_trace()
-
-
 
