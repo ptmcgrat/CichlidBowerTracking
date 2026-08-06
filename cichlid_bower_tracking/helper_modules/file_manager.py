@@ -452,8 +452,8 @@ class FileManager():
                 raise Exception('No writable drives in /media/pi/')
             else:
                 raise Exception('Multiple writable drives in /media/pi/. Options are: ' + str(writableDirs))
-        elif platform.node() == 'ebb-utaka.biosci.gatech.edu':
-            self.localMasterDir = '/mnt/Storage/' + os.getenv('USER') + '/Temp/CichlidAnalyzer/'
+        elif 'utaka' in platform.node():
+            self.localMasterDir = '/Data/' + os.getenv('USER') + '/Temp/CichlidAnalyzer/'
             self.system = 'utaka'
 
         else:
