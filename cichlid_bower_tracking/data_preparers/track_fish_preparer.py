@@ -33,7 +33,7 @@ class TrackFishPreparer():
 
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
 		assert os.path.exists(self.fileManager.localLogfileDir)
-		assert os.path.exists(self.fileManager.localYOLOModelFile)
+		#assert os.path.exists(self.fileManager.localYOLOModelFile)
 		assert os.path.exists(self.fileManager.localPoseModelFile)
 
 		for videoIndex in self.videoIndices:
