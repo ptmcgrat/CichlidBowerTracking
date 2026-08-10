@@ -71,7 +71,7 @@ class AssociateTracksPreparer:
 
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			dt = pd.read_csv(videoObj.localFishPosesFile)
+			dt = pd.read_csv(videoObj.localFishPoseFile)
 			dt['ProjectID'] = self.fileManager.projectID
 			dt['VideoID'] = videoObj.baseName
 			dt['InFrame'] = dt.apply(lambda row: polygon.contains(Point(row['X_center'],row['Y_center'])), axis = 1)
