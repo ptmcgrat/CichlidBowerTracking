@@ -23,14 +23,14 @@ class AssociateTracksPreparer:
 		
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			self.fileManager.downloadData(videoObj.localFishDetectionsFile)
+			self.fileManager.downloadData(videoObj.localFishPoseFile)
 
 	def validateInputData(self):
 		assert os.path.exists(self.fileManager.localAllLabeledClustersFile)
 		assert os.path.exists(self.fileManager.localVideoCropFile)
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			assert os.path.exists(videoObj.localFishDetectionsFile)
+			assert os.path.exists(videoObj.localFishPoseFile)
 
 	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localAllLabeledClustersFile)
@@ -71,7 +71,7 @@ class AssociateTracksPreparer:
 
 		for videoIndex in self.videoIndices:
 			videoObj = self.fileManager.returnVideoObject(videoIndex)
-			dt = pd.read_csv(videoObj.localFishDetectionsFile)
+			dt = pd.read_csv(videoObj.localFishPosesFile)
 			dt['ProjectID'] = self.fileManager.projectID
 			dt['VideoID'] = videoObj.baseName
 			dt['InFrame'] = dt.apply(lambda row: polygon.contains(Point(row['X_center'],row['Y_center'])), axis = 1)
