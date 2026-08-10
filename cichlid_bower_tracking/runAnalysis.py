@@ -371,7 +371,7 @@ elif args.AnalysisType == 'AssociateTracksWithClusters':
 			continue
 		print('Running: ' + projectID + ' ' + str(datetime.datetime.now()), flush = True)
 		fm_obj.setProjectID(projectID)
-		videoIndices = row.TrackFish.split(': ')[1].split(',')
+		videoIndices = row.PoseFish.split(': ')[1].split(',')
 		videoIndices = [int(x) for x in videoIndices]
 
 		atp_obj = ATP(fm_obj, videoIndices)
