@@ -81,7 +81,7 @@ class SummaryPreparer:
 		for i,trial in enumerate(self.lp.trials):
 			localTrialFigureFile = self.fileManager.localSummaryDir + trial.figureFile
 			num_days = len(trial.days)
-			figTrial, axes = plt.subplots(nrows = 10, ncols = num_days, figsize=(num_days, 20), squeeze=False)
+			figTrial, axes = plt.subplots(nrows = 10, ncols = num_days, figsize=(num_days, 10), squeeze=False)
 			figTrial.suptitle(self.lp.projectID + ' Trial ' + str(i+1) + ' Summary File')
 			start_frame = trial.days[0][0]
 
@@ -94,7 +94,7 @@ class SummaryPreparer:
 				axes[0,j].imshow(self.da_obj.returnHeightChange(start_frame.time, last_frame.time, cropped=True), vmin=-v, vmax=v)
 				#axes[0,j].set_title('D' + str(j+1) + ' ' + str(bowerVolume))
 				bowerVolume = self.da_obj.returnVolumeSummary(start_frame.time,last_frame.time).depthBowerVolume
-				axes[0,j].set_title('Vol: ' + str(bowerVolume), fontsize = 6)
+				axes[0,j].set_title('Vol: ' + f"{bowerVolume:.1f}", fontsize = 6)
 				
 				#current_axs[0].set_title(str(first_frame.time.month) + '/' + str(first_frame.time.day) + ':' + trial.days_videos[trial.num_days - j - 1])
 				
@@ -102,7 +102,7 @@ class SummaryPreparer:
 				axes[1,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, cropped=True), vmin=-v/2, vmax=v/2)
 				#axes[2,j].imshow(self.da_obj.returnHeightChange(first_frame.time, last_frame.time, masked=True, cropped=True), vmin=-v/2, vmax=v/2)
 				bowerVolume = self.da_obj.returnVolumeSummary(first_frame.time,last_frame.time).depthBowerVolume
-				axes[1,j].set_title('Vol: ' + str(bowerVolume), fontsize = 6)
+				axes[1,j].set_title('Vol: ' + f"{bowerVolume:.1f}", fontsize = 6)
 
 				# k = 2 All bower events
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c')
