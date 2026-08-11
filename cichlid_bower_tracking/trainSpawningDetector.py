@@ -15,9 +15,11 @@ projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster != 'VideoIndices: '
 
 parquet_dir = fm_obj.localUselessDir + 'Parquet/'
 cluster_dir = fm_obj.localUselessDir + 'Cluster/'
+cache_dir = fm_obj.localUselessDir + 'Cache/'
 
 fm_obj.createDirectory(parquet_dir)
 fm_obj.createDirectory(cluster_dir)
+fm_obj.createDirectory(cache_dir)
 
 for projectID, row in s_dt.loc[projectIDs].iterrows():
 	if projectID not in projectIDs:
@@ -34,5 +36,8 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 		dt[dt.VideoID == videoObj.baseName].to_csv(cluster_dir + projectID + '_' + videoObj.baseName + '.csv')
 		fm_obj.downloadData(videoObj.localParquetFile)
 		subprocess.run(['mv', videoObj.localParquetFile, parquet_dir + projectID + '_' + videoObj.baseName + '.parquet'])
-		
-	pdb.set_trace()
+	
+subprocess.run(['python3','calibrate.py','precompute',parquet_dir, cluster_dir, cache_dir])
+subprocess.run(['python3','calibrate.py','sweep', cache_dir, self.localUselessDir + 'results.parquet'])
+subprocess.run(['python3','calibrate.py','report', self.localUselessDir + 'results.parquet'])
+
