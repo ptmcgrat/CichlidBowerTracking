@@ -12,8 +12,11 @@ s_dt = fm_obj.s_dt
 
 projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster != 'VideoIndices: ')].index.tolist()
 
-parquet_dir
-cluster_dir
+parquet_dir = fm_obj.localTempDir + 'Parquet/'
+cluster_dir = fm_obj.localTempDir + 'Cluster/'
+
+fm_obj.createDirectory(parquet_dir)
+fm_obj.createDirectory(cluster_dir)
 
 for projectID, row in s_dt.loc[projectIDs].iterrows():
 	if projectID not in projectIDs:
@@ -24,16 +27,11 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 	# Add DepthX, DepthY, InFrame to individual video cluster data
 	
 	dt = pd.read_csv(fm_obj.localAllLabeledClustersFile, index_col = 0)
-	videoIndices = row.videoIDsToRun.split(': ')[1].split(',')
-	videoAnnotations = row.videoIDsToAnnotate.split(': ')[1].split(',')
-	#p_dt = ma_dt[ma_dt.ProjectID == projectID]
+	videoIndices = row.PoseFish.split(': ')[1].split(',')
 	for videoIndex in videoIndices:
-		dt[dt.videoID == videoIndex.baseName].to_csv(cluster_dir + projectID + '_' + videoObj.baseName + '.csv')
 		videoObj = fm_obj.returnVideoObject(int(videoIndex))
+		dt[dt.videoID == videoObj.baseName].to_csv(cluster_dir + projectID + '_' + videoObj.baseName + '.csv')
 		fm_obj.downloadData(videoObj.localParquetFile)
 		subprocess.run(['mv', videoObj.localParquetFile, parquet_dir + projectID + '_' + videoObj.baseName + '.parquet'])
-		command = [str(x) for x in command]
-		print(command)
-		subprocess.run(command)
-	fm_obj.uploadData(fm_obj.localPoseDir)
-
+		
+	pdb.set_trace()
