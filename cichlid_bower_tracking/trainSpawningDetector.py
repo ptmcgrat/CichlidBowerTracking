@@ -31,7 +31,7 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 	videoIndices = row.PoseFish.split(': ')[1].split(',')
 	for videoIndex in videoIndices:
 		videoObj = fm_obj.returnVideoObject(int(videoIndex))
-		dt[dt.videoID == videoObj.baseName].to_csv(cluster_dir + projectID + '_' + videoObj.baseName + '.csv')
+		dt[dt.VideoID == videoObj.baseName].to_csv(cluster_dir + projectID + '_' + videoObj.baseName + '.csv')
 		fm_obj.downloadData(videoObj.localParquetFile)
 		subprocess.run(['mv', videoObj.localParquetFile, parquet_dir + projectID + '_' + videoObj.baseName + '.parquet'])
 		
