@@ -382,7 +382,7 @@ class FileManager():
 
         # Depth related parameters
         self.hourlyDepthThreshold = 0.3  # cm
-        self.dailyDepthThreshold = 1  # cm
+        self.dailyDepthThreshold = 0.4  # cm
         self.totalDepthThreshold = 1.0  # cm
 
         # Cluster related parameters
