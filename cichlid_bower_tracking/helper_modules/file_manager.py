@@ -333,7 +333,7 @@ class FileManager():
         self.localAnnotationDir = self.localMasterDir + '__AnnotatedData/'
         self.local3DVideosDir = self.localAnnotationDir + 'LabeledVideos/'
         self.localObjectDetectionDir = self.localAnnotationDir + 'ObjectDetection/'
-        self.localPoseDir = self.localAnnotationDir + 'PoseData/'
+        self.localPoseDir = self.localProjectDir + 'PoseData/'
         self.localPoseDayDir = self.localPoseDir + 'days/'
 
         self.localLabeledClipsFile = self.local3DVideosDir + 'ManualLabels.csv'
