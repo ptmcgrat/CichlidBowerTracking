@@ -77,33 +77,33 @@ class AssociateTracksPreparer:
 			dt['InFrame'] = dt.apply(lambda row: polygon.contains(Point(row['X_center'],row['Y_center'])), axis = 1)
 			dt['TimeStamp'] = dt.apply(lambda row: videoObj.startTime + datetime.timedelta(seconds = row.FrameNum / videoObj.framerate), axis = 1)
 
-			for lid, row in c_dt[(c_dt.InFrame == True) & (c_dt.ClipCreated == 'Yes')].iterrows():
+			for lid, row in c_dt[(c_dt.InFrame == True) & (c_dt.ClipCreated == 'Yes') & (c_dt.VideoID == videoObj.baseName)].iterrows():
 				sub_dt = dt[(dt.TimeStamp > row.TimeStamp - datetime.timedelta(seconds = 0.2)) & (dt.TimeStamp < row.TimeStamp + datetime.timedelta(seconds = 0.2))]
 				if len(sub_dt) == 0:
 					continue
-				min_distance = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).min()
+				distance2 = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2)).min()
 	
-				track_index = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2) ** 0.5).idxmin()
+				track_index = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2)).idxmin()
 				try:
 					c_dt.loc[lid,'TrackID'] = int(dt.loc[track_index]['TrackID'])
-					c_dt.loc[lid,'MinDistance'] = min_distance
+					c_dt.loc[lid,'MinDistance'] = distance2 ** 0.5
 					
 				except:
 					pdb.set_trace()		
+			
+			track_dt = dt.groupby(['ProjectID','VideoID','TrackID']).agg(nFrames=('TrackID','count'), aggSex=('SexID','mean'), aggInFrame = ('InFrame','mean')).reset_index()
 			try:
 				# c_dt = c_dt.append(new_dt)
-				track_dt = pd.concat([track_dt, dt], ignore_index=True)
+				s_track_dt = pd.concat([s_track_dt, track_dt], ignore_index=True)
 			except NameError:
-				track_dt = dt
-		track_dt.to_csv(self.fileManager.localAllFishTracksFile)
+				s_track_dt = track_dt
 		
-		summarized_tracks_dt = track_dt.groupby(['ProjectID','VideoID','TrackID']).agg(nFrames=('TrackID','count'), aggSex=('SexID','mean'), aggInFrame = ('InFrame','mean')).reset_index()
-		summarized_tracks_dt['Sex'] = 'Male'
-		summarized_tracks_dt.loc[summarized_tracks_dt.aggSex <= 0.5,'Sex'] = 'Female'
-		summarized_tracks_dt['InFrameTrack'] = True
-		summarized_tracks_dt.loc[summarized_tracks_dt.aggInFrame <= 0.5,'InFrameTrack'] = False
-		summarized_tracks_dt.to_csv(self.fileManager.localAllTracksSummaryFile)
-		c_dt = pd.merge(c_dt, summarized_tracks_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
+		s_tracks_dt['Sex'] = 'Male'
+		s_tracks_dt.loc[s_tracks_dt.aggSex <= 0.5,'Sex'] = 'Female'
+		s_tracks_dt['InFrameTrack'] = True
+		s_tracks_dt.loc[s_tracks_dt.aggInFrame <= 0.5,'InFrameTrack'] = False
+		s_tracks_dt.to_csv(self.fileManager.localAllTracksSummaryFile)
+		c_dt = pd.merge(c_dt, s_tracks_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
 		c_dt.loc[c_dt.TrackID==0, 'Sex'] = 'Unknown'
 		c_dt.loc[c_dt.TrackID==0, 'InFrameTrack'] = False
 		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Prediction','Probability','TrackID','MinDistance','Sex','InFrameTrack']]

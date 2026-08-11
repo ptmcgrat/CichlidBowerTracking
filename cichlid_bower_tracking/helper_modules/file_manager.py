@@ -334,6 +334,7 @@ class FileManager():
         self.local3DVideosDir = self.localAnnotationDir + 'LabeledVideos/'
         self.localObjectDetectionDir = self.localAnnotationDir + 'ObjectDetection/'
         self.localPoseDir = self.localAnnotationDir + 'PoseData/'
+        self.localPoseDayDir = self.localPoseDir + 'days/'
 
         self.localLabeledClipsFile = self.local3DVideosDir + 'ManualLabels.csv'
         self.localLabeledClipsDir = self.local3DVideosDir + 'Clips/'
@@ -371,6 +372,7 @@ class FileManager():
         videoObj.localLogfile = self.localLogfileDir + 'ClusterLog_' + str(index) + '.txt'
         videoObj.localClassifyLogfile = self.localLogfileDir + 'ClassifyLog_' + str(index) + '.txt'
         videoObj.localYOLOLogfile = self.localLogfileDir + 'YOLOLog_' + str(index) + '.txt'
+        videoObj.localParquetFile = self.localPoseDayDir + videoObj.baseName + '.parquet'
 
         self.createDirectory(videoObj.localTempDir)
 
