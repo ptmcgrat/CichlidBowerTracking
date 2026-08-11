@@ -34,12 +34,10 @@ class AssociateTracksPreparer:
 
 	def uploadData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localAllLabeledClustersFile)
-		self.fileManager.uploadData(self.fileManager.localAllFishTracksFile)
 		self.fileManager.uploadData(self.fileManager.localAllTracksSummaryFile)
 
 		if delete:
 			os.remove(self.fileManager.localAllLabeledClustersFile)
-			os.remove(self.fileManager.localAllFishTracksFile)
 			os.remove(self.fileManager.localAllTracksSummaryFile)
 			os.remove(self.fileManager.localVideoCropFile)
 
