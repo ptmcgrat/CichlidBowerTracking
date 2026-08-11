@@ -98,12 +98,12 @@ class AssociateTracksPreparer:
 			except NameError:
 				s_track_dt = track_dt
 		
-		s_tracks_dt['Sex'] = 'Male'
-		s_tracks_dt.loc[s_tracks_dt.aggSex <= 0.5,'Sex'] = 'Female'
-		s_tracks_dt['InFrameTrack'] = True
-		s_tracks_dt.loc[s_tracks_dt.aggInFrame <= 0.5,'InFrameTrack'] = False
-		s_tracks_dt.to_csv(self.fileManager.localAllTracksSummaryFile)
-		c_dt = pd.merge(c_dt, s_tracks_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
+		s_track_dt['Sex'] = 'Male'
+		s_track_dt.loc[s_track_dt.aggSex <= 0.5,'Sex'] = 'Female'
+		s_track_dt['InFrameTrack'] = True
+		s_track_dt.loc[s_track_dt.aggInFrame <= 0.5,'InFrameTrack'] = False
+		s_track_dt.to_csv(self.fileManager.localAllTracksSummaryFile)
+		c_dt = pd.merge(c_dt, s_track_dt[['ProjectID','VideoID','TrackID','Sex','InFrameTrack']], on = ['ProjectID','VideoID','TrackID'], how = 'left')
 		c_dt.loc[c_dt.TrackID==0, 'Sex'] = 'Unknown'
 		c_dt.loc[c_dt.TrackID==0, 'InFrameTrack'] = False
 		c_dt = c_dt[['ProjectID','VideoID','ClipName','t','X','Y','N','InFrame','ClipCreated','TimeStamp','Prediction','Probability','TrackID','MinDistance','Sex','InFrameTrack']]
