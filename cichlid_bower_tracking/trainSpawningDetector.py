@@ -12,8 +12,8 @@ s_dt = fm_obj.s_dt
 
 projectIDs = s_dt[(s_dt.RunAnalysis == True) & (s_dt.Cluster != 'VideoIndices: ')].index.tolist()
 
-parquet_dir = fm_obj.localTempDir + 'Parquet/'
-cluster_dir = fm_obj.localTempDir + 'Cluster/'
+parquet_dir = fm_obj.localUselessDir + 'Parquet/'
+cluster_dir = fm_obj.localUselessDir + 'Cluster/'
 
 fm_obj.createDirectory(parquet_dir)
 fm_obj.createDirectory(cluster_dir)
