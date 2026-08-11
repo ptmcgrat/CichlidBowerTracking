@@ -1,5 +1,6 @@
 from helper_modules.file_manager import FileManager as FM
 import argparse, pdb, datetime, subprocess
+import pandas as pd 
 
 parser = argparse.ArgumentParser(description='This script fixes some issues with the pipeline') 
 parser.add_argument('AnalysisID', type=str, help='The AnalysisID you want to analyze')
