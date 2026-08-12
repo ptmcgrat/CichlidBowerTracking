@@ -84,7 +84,7 @@ class AssociateTracksPreparer:
 				track_index = (((row.X - sub_dt['Y_center']) ** 2 + (row.Y - sub_dt['X_center']) ** 2)).idxmin()
 				try:
 					c_dt.loc[lid,'TrackID'] = int(dt.loc[track_index]['TrackID'])
-					c_dt.loc[lid,'MinDistance'] = distance2 ** 0.5
+					c_dt.loc[lid,'MinDistance'] = int(distance2 ** 0.5)
 					
 				except:
 					pdb.set_trace()		
