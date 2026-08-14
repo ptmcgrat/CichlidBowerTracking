@@ -38,6 +38,6 @@ for projectID, row in s_dt.loc[projectIDs].iterrows():
 		subprocess.run(['mv', videoObj.localParquetFile, parquet_dir + projectID + '_' + videoObj.baseName + '.parquet'])
 	
 subprocess.run(['python3','calibrate.py','precompute',parquet_dir, cluster_dir, cache_dir])
-subprocess.run(['python3','calibrate.py','sweep', cache_dir, self.localUselessDir + 'results.parquet'])
-subprocess.run(['python3','calibrate.py','report', self.localUselessDir + 'results.parquet'])
+subprocess.run(['python3','calibrate.py','sweep', cache_dir, fm_obj.localUselessDir + 'results.parquet'])
+subprocess.run(['python3','calibrate.py','report', fm_obj.localUselessDir + 'results.parquet'])
 
