@@ -75,6 +75,7 @@ class SummaryPreparer:
 		# Otherwise, skip creation of Depth Figures
 		self.da_obj = DA(self.fileManager)
 		self.cl_obj = CA(self.fileManager)
+		self.cl_obj.createSummaryTable()
 		e_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','ManipulationType','Number'])
 		cat_h_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','Hour','ManipulationID','Number'])
 		com_h_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','Hour','ManipulationGroup','Number'])

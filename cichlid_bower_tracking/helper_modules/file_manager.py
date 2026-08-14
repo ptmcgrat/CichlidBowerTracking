@@ -476,7 +476,10 @@ class FileManager():
         # print("Relative name:",relative_name)
         # print("local_path:",local_path)
         # print("cloud_path ",cloud_path)
-        cloud_objects = subprocess.run(['rclone', 'lsf', cloud_path], capture_output = True, encoding = 'utf-8').stdout.split()
+        output = subprocess.run(['rclone', 'lsf', cloud_path], capture_output = True, encoding = 'utf-8')
+        if output.returncode != 0:
+            pdb.set_trace()
+        cloud_objects = output.stdout.split()
         # pdb.set_trace()
 
 

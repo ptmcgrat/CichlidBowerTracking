@@ -490,6 +490,9 @@ class ClusterAnalyzer:
 
 		return outData
 
+	def createSummaryTable(self):
+		pdb.set_trace()
+
 	def _checkTimes(self, t0, t1=None):
 		# validate the given times
 		if t1 is None:
