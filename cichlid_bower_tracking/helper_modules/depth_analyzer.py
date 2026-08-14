@@ -491,7 +491,20 @@ class ClusterAnalyzer:
 		return outData
 
 	def createSummaryTable(self):
+		def standard_distance(g):
+			return np.sqrt(g['X_depth'].var(ddof=1) + g['Y_depth'].var(ddof=1))
+
+		def sde(g):
+			cov = np.cov(g[['X_depth','Y_depth']].values.T)
+			vals, vecs = np.linalg.eigh(cov)
+			major, minor = np.sqrt(vals[::-1])
+			theta = np.degrees(np.arctan2(*vecs[:, -1][::-1]))
+			return pd.Series({'major_px': major, 'minor_px': minor,
+							  'anisotropy': minor/major, 'theta_deg': theta})
+		dt = self.clusterData
 		pdb.set_trace()
+		dt.groupby(['ProjectID','VideoID','Prediction']).apply(standard_distance)
+		dt.groupby(['ProjectID','VideoID','Prediction']).apply(sde)
 
 	def _checkTimes(self, t0, t1=None):
 		# validate the given times
