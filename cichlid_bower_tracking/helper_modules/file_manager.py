@@ -495,8 +495,8 @@ class FileManager():
                 else:
                     pass
             else:
-                #pdb.set_trace()
-                raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
+                pdb.set_trace()
+                #raise FileNotFoundError('Cant find file for download: ' + cloud_path + relative_name)
         # pdb.set_trace()
         if not os.path.exists(local_path + relative_name):
             if allow_errors:
