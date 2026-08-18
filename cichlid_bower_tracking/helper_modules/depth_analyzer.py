@@ -142,8 +142,6 @@ class DepthAnalyzer:
 		if masked:
 			change[self.returnBowerLocations(t0, t1, cropped=cropped) == 0] = 0
 
-
-
 		return change
 
 	def returnVolumeSummary(self, t0, t1, thresh = None):
@@ -186,6 +184,24 @@ class DepthAnalyzer:
 		outData.depthBowerIndex = (outData.thresholdCastleVolume - outData.thresholdPitVolume) / (outData.thresholdCastleVolume + outData.thresholdPitVolume)
 
 		return outData
+
+	def retBowerHeights(self, start_time, end_time, xs, ys):
+		
+		height_change = self.returnHeightChange(start_time, end_time)
+		xs[xs < 0] = 0
+		xs[xs >= 640] = 639
+		ys = 480 - ys
+		ys[ys < 0] = 0
+		ys[ys >= 480] = 479
+
+		return height_change[ys.astype('int'),xs.astype('int')]
+
+	def _timeToIndex(self, t):
+		try:
+			index = max([False if x.time <= t else True for x in self.lp.frames].index(True) - 1, 0)
+		except ValueError:
+			last_index = len(self.lp.frames) - 1
+		return index
 
 	def _checkTimes(self, t0, t1=None):
 		# validate the given times
@@ -254,7 +270,7 @@ class ClusterAnalyzer:
 		# self.clusterData.round({'X_Depth': 0, 'Y_Depth': 0})
 
 
-	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, in_frame=True, created = True, confidence = None, earlyEvents = False, lateEvents = False, N = None, sex = None):
+	def returnDepthCoordinates(self, t0=None, t1=None, bid=None, in_frame=True, created = True, confidence = 0.67, earlyEvents = False, lateEvents = False, N = None, sex = None):
 		# utility function to return two numpy arrays that match the provided criteria
 		# t0: return only rows with timestamps after t0
 		# t1: return only rows with timestamps before t1
@@ -490,7 +506,9 @@ class ClusterAnalyzer:
 
 		return outData
 
-	def createSummaryTable(self):
+	def createSummaryTable(self, name, t0, t1):
+		
+		
 		def standard_distance(g):
 			return np.sqrt(g['X_depth'].var(ddof=1) + g['Y_depth'].var(ddof=1))
 
@@ -499,12 +517,14 @@ class ClusterAnalyzer:
 			vals, vecs = np.linalg.eigh(cov)
 			major, minor = np.sqrt(vals[::-1])
 			theta = np.degrees(np.arctan2(*vecs[:, -1][::-1]))
-			return pd.Series({'major_px': major, 'minor_px': minor,
-							  'anisotropy': minor/major, 'theta_deg': theta})
+			std_dis = np.sqrt(g['X_depth'].var(ddof=1) + g['Y_depth'].var(ddof=1))
+			return pd.Series({'std_distance': std_dis, 'major_px': major, 'minor_px': minor,
+							  'anisotropy': minor/major, 'theta_deg': theta, 'n':len(g)})
 		dt = self.clusterData
-		pdb.set_trace()
-		dt.groupby(['ProjectID','VideoID','Prediction']).apply(standard_distance)
-		dt.groupby(['ProjectID','VideoID','Prediction']).apply(sde)
+		dt = dt[(dt.index > t0) & (dt.index < t1) & (dt.Probability > 0.67)]
+		#dt.groupby(['ProjectID','VideoID','Prediction']).apply(standard_distance)
+		#dt.groupby(['ProjectID','VideoID','Prediction']).apply(sde)
+		return dt.groupby(['ProjectID','VideoID','Prediction'])[['X_depth', 'Y_depth']].apply(sde).reset_index()
 
 	def _checkTimes(self, t0, t1=None):
 		# validate the given times

@@ -75,18 +75,19 @@ class SummaryPreparer:
 		# Otherwise, skip creation of Depth Figures
 		self.da_obj = DA(self.fileManager)
 		self.cl_obj = CA(self.fileManager)
-		self.cl_obj.createSummaryTable()
 		e_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','ManipulationType','Number'])
 		cat_h_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','Hour','ManipulationID','Number'])
 		com_h_dt = pd.DataFrame(columns = ['ProjectID','Trial#','Day','Hour','ManipulationGroup','Number'])
 		for i,trial in enumerate(self.lp.trials):
 			localTrialFigureFile = self.fileManager.localSummaryDir + trial.figureFile
 			num_days = len(trial.days)
-			figTrial, axes = plt.subplots(nrows = 10, ncols = num_days, figsize=(num_days, 10), squeeze=False)
+			figTrial, axes = plt.subplots(nrows = 8, ncols = num_days, figsize=(num_days, 8), squeeze=False)
 			figTrial.suptitle(self.lp.projectID + ' Trial ' + str(i+1) + ' Summary File')
 			start_frame = trial.days[0][0]
+			stat_dt = self.cl_obj.createSummaryTable('Trial_' + str(i+1), trial.startTime, trial.stopTime)
 
 			for j, (first_frame,last_frame) in enumerate(trial.days):
+				stat_dt = self.cl_obj.createSummaryTable('Trial_' + str(i+1), first_frame.time, last_frame.time)
 				day_stamp = first_frame.time.replace(hour = 0, minute=0, second=0, microsecond=0)
 
 				#current_axs = [figDaily.add_subplot(midGrid[n, (num_days - j % num_days) - 1]) for n in [0, 1, 2]]
@@ -118,24 +119,53 @@ class SummaryPreparer:
 				
 				axes[2,j].set_xlim(0,self.da_obj.width)
 				axes[2,j].set_ylim(0,self.da_obj.height)
-				axes[2,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
+				
+				if len(stat_dt) > 0:
+					try:
+						c_std_dis = int(stat_dt.loc[stat_dt.Prediction == 'c','std_distance'].values[0])
+						c_maj_ax = int(stat_dt.loc[stat_dt.Prediction == 'c','major_px'].values[0])
+						c_min_ax = int(stat_dt.loc[stat_dt.Prediction == 'c','minor_px'].values[0])
+					except ValueError:
+						c_std_dis, c_maj_ax, c_min_ax = 0, 0, 0
+					try:
+						p_std_dis = int(stat_dt.loc[stat_dt.Prediction == 'p','std_distance'].values[0])
+						p_maj_ax = int(stat_dt.loc[stat_dt.Prediction == 'p','major_px'].values[0])
+						p_min_ax = int(stat_dt.loc[stat_dt.Prediction == 'p','minor_px'].values[0])
+					except ValueError:
+						p_std_dis, p_maj_ax, p_min_ax = 0, 0, 0
+
+					out_title = '#: ' + str(len(x) + len(x2) + len(x3)) + '\n'
+					#out_title += 'sc:' + str(c_maj_ax) + ',' + str(c_min_ax) + ','
+					#out_title += 'sp:' + str(p_maj_ax) + ',' + str(p_min_ax)
+					out_title += 'sc:' + str(c_std_dis) + ',sp:' + str(p_std_dis)
+					axes[2,j].set_title(out_title, fontsize = 6)
+				else:
+					axes[2,j].set_title('#: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
+				
+				data = self.da_obj.retBowerHeights(start_frame.time, last_frame.time,x,y)
+				axes[3,j].hist(data,bins = [x*.2 - 1. for x in range(11)], label = 'scoops', color = 'blue')
+
+				data = self.da_obj.retBowerHeights(start_frame.time, last_frame.time,x2,y2)
+				axes[3,j].hist(data,bins = [x*.2 - 1. for x in range(11)], label = 'spits', color = 'orange')
+				
 				
 				# k = 3 All feed events
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'f')
 				y = self.da_obj.height - y
-				axes[3,j].scatter(x,y,s = 0.05, color = 'blue')
+				axes[4,j].scatter(x,y,s = 0.05, color = 'blue')
 				x2,y2 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 't')
 				y2 = self.da_obj.height - y2
-				axes[3,j].scatter(x2,y2,s = 0.05, color = 'orange')
+				axes[4,j].scatter(x2,y2,s = 0.05, color = 'orange')
 				x3,y3 = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'm')
 				y3 = self.da_obj.height - y3
-				axes[3,j].scatter(x3,y3,s = 0.05, color = 'green')
+				axes[4,j].scatter(x3,y3,s = 0.05, color = 'green')
 				
-				axes[3,j].set_xlim(0,self.da_obj.width)
-				axes[3,j].set_ylim(0,self.da_obj.height)
-				axes[3,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
+				axes[4,j].set_xlim(0,self.da_obj.width)
+				axes[4,j].set_ylim(0,self.da_obj.height)
+				axes[4,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
 
 				# k = 4 Male Bower events
+				"""
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'c', sex = 'Male')
 				y = self.da_obj.height - y
 				axes[4,j].scatter(x,y,s = 0.05, color = 'blue')
@@ -164,16 +194,19 @@ class SummaryPreparer:
 				axes[5,j].set_xlim(0,self.da_obj.width)
 				axes[5,j].set_ylim(0,self.da_obj.height)
 				axes[5,j].set_title('Events: ' + str(len(x) + len(x2) + len(x3)), fontsize = 6)
-
+				"""
 				# k = 6 Spawn events
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 's')
 				y = self.da_obj.height - y
-				axes[6,j].scatter(x,y,s = 0.05, color = 'black')
+				axes[5,j].scatter(x,y,s = 0.05, color = 'black')
 				
-				axes[6,j].set_xlim(0,self.da_obj.width)
-				axes[6,j].set_ylim(0,self.da_obj.height)
-				axes[6,j].set_title('Events: ' + str(len(x)), fontsize = 6)
+				axes[5,j].set_xlim(0,self.da_obj.width)
+				axes[5,j].set_ylim(0,self.da_obj.height)
+				axes[5,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 				
+				data = self.da_obj.retBowerHeights(start_frame.time, last_frame.time,x,y)
+				axes[6,j].hist(data,bins = [x*.2 - 1. for x in range(11)], label = 'spawn', color = 'black')
+
 				# k = 7 Fish other events
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, 'o')
 				y = self.da_obj.height - y
@@ -183,6 +216,7 @@ class SummaryPreparer:
 				axes[7,j].set_ylim(0,self.da_obj.height)
 				axes[7,j].set_title('Events: ' + str(len(x)), fontsize = 6)
 
+				"""
 				# k = 8 Cropped events
 				x,y = self.cl_obj.returnDepthCoordinates(first_frame.time, last_frame.time, bid=None, in_frame=False, created=True)
 				axes[8,j].scatter(x,y,s = 0.05, color = 'black')
@@ -196,18 +230,18 @@ class SummaryPreparer:
 				axes[9,j].set_xlim(0,self.da_obj.width)
 				axes[9,j].set_ylim(0,self.da_obj.height)
 				axes[9,j].set_title('Events: ' + str(len(x)), fontsize = 6)
-				
+				"""
 				if j==0:
 					axes[0,j].set_ylabel('Total depth')
 					axes[1,j].set_ylabel('Daily depth')
 					axes[2,j].set_ylabel('All Build')
-					axes[3,j].set_ylabel('All Feed')
-					axes[4,j].set_ylabel('Male Build')
-					axes[5,j].set_ylabel('Male Feed')
-					axes[6,j].set_ylabel('Spawn')
+					axes[3,j].set_ylabel('Build to Depth')
+					axes[4,j].set_ylabel('All Feed')
+					axes[5,j].set_ylabel('Spawn')
+					axes[6,j].set_ylabel('Spawn to Depth')
 					axes[7,j].set_ylabel('Fish Other')
-					axes[8,j].set_ylabel('Cropped clips')
-					axes[9,j].set_ylabel('Not created')
+					#axes[8,j].set_ylabel('Cropped clips')
+					#axes[9,j].set_ylabel('Not created')
 
 				for hour in range(8,20):
 					start = day_stamp + datetime.timedelta(hours=hour)

@@ -399,7 +399,6 @@ elif args.AnalysisType == 'Summary':
 		sp_obj.downloadData()
 		sp_obj.validateInputData()
 		sp_obj.createSummaryFigures()
-		pdb.set_trace()
 		sp_obj.uploadData(delete=True)
 		
 		fm_obj = FM(analysisID, projectID)
