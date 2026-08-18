@@ -125,13 +125,13 @@ class SummaryPreparer:
 						c_std_dis = int(stat_dt.loc[stat_dt.Prediction == 'c','std_distance'].values[0])
 						c_maj_ax = int(stat_dt.loc[stat_dt.Prediction == 'c','major_px'].values[0])
 						c_min_ax = int(stat_dt.loc[stat_dt.Prediction == 'c','minor_px'].values[0])
-					except ValueError:
+					except ValueError or IndexError:
 						c_std_dis, c_maj_ax, c_min_ax = 0, 0, 0
 					try:
 						p_std_dis = int(stat_dt.loc[stat_dt.Prediction == 'p','std_distance'].values[0])
 						p_maj_ax = int(stat_dt.loc[stat_dt.Prediction == 'p','major_px'].values[0])
 						p_min_ax = int(stat_dt.loc[stat_dt.Prediction == 'p','minor_px'].values[0])
-					except ValueError:
+					except ValueError or IndexError:
 						p_std_dis, p_maj_ax, p_min_ax = 0, 0, 0
 
 					out_title = '#: ' + str(len(x) + len(x2) + len(x3)) + '\n'
