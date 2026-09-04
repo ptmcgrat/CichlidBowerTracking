@@ -235,6 +235,18 @@ class TarIndex:
         return self.anchors
 
 
+def fetch_optional(cloud_path, local_path, directory=False):
+    """Fetch something that may not be there yet.
+
+    FileManager.downloadData runs `rclone lsf` on the parent directory first and
+    drops into pdb.set_trace() if that fails, and allow_errors does not cover it
+    — so a path whose parent does not exist in the cloud yet (PrepFiles2 on a
+    first run) hangs at a debugger prompt. rclone copy just returns non-zero."""
+    cmd = ['rclone', 'copy' if directory else 'copyto', cloud_path, local_path]
+    out = subprocess.run(cmd, capture_output=True, encoding='utf-8')
+    return out.returncode == 0 and os.path.exists(local_path)
+
+
 def index_local_tar(path):
     """Walk a local archive once and record every member's offset and size.
     tarfile seeks between headers, so this is fast even on a huge file."""
@@ -350,7 +362,8 @@ def build_project(fm_obj, projectID, args):
     # A cached index makes ordering irrelevant: exact offsets, one ranged read each.
     cache = {}
     if not args.Rebuild:
-        fm_obj.downloadData(index_path, allow_errors=True, quiet=True)
+        cloud_index = index_path.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir)
+        fetch_optional(cloud_index, index_path)
         if os.path.exists(index_path):
             try:
                 with open(index_path) as f:
