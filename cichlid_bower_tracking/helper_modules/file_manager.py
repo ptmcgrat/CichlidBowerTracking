@@ -529,7 +529,8 @@ class FileManager():
             cloud_path = local_path.replace(self.localMasterDir, self.cloudMasterDir)
 
             if tarred:
-                output = subprocess.run(['tar', '-cvf', local_path + relative_name + '.tar', '-C', local_path, relative_name], capture_output = True, encoding = 'utf-8')
+                sort_flag = ['--sort=name'] if subprocess.run(['tar', '--sort=name', '--version'], capture_output = True).returncode == 0 else []
+                output = subprocess.run(['tar'] + sort_flag + ['-cvf', local_path + relative_name + '.tar', '-C', local_path, relative_name], capture_output = True, encoding = 'utf-8')
                 if output.returncode != 0:
                     print(output.stderr)
                     if attempt < 3:
