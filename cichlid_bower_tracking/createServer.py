@@ -517,8 +517,7 @@ function swipePanel(base, overSrc, caption) {
   fig.innerHTML =
     '<div class="stage"><img class="base" src="' + base + '" alt="">' +
     '<div class="swipe"><div class="over"><img src="' + overSrc + '" alt=""></div>' +
-    '<div class="handle"></div></div>' +
-    polygonSVG(D.depthPoints, D.frameSize[0], D.frameSize[1]) + '</div>' +
+    '<div class="handle"></div></div></div>' +
     '<div class="controls"><label>Divider</label>' +
     '<input type="range" min="0" max="100" step="1" value="50" aria-label="Divider position"></div>' +
     '<figcaption>' + caption + '</figcaption>';
@@ -1347,8 +1346,7 @@ function preview() {
   if (!viewPair) return;
   const box = document.getElementById('warpBox');
   const svg = document.getElementById('previewSvg');
-  paint(svg, viewPair.depthSize,
-        '<polygon class="crop" points="' + crops.depth.map(p => p.join(',')).join(' ') + '"/>');
+  paint(svg, viewPair.depthSize, '');
   if (!H) { box.style.display = 'none'; return; }
   box.style.display = 'block';
   const host = document.getElementById('preview');
@@ -1698,7 +1696,8 @@ def build_one(fm_obj, projectID, out_root, category='', delete=False):
     Never raises: a project that cannot be built is recorded so the sweep
     continues and the index still shows it with a reason."""
     entry = {'id': projectID, 'tank': '', 'category': category, 'trials': 0, 'start': '',
-             'thumb': None, 'missing': 0, 'status': 'ok', 'pages': {}, 'error': ''}
+             'thumb': None, 'missing': 0, 'status': 'ok', 'pages': {}, 'files': [],
+             'error': ''}
 
     fm_obj.setProjectID(projectID)
     lp = getattr(fm_obj, 'lp', None)
@@ -1745,9 +1744,13 @@ def build_one(fm_obj, projectID, out_root, category='', delete=False):
     fm_obj.createDirectory(project_dir)
     size = write_page(project_dir + 'Prep.html', projectID + ' \u00b7 Prep', payload)
     entry['pages']['Prep'] = 'Prep.html'
+    entry['files'].append('Prep.html')
 
+    # Register is reached from the Prep page, not the index, so it is uploaded
+    # without being listed in entry['pages'].
     reg_payload = build_register_payload(fm_obj, lp, pairs)
     size += write_register(project_dir + 'Register.html', fm_obj.analysisID, reg_payload)
+    entry['files'].append('Register.html')
     entry['size'] = size
 
     first = load_npy(fm_obj.localFirstFrame)
@@ -1981,7 +1984,8 @@ def main():
             entry = build_one(fm_obj, projectID, out_root, category=category, delete=args.Delete)
         except Exception as e:
             entry = {'id': projectID, 'tank': '', 'category': category, 'trials': 0, 'start': '',
-                     'thumb': None, 'missing': 0, 'status': 'failed', 'pages': {}, 'error': repr(e)}
+                     'thumb': None, 'missing': 0, 'status': 'failed', 'pages': {}, 'files': [],
+                     'error': repr(e)}
         entries.append(entry)
 
         if entry['status'] != 'ok':
@@ -1991,7 +1995,7 @@ def main():
         print('    wrote ' + entry['id'] + '/Prep.html (' +
               str(round(entry['size'] / 1e6, 2)) + ' MB, ' + str(entry['trials']) + ' trials)')
         if not args.NoUpload:
-            for name in entry['pages'].values():
+            for name in entry.get('files', []):
                 upload(fm_obj, out_root + projectID + '/' + name)
 
     index_size = write_index(out_root + 'index.html', args.AnalysisID, entries, fm_obj.branch_name)
