@@ -1251,21 +1251,24 @@ function hostPoint(host, ev, size) {
           (ev.clientY - r.top) / r.height * size[1]];
 }
 function attachLoupe(host, loupe, getSrc) {
-  const R = 66, OFFSET = 74;
+  const R = 66, OFFSET = 74, ZOOM = 5;
   host.addEventListener('mousemove', ev => {
     const img = host.querySelector('img');
     const r = img.getBoundingClientRect();
     const x = ev.clientX - r.left, y = ev.clientY - r.top;
-    const zoom = 5;
     loupe.style.display = 'block';
+    // Sit above the cursor, but flip below near the top edge or the pane clips it.
     const above = y > 2 * R + OFFSET;
     loupe.style.left = Math.min(Math.max(x - R, 4), r.width - 2 * R - 4) + 'px';
     loupe.style.top = (above ? y - 2 * R - OFFSET : y + OFFSET) + 'px';
     loupe.style.backgroundImage = 'url(' + getSrc() + ')';
-    loupe.style.backgroundSize = (r.width * zoom) + 'px ' + (r.height * zoom) + 'px';
-    const lx = parseFloat(loupe.style.left), ly = parseFloat(loupe.style.top);
+    loupe.style.backgroundSize = (r.width * ZOOM) + 'px ' + (r.height * ZOOM) + 'px';
+    // The point under the cursor sits at (x*ZOOM, y*ZOOM) in the scaled image and
+    // has to land at the loupe's centre. That depends only on the cursor, not on
+    // where the loupe was placed — deriving it from left/top instead puts the
+    // magnified view out by the flip offset.
     loupe.style.backgroundPosition =
-      (-x * zoom + (x - lx)) + 'px ' + (-y * zoom + (y - ly)) + 'px';
+      (R - x * ZOOM) + 'px ' + (R - y * ZOOM) + 'px';
   });
   host.addEventListener('mouseleave', () => { loupe.style.display = 'none'; });
 }
