@@ -739,7 +739,7 @@ INDEX_PAGE = r"""<!DOCTYPE html>
   .bar button { cursor:pointer; }
   .bar button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
   .bar span { color:var(--ink-dim); font-size:13px; font-variant-numeric:tabular-nums; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; }
   .group { margin-bottom:30px; }
   .group h2 { font-size:14px; font-weight:600; margin:0 0 11px; padding-bottom:7px;
               border-bottom:1px solid var(--line); display:flex; gap:9px; align-items:baseline; }
@@ -750,18 +750,18 @@ INDEX_PAGE = r"""<!DOCTYPE html>
   .card img { width:100%; display:block; background:#000; }
   .card .noimg { aspect-ratio:4/3; background:#000; display:flex; align-items:center;
                  justify-content:center; color:var(--ink-dim); font-size:13px; }
-  .card .body { padding:9px 10px; flex:1; }
-  .card h2 { font-size:12px; font-weight:600; margin:0 0 2px; line-height:1.3;
+  .card .body { padding:11px 12px; flex:1; }
+  .card h2 { font-size:13px; font-weight:600; margin:0 0 3px; line-height:1.3;
              word-break:break-word; }
-  .card p { margin:0; font-size:11px; color:var(--ink-dim); font-variant-numeric:tabular-nums;
+  .card p { margin:0; font-size:12px; color:var(--ink-dim); font-variant-numeric:tabular-nums;
             line-height:1.4; }
   .pages { display:flex; gap:3px; flex-wrap:wrap; padding:0 10px 10px; }
-  .pages a, .pages em { font-size:10px; padding:2px 6px; border-radius:999px;
+  .pages a, .pages em { font-size:11px; padding:3px 8px; border-radius:999px;
                         border:1px solid var(--line); font-style:normal; }
   .pages a { color:var(--ink); border-color:#3a4553; }
   .pages a:hover { background:var(--ink); color:var(--bg); text-decoration:none; }
   .pages em { color:#5c6675; }
-  .flag { display:inline-block; margin-top:6px; font-size:10px; padding:2px 7px;
+  .flag { display:inline-block; margin-top:7px; font-size:11px; padding:2px 8px;
           border-radius:999px; border:1px solid; }
   .flag.warn { color:var(--warn); border-color:rgba(224,105,63,.5); }
   .flag.fail { color:#ef7a7a; border-color:rgba(239,122,122,.5); }
