@@ -584,13 +584,17 @@ function renderOverview() {
   grid.appendChild(slot);
   box.appendChild(grid);
 
+  // This subtree is built before it is attached, so look elements up within it
+  // rather than through document.
+  const fixLink = bar.querySelector('#fixLink');
+
   function showPair(key) {
     const p = o.pairs.find(x => x.key === key) || o.pairs[0];
     slot.textContent = '';
     slot.appendChild(swipePanel(p.depth, p.piWarped,
       'Registration on ' + p.label + '. Move the pointer across to wipe the warped Pi ' +
       'frame over the depth frame — the tray edges should stay continuous.'));
-    document.getElementById('fixLink').href = 'Register.html?pair=' + encodeURIComponent(p.key);
+    fixLink.href = 'Register.html?pair=' + encodeURIComponent(p.key);
   }
   bar.querySelector('#pairPick').addEventListener('change', e => showPair(e.target.value));
   if (o.pairs.length) showPair(o.pairs[0].key);
@@ -720,7 +724,7 @@ INDEX_PAGE = r"""<!DOCTYPE html>
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
-  .wrap { max-width:1240px; margin:0 auto; padding:28px 24px 72px; }
+  .wrap { max-width:1640px; margin:0 auto; padding:28px 24px 72px; }
   h1 { font-size:25px; font-weight:600; margin:0 0 4px; letter-spacing:-0.01em; }
   .sub { color:var(--ink-dim); margin:0 0 20px; }
   a { color:var(--tray); text-decoration:none; }
@@ -735,7 +739,7 @@ INDEX_PAGE = r"""<!DOCTYPE html>
   .bar button { cursor:pointer; }
   .bar button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
   .bar span { color:var(--ink-dim); font-size:13px; font-variant-numeric:tabular-nums; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(196px,1fr)); gap:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:12px; }
   .group { margin-bottom:30px; }
   .group h2 { font-size:14px; font-weight:600; margin:0 0 11px; padding-bottom:7px;
               border-bottom:1px solid var(--line); display:flex; gap:9px; align-items:baseline; }
@@ -746,16 +750,18 @@ INDEX_PAGE = r"""<!DOCTYPE html>
   .card img { width:100%; display:block; background:#000; }
   .card .noimg { aspect-ratio:4/3; background:#000; display:flex; align-items:center;
                  justify-content:center; color:var(--ink-dim); font-size:13px; }
-  .card .body { padding:10px 11px; flex:1; }
-  .card h2 { font-size:13px; font-weight:600; margin:0 0 3px; word-break:break-word; }
-  .card p { margin:0; font-size:12px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
-  .pages { display:flex; gap:4px; flex-wrap:wrap; padding:0 11px 11px; }
-  .pages a, .pages em { font-size:11px; padding:3px 7px; border-radius:999px;
+  .card .body { padding:9px 10px; flex:1; }
+  .card h2 { font-size:12px; font-weight:600; margin:0 0 2px; line-height:1.3;
+             word-break:break-word; }
+  .card p { margin:0; font-size:11px; color:var(--ink-dim); font-variant-numeric:tabular-nums;
+            line-height:1.4; }
+  .pages { display:flex; gap:3px; flex-wrap:wrap; padding:0 10px 10px; }
+  .pages a, .pages em { font-size:10px; padding:2px 6px; border-radius:999px;
                         border:1px solid var(--line); font-style:normal; }
   .pages a { color:var(--ink); border-color:#3a4553; }
   .pages a:hover { background:var(--ink); color:var(--bg); text-decoration:none; }
   .pages em { color:#5c6675; }
-  .flag { display:inline-block; margin-top:7px; font-size:12px; padding:2px 8px;
+  .flag { display:inline-block; margin-top:6px; font-size:10px; padding:2px 7px;
           border-radius:999px; border:1px solid; }
   .flag.warn { color:var(--warn); border-color:rgba(224,105,63,.5); }
   .flag.fail { color:#ef7a7a; border-color:rgba(239,122,122,.5); }
@@ -778,7 +784,7 @@ INDEX_PAGE = r"""<!DOCTYPE html>
     <button id="flat" aria-pressed="false">Ungroup</button>
     <span id="count"></span>
   </div>
-  <div class="grid" id="grid"></div>
+  <div id="grid"></div>
   <p class="foot" id="foot"></p>
 </div>
 <script id="payload" type="application/json">__PAYLOAD__</script>
