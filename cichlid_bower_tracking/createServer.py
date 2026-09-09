@@ -1,4 +1,4 @@
-import argparse, base64, datetime, glob, json, os, re, shutil, sys, warnings
+import argparse, base64, datetime, glob, json, os, re, shutil, subprocess, sys, warnings
 
 import cv2
 import numpy as np
@@ -133,6 +133,56 @@ def load_npy(path):
 
 # ------------------------------------------------------------------ prep page
 
+class PrepFiles2Missing(Exception):
+    """PrepFiles2 holds the time-matched Pi/depth pairs the pages are built on."""
+    pass
+
+
+TRIAL_SIDES = [('First', 'start'), ('Last', 'end')]
+
+
+def load_prepfiles2(fm, lp):
+    """Read the corrected image pairs. Raises if they have not been built.
+
+    createPrepFiles2.py writes one Pi still and one depth still per trial side,
+    matched on capture time. The old PrepFiles pairing could be hours apart, so
+    the pages are built on these instead."""
+    d = fm.localProjectDir + 'PrepFiles2/'
+    manifest_path = d + 'pairs.json'
+    if not os.path.exists(manifest_path):
+        raise PrepFiles2Missing('no PrepFiles2/pairs.json')
+    try:
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+    except Exception as e:
+        raise PrepFiles2Missing('pairs.json is unreadable (' + repr(e) + ')')
+
+    pairs, missing = [], []
+    for i in range(1, len(lp.trials) + 1):
+        for side, word in TRIAL_SIDES:
+            stem = d + 'Trial_' + str(i) + side
+            needed = {'depth_jpg': stem + 'Depth.jpg', 'pi_jpg': stem + 'Pi.jpg',
+                      'depth_npy': stem + 'Depth.npy'}
+            absent = [os.path.basename(p) for p in needed.values() if not os.path.exists(p)]
+            if absent:
+                missing.extend(absent)
+                continue
+            meta = manifest.get('trials', {}).get(str(i), {}).get(side, {})
+            pairs.append({
+                'key': 'trial' + str(i) + '_' + word,
+                'label': 'Trial ' + str(i) + ' ' + word,
+                'trial': i, 'side': side,
+                'gapMinutes': meta.get('gapMinutes'),
+                'piTime': meta.get('piTime', ''), 'depthTime': meta.get('depthTime', ''),
+                'piSource': meta.get('piFile', ''), 'depthSource': meta.get('depthPic', ''),
+                **needed,
+            })
+    if not pairs:
+        raise PrepFiles2Missing('PrepFiles2 has no complete trial pairs' +
+                                (' (missing ' + ', '.join(missing[:6]) + ')' if missing else ''))
+    return pairs, missing
+
+
 def check_prep_files(fm, lp):
     """The AnalysisStates check for StartingFiles never looks at the per-trial
     prep files, so a project can read Prep == True while missing them."""
@@ -158,75 +208,84 @@ def check_prep_files(fm, lp):
     return problems, trial_status
 
 
-def build_prep_payload(fm, lp, trial_status):
+def build_prep_payload(fm, lp, trial_status, pairs):
     depth_points = parse_points(fm.localDepthCropFile)
     video_points = parse_points(fm.localVideoCropFile)
     transM = np.load(fm.localTransMFile)
     crop_mask = polygon_mask((lp.height, lp.width), depth_points)
 
-    first = load_npy(fm.localFirstFrame)
-    last = load_npy(fm.localLastFrame)
-    change, median_height = filtered_change(first, last)
-    change_src, change_meta = encode_depth(change)
+    # Overview: one depth still and one warped Pi still per pair, so the
+    # registration can be checked against any trial rather than just setup.
+    overview_pairs = []
+    for p in pairs:
+        depth_img = cv2.imread(p['depth_jpg'])
+        pi_img = cv2.imread(p['pi_jpg'])
+        if depth_img is None or pi_img is None:
+            continue
+        warped = cv2.warpPerspective(pi_img, transM, (lp.width, lp.height))
+        overview_pairs.append({
+            'key': p['key'], 'label': p['label'], 'gapMinutes': p['gapMinutes'],
+            'depth': encode_image(depth_img, max_width=lp.width),
+            'piWarped': encode_image(warped, max_width=lp.width),
+        })
 
-    pi_rgb = cv2.imread(fm.localPiRGB)
-    warped_pi = cv2.warpPerspective(pi_rgb, transM, (lp.width, lp.height))
-
+    first = pairs[0]
+    pi_first = cv2.imread(first['pi_jpg'])
     overview = {
-        'depthRGB': encode_image(cv2.imread(fm.localFirstDepthRGB)),
-        'depthRGBLast': encode_image(cv2.imread(fm.localLastDepthRGB)),
-        'piRGB': encode_image(pi_rgb),
-        'piWarped': encode_image(warped_pi),
-        'piSize': [int(pi_rgb.shape[1]), int(pi_rgb.shape[0])],
-        'change': {'src': change_src, 'meta': change_meta,
-                   'stats': depth_stats(change, crop_mask),
-                   'label': 'Whole project, last frame minus first'},
-        'medianHeight': median_height,
+        'pairs': overview_pairs,
+        'depthCropImage': encode_image(cv2.imread(first['depth_jpg']), max_width=lp.width),
+        'videoCropImage': encode_image(pi_first, max_width=min(pi_first.shape[1], 900)),
+        'piSize': [int(pi_first.shape[1]), int(pi_first.shape[0])],
     }
 
     trials = []
-    for i, trial in enumerate(lp.trials):
-        n = str(i + 1)
+    by_trial = {}
+    for p in pairs:
+        by_trial.setdefault(p['trial'], {})[p['side']] = p
+
+    for i, trial in enumerate(lp.trials, 1):
+        sides = by_trial.get(i, {})
         entry = {
-            'number': i + 1,
-            'start': str(trial.startTime),
-            'stop': str(trial.stopTime),
+            'number': i,
+            'start': str(trial.startTime), 'stop': str(trial.stopTime),
             'reset': str(trial.resetTime) if trial.resetTime is not None else None,
             'numDays': int(trial.num_days),
-            'nFrames': len(trial.frames),
-            'nDaylightFrames': len(trial.daylight_frames),
+            'nFrames': len(trial.frames), 'nDaylightFrames': len(trial.daylight_frames),
             'movies': [int(m.index) for m in trial.movies],
-            'missing': trial_status[i],
+            'missing': [] if len(sides) == 2 else ['PrepFiles2 pair for this trial'],
             'panels': {},
         }
-        if trial_status[i]:
+        if len(sides) != 2:
             trials.append(entry)
             continue
 
-        t_first = load_npy(fm.localPrepDir + 'Trial_' + n + 'FirstDepth.npy')
-        t_last = load_npy(fm.localPrepDir + 'Trial_' + n + 'LastDepth.npy')
-        t_reset = load_npy(fm.localPrepDir + 'Trial_' + n + 'ResetDepth.npy')
-
+        t_first = load_npy(sides['First']['depth_npy'])
+        t_last = load_npy(sides['Last']['depth_npy'])
         t_change, _ = filtered_change(t_first, t_last)
-        r_change, _ = filtered_change(t_reset, t_last)
         t_src, t_meta = encode_depth(t_change)
-        r_src, r_meta = encode_depth(r_change)
 
-        first_pi = cv2.imread(fm.localPrepDir + 'Trial_' + n + 'FirstPi.jpg')
-        last_pi = cv2.imread(fm.localPrepDir + 'Trial_' + n + 'LastPi.jpg')
-
-        entry['panels'] = {
-            'firstDepthRGB': encode_image(cv2.imread(fm.localPrepDir + 'Trial_' + n + 'FirstDepth.jpg')),
-            'lastDepthRGB': encode_image(cv2.imread(fm.localPrepDir + 'Trial_' + n + 'LastDepth.jpg')),
-            'firstPi': encode_image(cv2.warpPerspective(first_pi, transM, (lp.width, lp.height))),
-            'lastPi': encode_image(cv2.warpPerspective(last_pi, transM, (lp.width, lp.height))),
+        panels = {
+            'firstDepthRGB': encode_image(cv2.imread(sides['First']['depth_jpg'])),
+            'lastDepthRGB': encode_image(cv2.imread(sides['Last']['depth_jpg'])),
+            'firstPi': encode_image(cv2.warpPerspective(
+                cv2.imread(sides['First']['pi_jpg']), transM, (lp.width, lp.height))),
+            'lastPi': encode_image(cv2.warpPerspective(
+                cv2.imread(sides['Last']['pi_jpg']), transM, (lp.width, lp.height))),
             'change': {'src': t_src, 'meta': t_meta,
                        'stats': depth_stats(t_change, crop_mask),
-                       'label': 'Trial ' + n + ', last frame minus first'},
-            'resetChange': {'src': r_src, 'meta': r_meta,
-                            'stats': depth_stats(r_change, crop_mask),
-                            'label': 'Trial ' + n + ', last frame minus reset'},
+                       'label': 'Trial ' + str(i) + ', last frame minus first'},
         }
+
+        # The reset frame only exists in the original PrepFiles.
+        reset_path = fm.localPrepDir + 'Trial_' + str(i) + 'ResetDepth.npy'
+        if os.path.exists(reset_path):
+            r_change, _ = filtered_change(load_npy(reset_path), t_last)
+            r_src, r_meta = encode_depth(r_change)
+            panels['resetChange'] = {'src': r_src, 'meta': r_meta,
+                                     'stats': depth_stats(r_change, crop_mask),
+                                     'label': 'Trial ' + str(i) + ', last frame minus reset'}
+        entry['panels'] = panels
+        entry['gaps'] = {side: sides[side]['gapMinutes'] for side, _ in TRIAL_SIDES}
         trials.append(entry)
 
     prep_log = ''
@@ -236,21 +295,14 @@ def build_prep_payload(fm, lp, trial_status):
                                 or 'Username' in line or 'Nodename' in line]).strip()
 
     return {
-        'projectID': lp.projectID,
-        'tankID': lp.tankID,
-        'analysisID': fm.analysisID,
+        'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
         'device': getattr(lp, 'device', 'unknown'),
-        'masterStart': str(lp.master_start),
-        'masterStop': str(getattr(lp, 'master_stop', '')),
-        'nFrames': len(lp.frames),
-        'nMovies': len(lp.movies),
-        'depthPoints': depth_points,
-        'videoPoints': video_points,
+        'masterStart': str(lp.master_start), 'masterStop': str(getattr(lp, 'master_stop', '')),
+        'nFrames': len(lp.frames), 'nMovies': len(lp.movies),
+        'depthPoints': depth_points, 'videoPoints': video_points,
         'frameSize': [lp.width, lp.height],
-        'overview': overview,
-        'trials': trials,
-        'logIssues': lp.malformed_file,
-        'prepLog': prep_log,
+        'overview': overview, 'trials': trials,
+        'logIssues': lp.malformed_file, 'prepLog': prep_log,
         'built': str(datetime.datetime.now().replace(microsecond=0)),
         'branch': fm.branch_name,
     }
@@ -330,6 +382,14 @@ PAGE = r"""<!DOCTYPE html>
   a { color: var(--tray); text-decoration: none; }
   a:hover { text-decoration: underline; }
   .back { display: inline-block; margin-bottom: 14px; font-size: 13px; color: var(--ink-dim); }
+  .bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 0;
+         border-bottom: 1px solid var(--line); margin-bottom: 18px; font-size: 14px;
+         color: var(--ink-dim); }
+  .bar select { background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+                padding: 7px 10px; border-radius: 6px; font: inherit; font-size: 14px; }
+  .btn { margin-left: auto; border: 1px solid var(--line); color: var(--ink);
+         padding: 7px 14px; border-radius: 6px; font-size: 14px; }
+  .btn:hover { border-color: var(--tray); text-decoration: none; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -501,15 +561,40 @@ function swipePanel(base, overSrc, caption) {
 
 function renderOverview() {
   const o = D.overview, box = document.createElement('div');
+
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.innerHTML =
+    '<label for="pairPick">Registration checked against</label>' +
+    '<select id="pairPick">' + o.pairs.map(p =>
+      '<option value="' + p.key + '">' + p.label +
+      (p.gapMinutes === null || p.gapMinutes === undefined ? '' :
+        ' (' + p.gapMinutes + ' min apart)') + '</option>').join('') + '</select>' +
+    '<a class="btn" id="fixLink" href="Register.html">Fix registration or crops</a>';
+  box.appendChild(bar);
+
   const grid = document.createElement('div');
   grid.className = 'grid';
-  grid.appendChild(imagePanel(o.depthRGB, 'Depth camera view at the start, with the tray crop.', D.depthPoints));
-  grid.appendChild(depthPanel(o.change, 2));
-  grid.appendChild(imagePanel(o.piRGB, 'Pi camera view, with the video crop.', D.videoPoints, o.piSize));
-  grid.appendChild(swipePanel(o.depthRGB, o.piWarped,
-    'Registration check. Move the pointer across the panel to wipe the warped Pi frame ' +
-    'over the depth frame — the tray edges should stay continuous across the divider.'));
+  grid.appendChild(imagePanel(o.depthCropImage,
+    'Depth camera with the tray crop.', D.depthPoints));
+  grid.appendChild(imagePanel(o.videoCropImage,
+    'Pi camera with the video crop.', D.videoPoints, o.piSize));
+
+  const slot = document.createElement('div');
+  grid.appendChild(slot);
   box.appendChild(grid);
+
+  function showPair(key) {
+    const p = o.pairs.find(x => x.key === key) || o.pairs[0];
+    slot.textContent = '';
+    slot.appendChild(swipePanel(p.depth, p.piWarped,
+      'Registration on ' + p.label + '. Move the pointer across to wipe the warped Pi ' +
+      'frame over the depth frame — the tray edges should stay continuous.'));
+    document.getElementById('fixLink').href = 'Register.html?pair=' + encodeURIComponent(p.key);
+  }
+  bar.querySelector('#pairPick').addEventListener('change', e => showPair(e.target.value));
+  if (o.pairs.length) showPair(o.pairs[0].key);
+  else slot.innerHTML = '<div class="note">No image pairs are available.</div>';
   return box;
 }
 
@@ -527,7 +612,7 @@ function renderTrial(t) {
   grid.appendChild(imagePanel(p.firstPi, 'Pi view at the start, warped into depth space.', D.depthPoints));
   grid.appendChild(imagePanel(p.lastPi, 'Pi view at the end, warped into depth space.', D.depthPoints));
   grid.appendChild(depthPanel(p.change, 2));
-  grid.appendChild(depthPanel(p.resetChange, 2));
+  if (p.resetChange) grid.appendChild(depthPanel(p.resetChange, 2));
   box.appendChild(grid);
   return box;
 }
@@ -557,6 +642,8 @@ function build() {
         const bits = ['Ran ' + t.start.slice(0, 16) + ' to ' + t.stop.slice(0, 16),
                       t.numDays + ' days', t.nDaylightFrames + ' daylight frames of ' + t.nFrames,
                       'videos ' + (t.movies.length ? t.movies.join(', ') : 'none')];
+        if (t.gaps) bits.push('pairs matched to ' + t.gaps.First + ' and ' +
+                              t.gaps.Last + ' min');
         if (t.reset) bits.push('tank reset ' + t.reset.slice(0, 16));
         const p = document.createElement('p');
         p.className = 'sub'; p.textContent = bits.join(' · ');
@@ -643,20 +730,27 @@ INDEX_PAGE = r"""<!DOCTYPE html>
          margin-bottom:22px; }
   .bar input { flex:1; min-width:200px; background:var(--panel); border:1px solid var(--line);
                color:var(--ink); padding:8px 12px; border-radius:6px; font:inherit; font-size:14px; }
-  .bar select { background:var(--panel); border:1px solid var(--line); color:var(--ink);
-                padding:8px 10px; border-radius:6px; font:inherit; font-size:14px; }
+  .bar select, .bar button { background:var(--panel); border:1px solid var(--line);
+                color:var(--ink); padding:8px 10px; border-radius:6px; font:inherit; font-size:14px; }
+  .bar button { cursor:pointer; }
+  .bar button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
   .bar span { color:var(--ink-dim); font-size:13px; font-variant-numeric:tabular-nums; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(268px,1fr)); gap:18px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(196px,1fr)); gap:14px; }
+  .group { margin-bottom:30px; }
+  .group h2 { font-size:14px; font-weight:600; margin:0 0 11px; padding-bottom:7px;
+              border-bottom:1px solid var(--line); display:flex; gap:9px; align-items:baseline; }
+  .group h2 span { color:var(--ink-dim); font-weight:400; font-size:13px;
+                   font-variant-numeric:tabular-nums; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden;
           display:flex; flex-direction:column; }
   .card img { width:100%; display:block; background:#000; }
   .card .noimg { aspect-ratio:4/3; background:#000; display:flex; align-items:center;
                  justify-content:center; color:var(--ink-dim); font-size:13px; }
-  .card .body { padding:12px 14px; flex:1; }
-  .card h2 { font-size:15px; font-weight:600; margin:0 0 3px; }
-  .card p { margin:0; font-size:13px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
-  .pages { display:flex; gap:6px; flex-wrap:wrap; padding:0 14px 13px; }
-  .pages a, .pages em { font-size:12px; padding:4px 9px; border-radius:999px;
+  .card .body { padding:10px 11px; flex:1; }
+  .card h2 { font-size:13px; font-weight:600; margin:0 0 3px; word-break:break-word; }
+  .card p { margin:0; font-size:12px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
+  .pages { display:flex; gap:4px; flex-wrap:wrap; padding:0 11px 11px; }
+  .pages a, .pages em { font-size:11px; padding:3px 7px; border-radius:999px;
                         border:1px solid var(--line); font-style:normal; }
   .pages a { color:var(--ink); border-color:#3a4553; }
   .pages a:hover { background:var(--ink); color:var(--bg); text-decoration:none; }
@@ -674,13 +768,14 @@ INDEX_PAGE = r"""<!DOCTYPE html>
   <h1>__ANALYSIS__</h1>
   <p class="sub" id="sub"></p>
   <div class="bar">
-    <input id="q" type="search" placeholder="Filter by project or tank" aria-label="Filter projects">
+    <input id="q" type="search" placeholder="Filter by project, tank or category" aria-label="Filter projects">
     <select id="sort">
       <option value="name">Sort by project</option>
       <option value="tank">Sort by tank</option>
       <option value="start">Sort by start date</option>
       <option value="status">Sort by status</option>
     </select>
+    <button id="flat" aria-pressed="false">Ungroup</button>
     <span id="count"></span>
   </div>
   <div class="grid" id="grid"></div>
@@ -689,10 +784,11 @@ INDEX_PAGE = r"""<!DOCTYPE html>
 <script id="payload" type="application/json">__PAYLOAD__</script>
 <script>
 const D = JSON.parse(document.getElementById('payload').textContent);
-const PAGES = ['Prep', 'Register', 'Depth', 'Cluster', 'IntegratedData'];
+const PAGES = ['Prep', 'Depth', 'Cluster', 'IntegratedData'];
 const grid = document.getElementById('grid');
 const q = document.getElementById('q');
 const sortBy = document.getElementById('sort');
+const flatBtn = document.getElementById('flat');
 
 document.getElementById('sub').textContent =
   D.projects.length + ' projects with Prep complete. Pick one to review its tray crop and registration.';
@@ -705,26 +801,26 @@ function card(p) {
       ? '<a href="' + p.id + '/' + name + '.html">' + name + '</a>'
       : '<em>' + name + '</em>').join('');
   let flag = '';
-  if (p.status === 'failed') flag = '<span class="flag fail">Build failed</span>';
+  if (p.status === 'needs_prepfiles2')
+    flag = '<span class="flag warn">Needs PrepFiles2</span>';
+  else if (p.status === 'failed') flag = '<span class="flag fail">Build failed</span>';
   else if (p.missing) flag = '<span class="flag warn">' + p.missing + ' incomplete</span>';
   el.innerHTML =
     (p.thumb ? '<img src="' + p.thumb + '" alt="Depth change for ' + p.id + '">'
              : '<div class="noimg">No depth preview</div>') +
     '<div class="body"><h2>' + p.id + '</h2>' +
     '<p>' + [p.tank, p.trials + ' trial' + (p.trials === 1 ? '' : 's'),
-             p.start ? p.start.slice(0, 10) : ''].filter(Boolean).join(' · ') + '</p>' +
+             p.start ? p.start.slice(0, 10) : ''].filter(Boolean).join(' \u00b7 ') + '</p>' +
     flag + '</div><div class="pages">' + pages + '</div>';
   return el;
 }
 
-function render() {
-  const term = q.value.trim().toLowerCase();
-  let rows = D.projects.filter(p =>
-    !term || p.id.toLowerCase().includes(term) || (p.tank || '').toLowerCase().includes(term));
+function rank(x) { return x.status === 'failed' ? 0 : (x.status === 'needs_prepfiles2' ? 1 : (x.missing ? 2 : 3)); }
+
+function sorted(rows) {
   const key = sortBy.value;
-  rows.sort((a, b) => {
+  return rows.slice().sort((a, b) => {
     if (key === 'status') {
-      const rank = x => x.status === 'failed' ? 0 : (x.missing ? 1 : 2);
       if (rank(a) !== rank(b)) return rank(a) - rank(b);
       return a.id.localeCompare(b.id);
     }
@@ -732,11 +828,56 @@ function render() {
     const vb = (key === 'tank' ? b.tank : key === 'start' ? b.start : b.id) || '';
     return String(va).localeCompare(String(vb)) || a.id.localeCompare(b.id);
   });
+}
+
+function gridOf(rows) {
+  const g = document.createElement('div');
+  g.className = 'grid';
+  rows.forEach(p => g.appendChild(card(p)));
+  return g;
+}
+
+function render() {
+  const term = q.value.trim().toLowerCase();
+  const rows = D.projects.filter(p =>
+    !term || p.id.toLowerCase().includes(term) || (p.tank || '').toLowerCase().includes(term) ||
+    (p.category || '').toLowerCase().includes(term));
   grid.textContent = '';
-  rows.forEach(p => grid.appendChild(card(p)));
+
+  if (flatBtn.getAttribute('aria-pressed') === 'true') {
+    grid.appendChild(gridOf(sorted(rows)));
+  } else {
+    const groups = new Map();
+    rows.forEach(p => {
+      const k = p.category || 'Uncategorised';
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(p);
+    });
+    // named categories alphabetically, anything uncategorised last
+    const keys = Array.from(groups.keys()).sort((a, b) => {
+      if (a === 'Uncategorised') return 1;
+      if (b === 'Uncategorised') return -1;
+      return a.localeCompare(b);
+    });
+    keys.forEach(k => {
+      const sec = document.createElement('section');
+      sec.className = 'group';
+      const rowsK = groups.get(k);
+      const bad = rowsK.filter(p => rank(p) < 3).length;
+      sec.innerHTML = '<h2>' + k + '<span>' + rowsK.length + ' project' +
+                      (rowsK.length === 1 ? '' : 's') +
+                      (bad ? ' \u00b7 ' + bad + ' needing attention' : '') + '</span></h2>';
+      sec.appendChild(gridOf(sorted(rowsK)));
+      grid.appendChild(sec);
+    });
+  }
   document.getElementById('count').textContent =
     rows.length + ' of ' + D.projects.length + ' shown';
 }
+flatBtn.addEventListener('click', () => {
+  flatBtn.setAttribute('aria-pressed', flatBtn.getAttribute('aria-pressed') !== 'true');
+  render();
+});
 q.addEventListener('input', render);
 sortBy.addEventListener('change', render);
 render();
@@ -759,6 +900,18 @@ def write_index(path, analysis_id, projects, branch):
 
 # ------------------------------------------------------------------------ main
 
+def fetch_optional(cloud_path, local_path, directory=False):
+    """Fetch something that may not be there yet.
+
+    FileManager.downloadData runs `rclone lsf` on the parent directory first and
+    drops into pdb.set_trace() if that fails, and allow_errors does not cover it
+    — so a path whose parent does not exist in the cloud yet hangs at a debugger
+    prompt. rclone copy just returns non-zero."""
+    cmd = ['rclone', 'copy' if directory else 'copyto', cloud_path, local_path]
+    out = subprocess.run(cmd, capture_output=True, encoding='utf-8')
+    return out.returncode == 0 and os.path.exists(local_path)
+
+
 def upload(fm_obj, path, quiet=False):
     """Upload one file and say where it went. uploadData raises on failure, so
     anything printed here actually landed."""
@@ -768,51 +921,26 @@ def upload(fm_obj, path, quiet=False):
         print('    uploaded -> ' + cloud)
 
 
-def build_register_payload(fm, lp):
-    """Candidate image pairs for re-registering a project.
-
-    The 5-minute depth stills live inside Frames.tar alongside the .npy files, so
-    pulling them just to browse is not viable. PrepFiles already holds a usable
-    menu: the project-level stills plus first/last of each trial, which are
-    naturally close in time because the Pi still comes from the video that starts
-    within a few minutes of the depth frame."""
-    prep = fm.localPrepDir
-    pairs = []
-
-    def add(key, label, depth_path, pi_path, depth_time=None, pi_time=None):
-        if not (os.path.exists(depth_path) and os.path.exists(pi_path)):
-            return
-        depth_img = cv2.imread(depth_path)
-        pi_img = cv2.imread(pi_path)
+def build_register_payload(fm, lp, pairs):
+    """Full-resolution stills for every corrected pair, plus the current crops."""
+    out_pairs = []
+    for p in pairs:
+        depth_img = cv2.imread(p['depth_jpg'])
+        pi_img = cv2.imread(p['pi_jpg'])
         if depth_img is None or pi_img is None:
-            return
-        gap = None
-        if depth_time is not None and pi_time is not None:
-            gap = abs((depth_time - pi_time).total_seconds()) / 60.0
-        pairs.append({
-            'key': key, 'label': label,
+            continue
+        out_pairs.append({
+            'key': p['key'], 'label': p['label'], 'gapMinutes': p['gapMinutes'],
+            'piTime': p['piTime'], 'depthTime': p['depthTime'],
+            'depthFile': os.path.basename(p['depth_jpg']),
+            'piFile': os.path.basename(p['pi_jpg']),
             'depth': encode_image(depth_img, max_width=depth_img.shape[1]),
             'pi': encode_image(pi_img, max_width=min(pi_img.shape[1], 1296)),
             'depthSize': [int(depth_img.shape[1]), int(depth_img.shape[0])],
             'piSize': [int(pi_img.shape[1]), int(pi_img.shape[0])],
-            'depthFile': os.path.basename(depth_path), 'piFile': os.path.basename(pi_path),
-            'gapMinutes': gap,
         })
-
-    add('project_start', 'Project setup', fm.localFirstDepthRGB, fm.localPiRGB)
-    add('project_end', 'Project end', fm.localLastDepthRGB, prep + 'LastPiCameraRGB.jpg')
-    for i, trial in enumerate(lp.trials):
-        n = str(i + 1)
-        d_first = trial.daylight_frames[0].time if trial.daylight_frames else None
-        d_last = trial.daylight_frames[-1].time if trial.daylight_frames else None
-        p_first = trial.movies[0].startTime if trial.movies else None
-        p_last = trial.movies[-1].startTime if trial.movies else None
-        add('trial' + n + '_start', 'Trial ' + n + ' start',
-            prep + 'Trial_' + n + 'FirstDepth.jpg', prep + 'Trial_' + n + 'FirstPi.jpg',
-            d_first, p_first)
-        add('trial' + n + '_end', 'Trial ' + n + ' end',
-            prep + 'Trial_' + n + 'LastDepth.jpg', prep + 'Trial_' + n + 'LastPi.jpg',
-            d_last, p_last)
+    if not out_pairs:
+        raise PrepFiles2Missing('no readable PrepFiles2 images')
 
     current = {}
     if os.path.exists(fm.localTransMFile):
@@ -826,7 +954,7 @@ def build_register_payload(fm, lp):
         'schema': 'cichlid-registration/1',
         'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
         'frameSize': [lp.width, lp.height],
-        'pairs': pairs, 'current': current,
+        'pairs': out_pairs, 'current': current,
         'built': str(datetime.datetime.now().replace(microsecond=0)),
     }
 
@@ -839,29 +967,43 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
 <title>__TITLE__</title>
 <style>
   :root { --ink:#e8ecf1; --ink-dim:#93a0b0; --bg:#0e1116; --panel:#171c24;
-          --line:#262d38; --tray:#f2a33c; --warn:#e0693f; --ok:#5aa87a; }
+          --line:#262d38; --tray:#f2a33c; --video:#6fb2e8; --warn:#e0693f; --ok:#5aa87a; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
   .wrap { max-width:1400px; margin:0 auto; padding:24px 22px 80px; }
   h1 { font-size:24px; font-weight:600; margin:0 0 3px; }
   h2 { font-size:15px; font-weight:600; margin:26px 0 10px; }
-  .sub { color:var(--ink-dim); margin:0 0 18px; }
+  .sub { color:var(--ink-dim); margin:0 0 16px; }
   a { color:var(--tray); text-decoration:none; }
   a:hover { text-decoration:underline; }
   .back { display:inline-block; margin-bottom:12px; font-size:13px; color:var(--ink-dim); }
-  .strip { display:flex; gap:9px; overflow-x:auto; padding-bottom:8px; }
-  .strip button { background:var(--panel); border:1px solid var(--line); border-radius:7px;
-                  padding:7px; cursor:pointer; color:var(--ink-dim); font:inherit; font-size:12px;
-                  min-width:132px; text-align:left; }
-  .strip button[aria-pressed="true"] { border-color:var(--tray); color:var(--ink); }
-  .strip img { width:118px; display:block; border-radius:3px; margin-bottom:5px; background:#000; }
-  .strip .gap { color:var(--ink-dim); font-variant-numeric:tabular-nums; }
-  .strip .gap.wide { color:var(--warn); }
-  .panes { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:6px; }
+  .mtabs { display:flex; gap:4px; margin:14px 0 16px; }
+  .mtabs button { background:none; border:1px solid var(--line); color:var(--ink-dim);
+                  padding:9px 20px; border-radius:999px; cursor:pointer; font:inherit; font-size:14px; }
+  .mtabs button[aria-selected="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .bar { display:flex; gap:13px; align-items:center; flex-wrap:wrap; padding:13px 0;
+         border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:16px; }
+  .bar label { font-size:13px; color:var(--ink-dim); }
+  .bar select, .save input { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+            padding:8px 11px; border-radius:6px; font:inherit; font-size:14px; }
+  .bar button, .save button { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+            padding:8px 14px; border-radius:6px; font:inherit; font-size:14px; cursor:pointer; }
+  .bar button:hover, .save button:hover:enabled { border-color:var(--tray); }
+  .bar button[aria-pressed="true"] { background:var(--tray); color:#141414; border-color:var(--tray); }
+  .spacer { flex:1; }
+  .stat { font-size:13px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); font-weight:500; }
+  .stat.good b { color:var(--ok); } .stat.bad b { color:var(--warn); }
+  .panes { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
   .pane { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .pane header { padding:9px 13px; font-size:13px; color:var(--ink-dim);
-                 border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+                 border-bottom:1px solid var(--line); display:flex; justify-content:space-between;
+                 gap:10px; align-items:center; }
+  .pane header .tools { display:flex; gap:5px; }
+  .pane header button { background:none; border:1px solid var(--line); color:var(--ink-dim);
+                        padding:3px 9px; border-radius:5px; font:inherit; font-size:12px; cursor:pointer; }
+  .pane header button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
   .canvas-host { position:relative; line-height:0; background:#000; cursor:crosshair; }
   .canvas-host img { width:100%; display:block; }
   .canvas-host svg { position:absolute; inset:0; width:100%; height:100%; }
@@ -871,15 +1013,6 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
   .loupe::after { content:""; position:absolute; inset:0; background:
       linear-gradient(var(--tray),var(--tray)) center/1px 100% no-repeat,
       linear-gradient(var(--tray),var(--tray)) center/100% 1px no-repeat; opacity:.75; }
-  .bar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 0;
-         border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin:18px 0; }
-  .bar button, .save button { background:var(--panel); border:1px solid var(--line); color:var(--ink);
-            padding:8px 14px; border-radius:6px; font:inherit; font-size:14px; cursor:pointer; }
-  .bar button:hover, .save button:hover:enabled { border-color:var(--tray); }
-  .bar button[aria-pressed="true"] { background:var(--tray); color:#141414; border-color:var(--tray); }
-  .stat { font-size:13px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
-  .stat b { color:var(--ink); font-weight:500; }
-  .stat.good b { color:var(--ok); } .stat.bad b { color:var(--warn); }
   table { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
   th, td { text-align:left; padding:5px 9px; border-bottom:1px solid var(--line); }
   th { color:var(--ink-dim); font-weight:500; }
@@ -893,9 +1026,8 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
   .preview svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   .preview .handle { position:absolute; top:0; bottom:0; width:2px; background:var(--ink);
                      pointer-events:none; }
-  .save { display:flex; gap:11px; align-items:center; flex-wrap:wrap; margin-top:18px; }
-  .save input { background:var(--panel); border:1px solid var(--line); color:var(--ink);
-                padding:8px 11px; border-radius:6px; font:inherit; font-size:14px; }
+  .save { display:flex; gap:11px; align-items:center; flex-wrap:wrap; margin-top:20px;
+          padding-top:16px; border-top:1px solid var(--line); }
   .save input#initials { width:110px; text-transform:uppercase; }
   .save input#note { flex:1; min-width:220px; }
   .save button:disabled { opacity:.42; cursor:not-allowed; }
@@ -903,7 +1035,9 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
   .msg.info { background:rgba(242,163,60,.1); border:1px solid rgba(242,163,60,.35); color:#f0d4ab; }
   .msg.done { background:rgba(90,168,122,.12); border:1px solid rgba(90,168,122,.4); color:#a9dcc0; }
   polygon.crop { fill:none; stroke:var(--tray); stroke-width:2; vector-effect:non-scaling-stroke; }
+  polygon.crop.video { stroke:var(--video); }
   circle.corner { fill:var(--tray); stroke:#141414; stroke-width:1.5; cursor:grab; }
+  circle.corner.video { fill:var(--video); }
   @media (max-width:920px) { .panes { grid-template-columns:1fr; } }
 </style>
 </head>
@@ -911,56 +1045,111 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
 <div class="wrap">
   <a class="back" href="../index.html">All projects in __ANALYSIS__</a>
   <h1 id="title"></h1>
-  <p class="sub">Click the same speck of sand in both images. Six or more well spread pairs,
-     kept away from any deep pit or tall castle, give the steadiest fit.</p>
+  <p class="sub" id="sub"></p>
 
-  <h2>Choose an image pair</h2>
-  <div class="strip" id="strip"></div>
-
-  <div class="bar">
-    <button id="modePoints" aria-pressed="true">Match points</button>
-    <button id="modeCrop" aria-pressed="false">Adjust tray crop</button>
-    <button id="undo">Remove last pair</button>
-    <button id="clear">Clear all pairs</button>
-    <span class="stat" id="npairs"></span>
-    <span class="stat" id="rms"></span>
+  <div class="mtabs" role="tablist">
+    <button id="tabPoints" role="tab" aria-selected="true">Match points</button>
+    <button id="tabCrop" role="tab" aria-selected="false">Adjust tray crop</button>
   </div>
 
-  <div class="panes">
-    <div class="pane">
-      <header><span>Depth camera</span><span id="depthName"></span></header>
-      <div class="canvas-host" id="depthHost">
-        <img id="depthImg" alt="Depth camera still">
-        <svg id="depthSvg" preserveAspectRatio="none"></svg>
-        <div class="loupe" id="depthLoupe"></div>
+  <!-- ------------------------------------------------------------ points -->
+  <section id="viewPoints">
+    <div class="bar">
+      <label for="pickPair">Pick points on</label>
+      <select id="pickPair"></select>
+      <button id="undo">Remove last pair</button>
+      <button id="clear">Clear all pairs</button>
+      <span class="spacer"></span>
+      <span class="stat" id="npairs"></span>
+      <span class="stat" id="rms"></span>
+    </div>
+    <div class="panes">
+      <div class="pane">
+        <header><span>Depth camera</span><span id="depthName"></span></header>
+        <div class="canvas-host" id="depthHost">
+          <img id="depthImg" alt="Depth camera still">
+          <svg id="depthSvg" preserveAspectRatio="none"></svg>
+          <div class="loupe" id="depthLoupe"></div>
+        </div>
+      </div>
+      <div class="pane">
+        <header><span>Pi camera</span><span id="piName"></span></header>
+        <div class="canvas-host" id="piHost">
+          <img id="piImg" alt="Pi camera still">
+          <svg id="piSvg" preserveAspectRatio="none"></svg>
+          <div class="loupe" id="piLoupe"></div>
+        </div>
       </div>
     </div>
-    <div class="pane">
-      <header><span>Pi camera</span><span id="piName"></span></header>
-      <div class="canvas-host" id="piHost">
-        <img id="piImg" alt="Pi camera still">
-        <svg id="piSvg" preserveAspectRatio="none"></svg>
-        <div class="loupe" id="piLoupe"></div>
-      </div>
-    </div>
-  </div>
 
-  <h2>Result</h2>
-  <div class="panes">
-    <div class="pane">
-      <header><span>Registration preview</span><span>move the pointer to wipe</span></header>
-      <div class="preview" id="preview">
-        <img class="base" id="previewBase" alt="">
-        <div class="over" id="previewOver"><div class="warpbox" id="warpBox"><img id="warpImg" alt=""></div></div>
-        <div class="handle" id="previewHandle"></div>
-        <svg id="previewSvg" preserveAspectRatio="none"></svg>
+    <h2>Result</h2>
+    <div class="bar">
+      <label for="viewPair">Check the fit against</label>
+      <select id="viewPair"></select>
+      <span class="spacer"></span>
+      <span class="stat" id="fitNote"></span>
+    </div>
+    <div class="panes">
+      <div class="pane">
+        <header><span>Registration preview</span><span>move the pointer to wipe</span></header>
+        <div class="preview" id="preview">
+          <img class="base" id="previewBase" alt="">
+          <div class="over" id="previewOver">
+            <div class="warpbox" id="warpBox"><img id="warpImg" alt=""></div>
+          </div>
+          <div class="handle" id="previewHandle"></div>
+          <svg id="previewSvg" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+      <div class="pane">
+        <header><span>Point pairs</span><span id="pairCount"></span></header>
+        <div style="max-height:340px;overflow:auto"><table id="table"><tbody></tbody></table></div>
       </div>
     </div>
-    <div class="pane">
-      <header><span>Point pairs</span><span id="fitNote"></span></header>
-      <div style="max-height:340px;overflow:auto"><table id="table"><tbody></tbody></table></div>
+  </section>
+
+  <!-- -------------------------------------------------------------- crop -->
+  <section id="viewCrop" hidden>
+    <div class="bar">
+      <label for="cropPair">Show</label>
+      <select id="cropPair"></select>
+      <span class="spacer"></span>
+      <span class="stat">The two crops are independent — the depth camera does not
+        always see the whole video field of view.</span>
     </div>
-  </div>
+    <div class="panes">
+      <div class="pane">
+        <header>
+          <span>Tray crop, depth camera</span>
+          <span class="tools">
+            <button data-mode="drag" data-which="depth" aria-pressed="true">Drag corners</button>
+            <button data-mode="place" data-which="depth" aria-pressed="false">Place 4 new</button>
+            <button data-reset="depth">Reset</button>
+          </span>
+        </header>
+        <div class="canvas-host" id="cropDepthHost">
+          <img id="cropDepthImg" alt="Depth camera still">
+          <svg id="cropDepthSvg" preserveAspectRatio="none"></svg>
+          <div class="loupe" id="cropDepthLoupe"></div>
+        </div>
+      </div>
+      <div class="pane">
+        <header>
+          <span>Video crop, Pi camera</span>
+          <span class="tools">
+            <button data-mode="drag" data-which="video" aria-pressed="true">Drag corners</button>
+            <button data-mode="place" data-which="video" aria-pressed="false">Place 4 new</button>
+            <button data-reset="video">Reset</button>
+          </span>
+        </header>
+        <div class="canvas-host" id="cropVideoHost">
+          <img id="cropVideoImg" alt="Pi camera still">
+          <svg id="cropVideoSvg" preserveAspectRatio="none"></svg>
+          <div class="loupe" id="cropVideoLoupe"></div>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <div class="save">
     <input id="initials" maxlength="4" placeholder="Initials" aria-label="Your initials">
@@ -976,12 +1165,18 @@ const D = JSON.parse(document.getElementById('payload').textContent);
 const COLORS = ['#f2a33c','#5aa87a','#6fb2e8','#e0693f','#c48ce0','#e8d45a',
                 '#57c9c1','#e884a8','#9ad45a','#b0916a','#7f8ce0','#d9d9d9'];
 
-let pairs = [];            // {depth:[x,y], pi:[x,y]} in native pixel coords
-let pending = null;        // a depth click waiting for its Pi partner
-let crop = (D.current.depthPoints || [[80,60],[560,60],[560,420],[80,420]]).map(p => p.slice());
-let mode = 'points';
-let pair = null;
+let pairs = [];      // {depth:[x,y], pi:[x,y]} in native pixel coords
+let pending = null;
 let H = null, residuals = [], rms = null;
+let pickPair = null, viewPair = null, cropPair = null;
+const ORIGINAL = {
+  depth: (D.current.depthPoints || [[80,60],[560,60],[560,420],[80,420]]).map(p => p.slice()),
+  video: (D.current.videoPoints || [[200,150],[1100,150],[1100,860],[200,860]]).map(p => p.slice()),
+};
+let crops = { depth: ORIGINAL.depth.map(p => p.slice()),
+              video: ORIGINAL.video.map(p => p.slice()) };
+let cropMode = { depth: 'drag', video: 'drag' };
+let placing = { depth: [], video: [] };
 
 // ---- homography from N correspondences (normalized DLT, h33 fixed to 1) ------
 function normalize(pts) {
@@ -996,7 +1191,7 @@ function normalize(pts) {
   return { T: [[s,0,-s*cx],[0,s,-s*cy],[0,0,1]],
            pts: pts.map(p => [(p[0]-cx)*s, (p[1]-cy)*s]) };
 }
-function solve(A, b) {                       // Gaussian elimination, partial pivot
+function solveLin(A, b) {
   const n = b.length;
   const M = A.map((row, i) => row.concat([b[i]]));
   for (let c = 0; c < n; c++) {
@@ -1012,7 +1207,10 @@ function solve(A, b) {                       // Gaussian elimination, partial pi
   }
   return M.map((row, i) => row[n] / M[i][i]);
 }
-function homography(src, dst) {              // maps src -> dst
+function mul(A, B) {
+  return A.map((row, i) => B[0].map((_, j) => row.reduce((s, v, k) => s + v * B[k][j], 0)));
+}
+function homography(src, dst) {
   if (src.length < 4) return null;
   const S = normalize(src), Dn = normalize(dst);
   const A = [], b = [];
@@ -1021,45 +1219,52 @@ function homography(src, dst) {              // maps src -> dst
     A.push([x, y, 1, 0, 0, 0, -u*x, -u*y]); b.push(u);
     A.push([0, 0, 0, x, y, 1, -v*x, -v*y]); b.push(v);
   }
-  // least squares via normal equations
   const n = 8, ATA = Array.from({length:n}, () => new Array(n).fill(0)), ATb = new Array(n).fill(0);
   for (let r = 0; r < A.length; r++)
     for (let i = 0; i < n; i++) {
       ATb[i] += A[r][i] * b[r];
       for (let j = 0; j < n; j++) ATA[i][j] += A[r][i] * A[r][j];
     }
-  const h = solve(ATA, ATb);
+  const h = solveLin(ATA, ATb);
   if (!h) return null;
   const Hn = [[h[0],h[1],h[2]],[h[3],h[4],h[5]],[h[6],h[7],1]];
-  const inv = m => {                          // inverse of the 3x3 normalizer
-    const s = m[0][0];
-    return [[1/s,0,-m[0][2]/s],[0,1/s,-m[1][2]/s],[0,0,1]];
-  };
+  const inv = m => { const s = m[0][0];
+    return [[1/s,0,-m[0][2]/s],[0,1/s,-m[1][2]/s],[0,0,1]]; };
   return mul(mul(inv(Dn.T), Hn), S.T);
 }
-function mul(A, B) {
-  return A.map((row, i) => B[0].map((_, j) =>
-    row.reduce((s, v, k) => s + v * B[k][j], 0)));
-}
-function apply(H, p) {
-  const w = H[2][0]*p[0] + H[2][1]*p[1] + H[2][2];
-  return [(H[0][0]*p[0] + H[0][1]*p[1] + H[0][2]) / w,
-          (H[1][0]*p[0] + H[1][1]*p[1] + H[1][2]) / w];
-}
-function invert(H) {
-  const [[a,b,c],[d,e,f],[g,h,i]] = H;
-  const A=e*i-f*h, B=-(d*i-f*g), C=d*h-e*g;
-  const det = a*A + b*B + c*C;
-  if (Math.abs(det) < 1e-12) return null;
-  return [[A/det,(c*h-b*i)/det,(b*f-c*e)/det],
-          [B/det,(a*i-c*g)/det,(c*d-a*f)/det],
-          [C/det,(b*g-a*h)/det,(a*e-b*d)/det]];
+function apply(M, p) {
+  const w = M[2][0]*p[0] + M[2][1]*p[1] + M[2][2];
+  return [(M[0][0]*p[0] + M[0][1]*p[1] + M[0][2]) / w,
+          (M[1][0]*p[0] + M[1][1]*p[1] + M[1][2]) / w];
 }
 
-// -------------------------------------------------------------------- drawing
-function svgFor(host) { return host.querySelector('svg'); }
-function drawMarkers(svg, pts, size, extra) {
-  svg.setAttribute('viewBox', '0 0 ' + size[0] + ' ' + size[1]);
+// -------------------------------------------------------------------- shared
+function hostPoint(host, ev, size) {
+  const img = host.querySelector('img');
+  const r = img.getBoundingClientRect();
+  return [(ev.clientX - r.left) / r.width * size[0],
+          (ev.clientY - r.top) / r.height * size[1]];
+}
+function attachLoupe(host, loupe, getSrc) {
+  const R = 66, OFFSET = 74;
+  host.addEventListener('mousemove', ev => {
+    const img = host.querySelector('img');
+    const r = img.getBoundingClientRect();
+    const x = ev.clientX - r.left, y = ev.clientY - r.top;
+    const zoom = 5;
+    loupe.style.display = 'block';
+    const above = y > 2 * R + OFFSET;
+    loupe.style.left = Math.min(Math.max(x - R, 4), r.width - 2 * R - 4) + 'px';
+    loupe.style.top = (above ? y - 2 * R - OFFSET : y + OFFSET) + 'px';
+    loupe.style.backgroundImage = 'url(' + getSrc() + ')';
+    loupe.style.backgroundSize = (r.width * zoom) + 'px ' + (r.height * zoom) + 'px';
+    const lx = parseFloat(loupe.style.left), ly = parseFloat(loupe.style.top);
+    loupe.style.backgroundPosition =
+      (-x * zoom + (x - lx)) + 'px ' + (-y * zoom + (y - ly)) + 'px';
+  });
+  host.addEventListener('mouseleave', () => { loupe.style.display = 'none'; });
+}
+function markerSVG(pts, size, extra) {
   const r = Math.max(4, size[0] / 150);
   let s = '';
   pts.forEach((p, i) => {
@@ -1071,21 +1276,21 @@ function drawMarkers(svg, pts, size, extra) {
          '<text x="' + (p[0] + r*1.6) + '" y="' + (p[1] - r*0.7) + '" fill="' + c +
          '" font-size="' + (r*2.6) + '">' + (i+1) + '</text>';
   });
-  svg.innerHTML = s + (extra || '');
+  return s + (extra || '');
 }
-function cropSVG() {
-  const pts = crop.map(p => p.join(',')).join(' ');
-  let s = '<polygon class="crop" points="' + pts + '"/>';
-  if (mode === 'crop')
-    crop.forEach((p, i) => { s += '<circle class="corner" data-i="' + i + '" cx="' + p[0] +
-                                 '" cy="' + p[1] + '" r="7"/>'; });
-  return s;
+function paint(svg, size, inner) {
+  svg.setAttribute('viewBox', '0 0 ' + size[0] + ' ' + size[1]);
+  svg.innerHTML = inner;
 }
-function redraw() {
-  if (!pair) return;
+function option(p) { return '<option value="' + p.key + '">' + p.label + '</option>'; }
+
+// -------------------------------------------------------------- points view
+function redrawPoints() {
+  if (!pickPair) return;
   const dPts = pairs.map(p => p.depth).concat(pending ? [pending] : []);
-  drawMarkers(document.getElementById('depthSvg'), dPts, pair.depthSize, cropSVG());
-  drawMarkers(document.getElementById('piSvg'), pairs.map(p => p.pi), pair.piSize);
+  paint(document.getElementById('depthSvg'), pickPair.depthSize, markerSVG(dPts, pickPair.depthSize));
+  paint(document.getElementById('piSvg'), pickPair.piSize,
+        markerSVG(pairs.map(p => p.pi), pickPair.piSize));
   fit();
   table();
   preview();
@@ -1093,8 +1298,7 @@ function redraw() {
 
 function fit() {
   H = pairs.length >= 4 ? homography(pairs.map(p => p.pi), pairs.map(p => p.depth)) : null;
-  residuals = [];
-  rms = null;
+  residuals = []; rms = null;
   if (H) {
     let sum = 0;
     pairs.forEach(p => {
@@ -1104,45 +1308,45 @@ function fit() {
     });
     rms = Math.sqrt(sum / pairs.length);
   }
-  const np = document.getElementById('npairs');
-  np.innerHTML = 'Pairs <b>' + pairs.length + '</b>' + (pairs.length < 6 ? ' (six or more preferred)' : '');
+  document.getElementById('npairs').innerHTML =
+    'Pairs <b>' + pairs.length + '</b>' + (pairs.length < 6 ? ' (six or more preferred)' : '');
   const el = document.getElementById('rms');
-  if (rms === null) { el.className = 'stat'; el.innerHTML = 'Fit error <b>—</b>'; }
+  if (rms === null) { el.className = 'stat'; el.innerHTML = 'Fit error <b>&mdash;</b>'; }
   else {
     el.className = 'stat ' + (rms < 3 ? 'good' : 'bad');
     el.innerHTML = 'Fit error <b>' + rms.toFixed(2) + ' px</b>' +
-                   (rms < 3 ? '' : ' — check the worst pair below');
+                   (rms < 3 ? '' : ' &mdash; check the worst pair below');
   }
+  document.getElementById('fitNote').textContent =
+    H ? 'worst point ' + Math.max(...residuals).toFixed(2) + ' px' : 'need four pairs';
+  document.getElementById('pairCount').textContent = pairs.length + ' pairs';
   const ok = pairs.length >= 6 && rms !== null && document.getElementById('initials').value.trim();
   document.getElementById('download').disabled = !ok;
   document.getElementById('saveHint').textContent = ok ? '' :
     (pairs.length < 6 ? 'Add ' + (6 - pairs.length) + ' more pair(s)' : 'Enter your initials');
-  document.getElementById('fitNote').textContent =
-    H ? 'worst ' + Math.max(...residuals).toFixed(2) + ' px' : 'need four pairs';
 }
 
 function table() {
   const rows = pairs.map((p, i) =>
     '<tr><td><span class="swatch" style="background:' + COLORS[i % COLORS.length] + '"></span>' +
-    (i+1) + '</td>' +
-    '<td>' + p.depth.map(Math.round).join(', ') + '</td>' +
+    (i+1) + '</td><td>' + p.depth.map(Math.round).join(', ') + '</td>' +
     '<td>' + p.pi.map(Math.round).join(', ') + '</td>' +
-    '<td>' + (residuals[i] !== undefined ? residuals[i].toFixed(2) + ' px' : '—') + '</td>' +
+    '<td>' + (residuals[i] !== undefined ? residuals[i].toFixed(2) + ' px' : '&mdash;') + '</td>' +
     '<td><button data-del="' + i + '">remove</button></td></tr>').join('');
   document.getElementById('table').querySelector('tbody').innerHTML =
     '<tr><th>#</th><th>Depth x, y</th><th>Pi x, y</th><th>Error</th><th></th></tr>' + rows;
 }
 
 function preview() {
+  if (!viewPair) return;
   const box = document.getElementById('warpBox');
   const svg = document.getElementById('previewSvg');
-  svg.setAttribute('viewBox', '0 0 ' + pair.depthSize[0] + ' ' + pair.depthSize[1]);
-  svg.innerHTML = '<polygon class="crop" points="' + crop.map(p => p.join(',')).join(' ') + '"/>';
+  paint(svg, viewPair.depthSize,
+        '<polygon class="crop" points="' + crops.depth.map(p => p.join(',')).join(' ') + '"/>');
   if (!H) { box.style.display = 'none'; return; }
   box.style.display = 'block';
   const host = document.getElementById('preview');
-  const s = host.clientWidth / pair.depthSize[0];
-  // CSS matrix3d is column-major; a 2D homography drops straight in.
+  const s = host.clientWidth / viewPair.depthSize[0];
   box.style.transform = 'scale(' + s + ') matrix3d(' +
     [H[0][0], H[1][0], 0, H[2][0],
      H[0][1], H[1][1], 0, H[2][1],
@@ -1150,122 +1354,107 @@ function preview() {
      H[0][2], H[1][2], 0, H[2][2]].join(',') + ')';
 }
 
-// --------------------------------------------------------------- interaction
-function hostPoint(host, ev, size) {
-  const img = host.querySelector('img');
-  const r = img.getBoundingClientRect();
-  return [(ev.clientX - r.left) / r.width * size[0],
-          (ev.clientY - r.top) / r.height * size[1]];
+function setPickPair(key) {
+  pickPair = D.pairs.find(p => p.key === key) || D.pairs[0];
+  document.getElementById('pickPair').value = pickPair.key;
+  document.getElementById('depthImg').src = pickPair.depth;
+  document.getElementById('piImg').src = pickPair.pi;
+  document.getElementById('depthName').textContent = pickPair.depthFile;
+  document.getElementById('piName').textContent = pickPair.piFile;
+  pending = null;
+  redrawPoints();
 }
-function attachLoupe(host, loupe, getSrc, getSize) {
-  host.addEventListener('mousemove', ev => {
-    const img = host.querySelector('img');
-    const r = img.getBoundingClientRect();
-    const size = getSize();
-    const zoom = 5;
-    loupe.style.display = 'block';
-    loupe.style.left = (ev.clientX - r.left - 66) + 'px';
-    loupe.style.top = (ev.clientY - r.top - 66 - 140) + 'px';
-    loupe.style.backgroundImage = 'url(' + getSrc() + ')';
-    loupe.style.backgroundSize = (r.width * zoom) + 'px ' + (r.height * zoom) + 'px';
-    loupe.style.backgroundPosition =
-      (-(ev.clientX - r.left) * zoom + 66) + 'px ' + (-(ev.clientY - r.top) * zoom + 66) + 'px';
+function setViewPair(key) {
+  viewPair = D.pairs.find(p => p.key === key) || D.pairs[0];
+  document.getElementById('viewPair').value = viewPair.key;
+  document.getElementById('previewBase').src = viewPair.depth;
+  const w = document.getElementById('warpImg');
+  w.src = viewPair.pi;
+  w.style.width = viewPair.piSize[0] + 'px';
+  preview();
+}
+
+// ---------------------------------------------------------------- crop view
+function cropSVG(which) {
+  const cls = which === 'video' ? 'crop video' : 'crop';
+  const dot = which === 'video' ? 'corner video' : 'corner';
+  const size = which === 'video' ? cropPair.piSize : cropPair.depthSize;
+  const r = Math.max(5, size[0] / 110);
+  const pts = crops[which];
+  let s = '<polygon class="' + cls + '" points="' + pts.map(p => p.join(',')).join(' ') + '"/>';
+  pts.forEach((p, i) => {
+    s += '<circle class="' + dot + '" data-i="' + i + '" cx="' + p[0] + '" cy="' + p[1] +
+         '" r="' + r + '"/>';
   });
-  host.addEventListener('mouseleave', () => { loupe.style.display = 'none'; });
+  if (cropMode[which] === 'place') {
+    placing[which].forEach((p, i) => {
+      s += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="' + r + '" fill="none" stroke="#fff" ' +
+           'stroke-width="' + (r/2.5) + '"/>';
+    });
+  }
+  return s;
 }
-
-function setMode(m) {
-  mode = m;
-  document.getElementById('modePoints').setAttribute('aria-pressed', m === 'points');
-  document.getElementById('modeCrop').setAttribute('aria-pressed', m === 'crop');
-  document.getElementById('piHost').style.opacity = m === 'crop' ? 0.45 : 1;
-  redraw();
+function redrawCrops() {
+  if (!cropPair) return;
+  paint(document.getElementById('cropDepthSvg'), cropPair.depthSize, cropSVG('depth'));
+  paint(document.getElementById('cropVideoSvg'), cropPair.piSize, cropSVG('video'));
 }
-
-function selectPair(p) {
-  pair = p;
-  pairs = []; pending = null;
-  document.getElementById('depthImg').src = p.depth;
-  document.getElementById('piImg').src = p.pi;
-  document.getElementById('previewBase').src = p.depth;
-  document.getElementById('warpImg').src = p.pi;
-  document.getElementById('warpImg').style.width = p.piSize[0] + 'px';
-  document.getElementById('depthName').textContent = p.depthFile;
-  document.getElementById('piName').textContent = p.piFile;
-  Array.from(document.getElementById('strip').children).forEach(b =>
-    b.setAttribute('aria-pressed', b.dataset.key === p.key));
-  redraw();
+function setCropPair(key) {
+  cropPair = D.pairs.find(p => p.key === key) || D.pairs[0];
+  document.getElementById('cropPair').value = cropPair.key;
+  document.getElementById('cropDepthImg').src = cropPair.depth;
+  document.getElementById('cropVideoImg').src = cropPair.pi;
+  redrawCrops();
 }
-
-function build() {
-  document.getElementById('title').textContent = D.projectID + ' — registration';
-  const strip = document.getElementById('strip');
-  D.pairs.forEach(p => {
-    const b = document.createElement('button');
-    b.dataset.key = p.key;
-    const gap = p.gapMinutes === null ? '' :
-      '<span class="gap' + (p.gapMinutes > 60 ? ' wide' : '') + '">' +
-      Math.round(p.gapMinutes) + ' min apart</span>';
-    b.innerHTML = '<img src="' + p.depth + '" alt="">' + p.label + '<br>' + gap;
-    b.addEventListener('click', () => selectPair(p));
-    strip.appendChild(b);
+function attachCropEditor(hostId, which, sizeOf) {
+  const host = document.getElementById(hostId);
+  let dragging = null;
+  host.addEventListener('mousedown', ev => {
+    const p = hostPoint(host, ev, sizeOf());
+    if (cropMode[which] === 'place') return;
+    let best = 0, bd = Infinity;
+    crops[which].forEach((c, i) => {
+      const d = Math.hypot(c[0]-p[0], c[1]-p[1]);
+      if (d < bd) { bd = d; best = i; }
+    });
+    const grab = sizeOf()[0] / 12;
+    if (bd < grab) { dragging = best; ev.preventDefault(); }
   });
-
-  const depthHost = document.getElementById('depthHost');
-  const piHost = document.getElementById('piHost');
-
-  depthHost.addEventListener('click', ev => {
-    if (!pair) return;
-    const p = hostPoint(depthHost, ev, pair.depthSize);
-    if (mode === 'crop') {
-      let best = 0, bd = Infinity;
-      crop.forEach((c, i) => { const d = Math.hypot(c[0]-p[0], c[1]-p[1]); if (d < bd) { bd = d; best = i; } });
-      crop[best] = [Math.round(p[0]), Math.round(p[1])];
-    } else {
-      pending = p;
+  window.addEventListener('mousemove', ev => {
+    if (dragging === null) return;
+    const p = hostPoint(host, ev, sizeOf());
+    crops[which][dragging] = [Math.round(p[0]), Math.round(p[1])];
+    redrawCrops();
+  });
+  window.addEventListener('mouseup', () => { dragging = null; });
+  host.addEventListener('click', ev => {
+    if (cropMode[which] !== 'place') return;
+    const p = hostPoint(host, ev, sizeOf());
+    placing[which].push([Math.round(p[0]), Math.round(p[1])]);
+    if (placing[which].length === 4) {
+      crops[which] = placing[which];
+      placing[which] = [];
+      setCropMode(which, 'drag');
     }
-    redraw();
+    redrawCrops();
   });
-  piHost.addEventListener('click', ev => {
-    if (!pair || mode === 'crop') return;
-    if (!pending) { flash('Click the point on the depth image first, then its match here.'); return; }
-    pairs.push({ depth: pending, pi: hostPoint(piHost, ev, pair.piSize) });
-    pending = null;
-    redraw();
-  });
+}
+function setCropMode(which, mode) {
+  cropMode[which] = mode;
+  if (mode === 'place') placing[which] = [];
+  document.querySelectorAll('[data-mode][data-which="' + which + '"]').forEach(b =>
+    b.setAttribute('aria-pressed', b.dataset.mode === mode));
+  redrawCrops();
+}
 
-  attachLoupe(depthHost, document.getElementById('depthLoupe'),
-              () => document.getElementById('depthImg').src, () => pair.depthSize);
-  attachLoupe(piHost, document.getElementById('piLoupe'),
-              () => document.getElementById('piImg').src, () => pair.piSize);
-
-  document.getElementById('table').addEventListener('click', ev => {
-    const i = ev.target.dataset && ev.target.dataset.del;
-    if (i !== undefined) { pairs.splice(+i, 1); redraw(); }
-  });
-  document.getElementById('undo').addEventListener('click', () => {
-    if (pending) pending = null; else pairs.pop();
-    redraw();
-  });
-  document.getElementById('clear').addEventListener('click', () => {
-    pairs = []; pending = null; redraw();
-  });
-  document.getElementById('modePoints').addEventListener('click', () => setMode('points'));
-  document.getElementById('modeCrop').addEventListener('click', () => setMode('crop'));
-  document.getElementById('initials').addEventListener('input', fit);
-
-  const host = document.getElementById('preview');
-  host.addEventListener('mousemove', ev => {
-    const r = host.getBoundingClientRect();
-    const f = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
-    document.getElementById('previewOver').style.width = (f * 100) + '%';
-    document.getElementById('previewHandle').style.left = (f * 100) + '%';
-  });
-  window.addEventListener('resize', () => { if (pair) preview(); });
-
-  document.getElementById('download').addEventListener('click', save);
-  if (D.pairs.length) selectPair(D.pairs[0]);
-  else flash('No image pairs are available for this project.');
+// ------------------------------------------------------------------- tabs
+function setTab(which) {
+  const points = which === 'points';
+  document.getElementById('tabPoints').setAttribute('aria-selected', points);
+  document.getElementById('tabCrop').setAttribute('aria-selected', !points);
+  document.getElementById('viewPoints').hidden = !points;
+  document.getElementById('viewCrop').hidden = points;
+  if (points) preview(); else redrawCrops();
 }
 
 function flash(text, kind) {
@@ -1275,47 +1464,39 @@ function flash(text, kind) {
 }
 
 function save() {
-  const Hinv = invert(H);
   const out = {
     schema: 'cichlid-registration/1',
     projectID: D.projectID, analysisID: D.analysisID, tankID: D.tankID,
-    pairKey: pair.key, depthFile: pair.depthFile, piFile: pair.piFile,
-    depthSize: pair.depthSize, piSize: pair.piSize,
+    pickPair: pickPair.key, viewPair: viewPair.key, cropPair: cropPair.key,
+    depthFile: pickPair.depthFile, piFile: pickPair.piFile,
+    depthSize: pickPair.depthSize, piSize: pickPair.piSize,
     points: pairs.map(p => ({ depth: p.depth, pi: p.pi })),
-    depthPoints: crop.map(p => [Math.round(p[0]), Math.round(p[1])]),
-    // for reference only — the stored transform is recomputed with OpenCV on ingest
+    depthPoints: crops.depth.map(p => [Math.round(p[0]), Math.round(p[1])]),
+    videoPoints: crops.video.map(p => [Math.round(p[0]), Math.round(p[1])]),
     browserTransM: H, browserRMS: rms,
-    videoPointsPreview: Hinv ? crop.map(p => apply(Hinv, p).map(Math.round)) : null,
     initials: document.getElementById('initials').value.trim().toUpperCase(),
     note: document.getElementById('note').value.trim(),
     created: new Date().toISOString(),
   };
   const text = JSON.stringify(out, null, 1);
   const name = D.projectID + '__' + out.initials + '__registration.json';
-
   let ok = false;
   try {
     const blob = new Blob([text], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = name;
-    a.style.display = 'none';
-    // Safari will not act on a detached anchor, and revoking immediately can
-    // cancel the download, so attach it and clean up on a delay.
+    a.href = url; a.download = name; a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 4000);
     ok = true;
-  } catch (e) {
-    ok = false;
-  }
+  } catch (e) { ok = false; }
 
   const m = document.getElementById('msg');
   m.className = 'msg done';
   m.innerHTML = (ok
       ? 'Saved <b>' + name + '</b> with ' + pairs.length + ' pairs at ' + rms.toFixed(2) + ' px. ' +
-        'It is in your Downloads folder — move it to WebServer/_submissions in Dropbox. '
+        'It is in your Downloads folder &mdash; move it to WebServer/_submissions in Dropbox. '
       : 'The browser blocked the download. ') +
     '<button id="copyJson" style="margin-left:8px">Copy the file contents instead</button>' +
     '<div id="copyNote" class="stat" style="margin-top:8px"></div>';
@@ -1327,18 +1508,96 @@ function save() {
     } else fallbackCopy(text, done);
   });
 }
-
 function fallbackCopy(text, done) {
   const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
   document.body.appendChild(ta);
   ta.select();
-  try { document.execCommand('copy'); done(); } catch (e) {
-    document.getElementById('copyNote').textContent = 'Could not copy automatically.';
-  }
+  try { document.execCommand('copy'); done(); }
+  catch (e) { document.getElementById('copyNote').textContent = 'Could not copy automatically.'; }
   document.body.removeChild(ta);
+}
+
+function build() {
+  document.getElementById('title').textContent = D.projectID + ' \u2014 registration';
+  document.getElementById('sub').textContent =
+    'Click the same speck of sand in both images. Six or more well spread pairs, kept away ' +
+    'from any deep pit or tall castle, give the steadiest fit. Points are kept when you ' +
+    'switch images, so you can add pairs from whichever trial has the clearest grain.';
+
+  const opts = D.pairs.map(option).join('');
+  ['pickPair', 'viewPair', 'cropPair'].forEach(id => {
+    document.getElementById(id).innerHTML = opts;
+  });
+
+  const wanted = new URLSearchParams(location.search).get('pair');
+  const start = D.pairs.find(p => p.key === wanted) || D.pairs[0];
+
+  document.getElementById('pickPair').addEventListener('change', e => setPickPair(e.target.value));
+  document.getElementById('viewPair').addEventListener('change', e => setViewPair(e.target.value));
+  document.getElementById('cropPair').addEventListener('change', e => setCropPair(e.target.value));
+
+  document.getElementById('depthHost').addEventListener('click', ev => {
+    pending = hostPoint(document.getElementById('depthHost'), ev, pickPair.depthSize);
+    redrawPoints();
+  });
+  document.getElementById('piHost').addEventListener('click', ev => {
+    if (!pending) { flash('Click the point on the depth image first, then its match here.'); return; }
+    pairs.push({ depth: pending,
+                 pi: hostPoint(document.getElementById('piHost'), ev, pickPair.piSize) });
+    pending = null;
+    redrawPoints();
+  });
+  document.getElementById('table').addEventListener('click', ev => {
+    const i = ev.target.dataset && ev.target.dataset.del;
+    if (i !== undefined) { pairs.splice(+i, 1); redrawPoints(); }
+  });
+  document.getElementById('undo').addEventListener('click', () => {
+    if (pending) pending = null; else pairs.pop();
+    redrawPoints();
+  });
+  document.getElementById('clear').addEventListener('click', () => {
+    pairs = []; pending = null; redrawPoints();
+  });
+  document.getElementById('initials').addEventListener('input', fit);
+
+  attachLoupe(document.getElementById('depthHost'), document.getElementById('depthLoupe'),
+              () => document.getElementById('depthImg').src);
+  attachLoupe(document.getElementById('piHost'), document.getElementById('piLoupe'),
+              () => document.getElementById('piImg').src);
+  attachLoupe(document.getElementById('cropDepthHost'), document.getElementById('cropDepthLoupe'),
+              () => document.getElementById('cropDepthImg').src);
+  attachLoupe(document.getElementById('cropVideoHost'), document.getElementById('cropVideoLoupe'),
+              () => document.getElementById('cropVideoImg').src);
+
+  attachCropEditor('cropDepthHost', 'depth', () => cropPair.depthSize);
+  attachCropEditor('cropVideoHost', 'video', () => cropPair.piSize);
+  document.querySelectorAll('[data-mode]').forEach(b =>
+    b.addEventListener('click', () => setCropMode(b.dataset.which, b.dataset.mode)));
+  document.querySelectorAll('[data-reset]').forEach(b =>
+    b.addEventListener('click', () => {
+      const which = b.dataset.reset;
+      crops[which] = ORIGINAL[which].map(p => p.slice());
+      setCropMode(which, 'drag');
+    }));
+
+  document.getElementById('tabPoints').addEventListener('click', () => setTab('points'));
+  document.getElementById('tabCrop').addEventListener('click', () => setTab('crop'));
+
+  const host = document.getElementById('preview');
+  host.addEventListener('mousemove', ev => {
+    const r = host.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+    document.getElementById('previewOver').style.width = (f * 100) + '%';
+    document.getElementById('previewHandle').style.left = (f * 100) + '%';
+  });
+  window.addEventListener('resize', () => { if (viewPair) preview(); });
+  document.getElementById('download').addEventListener('click', save);
+
+  setPickPair(start.key);
+  setViewPair(start.key);
+  setCropPair(start.key);
+  setTab('points');
 }
 build();
 </script>
@@ -1379,10 +1638,15 @@ def apply_submission(fm_obj, sub, s_dt):
     rms = float(np.sqrt(np.mean(np.sum((projected - depth) ** 2, axis=1))))
 
     depth_points = [(int(p[0]), int(p[1])) for p in sub['depthPoints']]
-    inv = np.linalg.inv(transM)
-    video_points = cv2.perspectiveTransform(
-        np.array(depth_points, np.float32).reshape(-1, 1, 2), inv).reshape(-1, 2)
-    video_points = [(int(round(p[0])), int(round(p[1]))) for p in video_points]
+    if sub.get('videoPoints'):
+        # The two crops are independent: the depth camera does not always see the
+        # whole video field of view, so the video crop is placed by hand.
+        video_points = [(int(p[0]), int(p[1])) for p in sub['videoPoints']]
+    else:
+        inv = np.linalg.inv(transM)
+        video_points = cv2.perspectiveTransform(
+            np.array(depth_points, np.float32).reshape(-1, 1, 2), inv).reshape(-1, 2)
+        video_points = [(int(round(p[0])), int(round(p[1]))) for p in video_points]
 
     fm_obj.setProjectID(projectID)
     fm_obj.createDirectory(fm_obj.localAnalysisDir)
@@ -1390,7 +1654,7 @@ def apply_submission(fm_obj, sub, s_dt):
 
     stamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     for path in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile, fm_obj.localTransMFile]:
-        fm_obj.downloadData(path, allow_errors=True, quiet=True)
+        fetch_optional(path.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir), path)
         if os.path.exists(path):
             shutil.copy2(path, fm_obj.localBackupDir + stamp + '_' + os.path.basename(path))
 
@@ -1422,13 +1686,13 @@ def apply_submission(fm_obj, sub, s_dt):
     return record
 
 
-def build_one(fm_obj, projectID, out_root, delete=False):
-    """Build the Prep page for a single project. Returns the index entry.
+def build_one(fm_obj, projectID, out_root, category='', delete=False):
+    """Build the Prep and Register pages for a single project.
 
-    Never raises: a project that cannot be built is recorded as failed so the
-    sweep continues and the index still shows it."""
-    entry = {'id': projectID, 'tank': '', 'trials': 0, 'start': '', 'thumb': None,
-             'missing': 0, 'status': 'ok', 'pages': {}, 'error': ''}
+    Never raises: a project that cannot be built is recorded so the sweep
+    continues and the index still shows it with a reason."""
+    entry = {'id': projectID, 'tank': '', 'category': category, 'trials': 0, 'start': '',
+             'thumb': None, 'missing': 0, 'status': 'ok', 'pages': {}, 'error': ''}
 
     fm_obj.setProjectID(projectID)
     lp = getattr(fm_obj, 'lp', None)
@@ -1445,37 +1709,40 @@ def build_one(fm_obj, projectID, out_root, delete=False):
     fm_obj.createDirectory(fm_obj.localSummaryDir)
     fm_obj.createDirectory(fm_obj.localLogfileDir)
     fm_obj.downloadData(fm_obj.localPrepDir)
-    # Only the three registration files, never the whole directory — once Depth and
-    # Cluster have run, MasterAnalysisFiles also holds smoothedDepthData.npy, the
-    # tracking CSVs and the clip archives.
-    for f in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile, fm_obj.localTransMFile]:
-        fm_obj.downloadData(f, allow_errors=True, quiet=True)
-    fm_obj.downloadData(fm_obj.localPrepLogfile, allow_errors=True, quiet=True)
+    prep2 = fm_obj.localProjectDir + 'PrepFiles2/'
+    fm_obj.createDirectory(prep2)
+    fetch_optional(prep2.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir),
+                   prep2, directory=True)
+    for f in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile, fm_obj.localTransMFile,
+              fm_obj.localPrepLogfile]:
+        fetch_optional(f.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir), f)
 
     problems, trial_status = check_prep_files(fm_obj, lp)
-    entry['missing'] = sum(1 for t in trial_status if t)
     blocking = [p for p in problems if p.startswith('missing ')]
     if blocking:
         entry['status'] = 'failed'
         entry['error'] = '; '.join(blocking)
         return entry
-    if problems:
-        for p in problems:
-            print('    ' + p)
 
-    payload = build_prep_payload(fm_obj, lp, trial_status)
+    try:
+        pairs, missing = load_prepfiles2(fm_obj, lp)
+    except PrepFiles2Missing as e:
+        entry['status'] = 'needs_prepfiles2'
+        entry['error'] = str(e) + ' — run: python createPrepFiles2.py ' + \
+                         fm_obj.analysisID + ' --ProjectIDs ' + projectID
+        return entry
+    entry['missing'] = len(lp.trials) * 2 - len(pairs)
+
+    payload = build_prep_payload(fm_obj, lp, trial_status, pairs)
 
     project_dir = out_root + projectID + '/'
     fm_obj.createDirectory(project_dir)
-    size = write_page(project_dir + 'Prep.html', projectID + ' · Prep', payload)
+    size = write_page(project_dir + 'Prep.html', projectID + ' \u00b7 Prep', payload)
     entry['pages']['Prep'] = 'Prep.html'
-    entry['size'] = size
 
-    reg_payload = build_register_payload(fm_obj, lp)
-    if reg_payload['pairs']:
-        size += write_register(project_dir + 'Register.html', fm_obj.analysisID, reg_payload)
-        entry['pages']['Register'] = 'Register.html'
-        entry['size'] = size
+    reg_payload = build_register_payload(fm_obj, lp, pairs)
+    size += write_register(project_dir + 'Register.html', fm_obj.analysisID, reg_payload)
+    entry['size'] = size
 
     first = load_npy(fm_obj.localFirstFrame)
     last = load_npy(fm_obj.localLastFrame)
@@ -1518,7 +1785,8 @@ def apply_registrations(args):
                 return 1
     else:
         fm_obj.createDirectory(sub_dir)
-        fm_obj.downloadData(sub_dir, allow_errors=True)
+        fetch_optional(sub_dir.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir),
+                       sub_dir, directory=True)
         if os.path.exists(ledger_path):
             try:
                 with open(ledger_path) as f:
@@ -1699,16 +1967,20 @@ def main():
             print(prefix + ': already built, skipping')
             continue
         print(prefix + ' ' + str(datetime.datetime.now()), flush=True)
+        category = ''
+        if 'Category' in s_dt.columns:
+            raw = s_dt.loc[projectID, 'Category']
+            category = '' if raw is None or str(raw).strip().lower() in ('nan', '') else str(raw).strip()
         try:
-            entry = build_one(fm_obj, projectID, out_root, delete=args.Delete)
+            entry = build_one(fm_obj, projectID, out_root, category=category, delete=args.Delete)
         except Exception as e:
-            entry = {'id': projectID, 'tank': '', 'trials': 0, 'start': '', 'thumb': None,
-                     'missing': 0, 'status': 'failed', 'pages': {}, 'error': repr(e)}
+            entry = {'id': projectID, 'tank': '', 'category': category, 'trials': 0, 'start': '',
+                     'thumb': None, 'missing': 0, 'status': 'failed', 'pages': {}, 'error': repr(e)}
         entries.append(entry)
 
-        if entry['status'] == 'failed':
+        if entry['status'] != 'ok':
             failed.append(projectID)
-            print('    failed: ' + entry['error'])
+            print('    ' + entry['status'] + ': ' + entry['error'])
             continue
         print('    wrote ' + entry['id'] + '/Prep.html (' +
               str(round(entry['size'] / 1e6, 2)) + ' MB, ' + str(entry['trials']) + ' trials)')
@@ -1721,7 +1993,12 @@ def main():
 
     built = len([e for e in entries if e['status'] == 'ok'])
     incomplete = [e['id'] for e in entries if e['status'] == 'ok' and e['missing']]
+    needs = [e['id'] for e in entries if e['status'] == 'needs_prepfiles2']
     print('Built ' + str(built) + ' of ' + str(len(entries)) + ' pages.')
+    if needs:
+        print('Missing PrepFiles2 (' + str(len(needs)) + '). Build them with:')
+        print('  python createPrepFiles2.py ' + args.AnalysisID +
+              ' --ProjectIDs ' + ' '.join(needs))
     if incomplete:
         print('Incomplete trial data in: ' + ', '.join(incomplete))
     if failed:
