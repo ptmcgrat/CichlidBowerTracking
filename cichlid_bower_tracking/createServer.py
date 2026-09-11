@@ -2,6 +2,7 @@ import argparse, base64, datetime, glob, json, os, re, shutil, subprocess, sys, 
 
 import cv2
 import numpy as np
+from skimage import morphology
 
 from helper_modules.file_manager import FileManager as FM
 
@@ -812,6 +813,8 @@ function card(p) {
   let flag = '';
   if (p.status === 'needs_prepfiles2')
     flag = '<span class="flag warn">Needs PrepFiles2</span>';
+  else if (p.status === 'needs_depthfiles')
+    flag = '<span class="flag warn">Needs DepthFiles</span>';
   else if (p.status === 'failed') flag = '<span class="flag fail">Build failed</span>';
   else if (p.missing) flag = '<span class="flag warn">' + p.missing + ' incomplete</span>';
   el.innerHTML =
@@ -824,7 +827,7 @@ function card(p) {
   return el;
 }
 
-function rank(x) { return x.status === 'failed' ? 0 : (x.status === 'needs_prepfiles2' ? 1 : (x.missing ? 2 : 3)); }
+function rank(x) { return x.status === 'failed' ? 0 : (x.status.slice(0,6) === 'needs_' ? 1 : (x.missing ? 2 : 3)); }
 
 function sorted(rows) {
   const key = sortBy.value;
@@ -900,6 +903,639 @@ def write_index(path, analysis_id, projects, branch):
     payload = {'analysisID': analysis_id, 'projects': projects, 'branch': branch,
                'built': str(datetime.datetime.now().replace(microsecond=0))}
     html = INDEX_PAGE.replace('__TITLE__', analysis_id + ' · Bower dashboard')
+    html = html.replace('__ANALYSIS__', analysis_id)
+    html = html.replace('__PAYLOAD__', json.dumps(payload).replace('</', '<\\/'))
+    with open(path, 'w') as f:
+        f.write(html)
+    return os.path.getsize(path)
+
+
+# ============================================================== depth viewer
+
+class DepthFilesMissing(Exception):
+    """DepthFiles/daily_endpoints.npz is what the Depth page is built on."""
+    pass
+
+
+# thresholds and minimum bower size, mirroring FileManager
+DAILY_THRESHOLD = 0.4
+TOTAL_THRESHOLD = 1.0
+MIN_PIXELS = 100
+PIXEL_LENGTH = 0.1030168618          # cm per pixel
+THRESHOLD_SWEEP = [0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
+
+
+def load_depth_endpoints(fm):
+    """Read DepthFiles/daily_endpoints.{npz,json}. Raises if absent."""
+    d = fm.localProjectDir + 'DepthFiles/'
+    npz_path, json_path = d + 'daily_endpoints.npz', d + 'daily_endpoints.json'
+    if not (os.path.exists(npz_path) and os.path.exists(json_path)):
+        raise DepthFilesMissing('no DepthFiles/daily_endpoints.npz')
+    with open(json_path) as f:
+        meta = json.load(f)
+    with np.load(npz_path) as z:
+        raw = z['raw'].astype(np.float64)
+        smooth = z['smooth'].astype(np.float64)
+    if raw.shape != smooth.shape:
+        raise DepthFilesMissing('raw and smooth arrays disagree in shape')
+    if raw.shape[0] != len(meta.get('days', [])):
+        raise DepthFilesMissing('array has %d days, metadata lists %d'
+                                % (raw.shape[0], len(meta.get('days', []))))
+    return raw, smooth, meta
+
+
+def bower_locations(change, threshold, min_pixels=MIN_PIXELS):
+    """+1 castle, -1 pit, 0 neither, NaN outside. Mirrors
+    DepthAnalyzer.returnBowerLocations."""
+    castle = np.where(change >= threshold, True, False)
+    pit = np.where(change <= -threshold, True, False)
+    castle = remove_small(castle, min_pixels)
+    pit = remove_small(pit, min_pixels)
+    out = (castle.astype(int) - pit.astype(int)).astype(float)
+    out[np.isnan(change)] = np.nan
+    return out
+
+
+def remove_small(mask, min_pixels):
+    """skimage renamed min_size to max_size; call whichever exists."""
+    try:
+        return morphology.remove_small_objects(mask, max_size=min_pixels)
+    except TypeError:
+        return morphology.remove_small_objects(mask, min_size=min_pixels)
+
+
+def volume_summary(change, threshold):
+    """Castle, pit and total volumes in cm3, computed at full resolution."""
+    loc = bower_locations(change, threshold)
+    area = PIXEL_LENGTH ** 2
+    castle = float(np.nansum(np.where(loc == 1, change, 0), dtype=np.float64)) * area
+    pit = -float(np.nansum(np.where(loc == -1, change, 0), dtype=np.float64)) * area
+    return {
+        'threshold': threshold,
+        'castleVolume': round(castle, 2),
+        'pitVolume': round(pit, 2),
+        'bowerVolume': round(castle + pit, 2),
+        'castleArea': round(float(np.count_nonzero(loc == 1)) * area, 2),
+        'pitArea': round(float(np.count_nonzero(loc == -1)) * area, 2),
+    }
+
+
+def half(frame):
+    """Downsample by 2 for display, ignoring NaN."""
+    h, w = frame.shape
+    h2, w2 = h // 2 * 2, w // 2 * 2
+    blocks = frame[:h2, :w2].reshape(h2 // 2, 2, w2 // 2, 2)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=RuntimeWarning)
+        return np.nanmean(blocks, axis=(1, 3))
+
+
+def build_depth_payload(fm, lp, raw, smooth, meta):
+    """Everything the Depth page needs.
+
+    Height maps are shipped at half resolution as packed PNGs and the browser
+    subtracts them to make daily, overnight and cumulative changes. Volumes are
+    computed here at full resolution, so the numbers never depend on the
+    downsampling done for display.
+    """
+    days = meta['days']
+    n_days = len(days)
+
+    # --- flag the days that are not comparable to a normal one --------------
+    spans = [d['n_frames'] for d in days]
+    typical = float(np.median(spans)) if spans else 0
+    for i, d in enumerate(days):
+        d['partial'] = bool(d['n_frames'] < 0.75 * typical)
+        d['overnightOK'] = False
+        d['overnightNote'] = ''
+        if i + 1 < n_days:
+            nxt = days[i + 1]
+            gap_h = (datetime.datetime.fromisoformat(nxt['first_time']) -
+                     datetime.datetime.fromisoformat(d['last_time'])).total_seconds() / 3600.0
+            d['gapHours'] = round(gap_h, 2)
+            if nxt['trial'] != d['trial']:
+                d['overnightNote'] = 'spans the tank reset'
+            elif gap_h <= 0:
+                d['overnightNote'] = 'the next day overlaps this one in time'
+            elif gap_h < 6:
+                d['overnightNote'] = 'gap of only %.1f h — recording restarted' % gap_h
+            elif gap_h > 20:
+                d['overnightNote'] = 'gap of %.1f h — a recording break' % gap_h
+            else:
+                d['overnightOK'] = True
+        else:
+            d['gapHours'] = None
+
+    # --- per-trial baselines ------------------------------------------------
+    trials = sorted({d['trial'] for d in days})
+    baseline_index = {}
+    for t in trials:
+        idx = [i for i, d in enumerate(days) if d['trial'] == t]
+        baseline_index[t] = idx[0]
+
+    # --- volumes, at full resolution ---------------------------------------
+    day_stats = []
+    for i, d in enumerate(days):
+        first_s, last_s = smooth[i, 0], smooth[i, 1]
+        daily = first_s - last_s                      # positive: sand added
+        entry = {
+            'day': i, 'trial': d['trial'],
+            'date': d['first_time'][:10],
+            'firstTime': d['first_time'][11:16], 'lastTime': d['last_time'][11:16],
+            'nFrames': d['n_frames'], 'partial': d['partial'],
+            'gapHours': d['gapHours'], 'overnightOK': d['overnightOK'],
+            'overnightNote': d['overnightNote'],
+            'rawValid': [round(d['raw_valid_first'], 4), round(d['raw_valid_last'], 4)],
+            'daily': volume_summary(daily, DAILY_THRESHOLD),
+        }
+        b = baseline_index[d['trial']]
+        cumulative = smooth[b, 0] - last_s
+        entry['cumulative'] = volume_summary(cumulative, TOTAL_THRESHOLD)
+        if d['overnightOK']:
+            overnight = last_s - smooth[i + 1, 0]
+            entry['overnight'] = volume_summary(overnight, DAILY_THRESHOLD)
+        else:
+            entry['overnight'] = None
+        day_stats.append(entry)
+
+    # --- per-trial totals and the threshold sweep ---------------------------
+    trial_stats = []
+    for t in trials:
+        idx = [i for i, d in enumerate(days) if d['trial'] == t]
+        b, e = idx[0], idx[-1]
+        total = smooth[b, 0] - smooth[e, 1]
+        sweep = [volume_summary(total, th) for th in THRESHOLD_SWEEP]
+        reset_change = None
+        reset_path = fm.localPrepDir + 'Trial_' + str(t) + 'ResetDepth.npy'
+        if os.path.exists(reset_path):
+            reset = load_npy(reset_path)
+            rc = reset - smooth[e, 1]
+            reset_change = {'map': encode_depth(half(rc))[0],
+                            'meta': encode_depth(half(rc))[1],
+                            'volumes': volume_summary(rc, TOTAL_THRESHOLD)}
+        trial_stats.append({
+            'trial': t, 'firstDay': b, 'lastDay': e, 'nDays': len(idx),
+            'start': days[b]['first_time'], 'stop': days[e]['last_time'],
+            'total': volume_summary(total, TOTAL_THRESHOLD),
+            'sweep': sweep,
+            'totalMap': dict(zip(('src', 'meta'), encode_depth(half(total)))),
+            'resetChange': reset_change,
+        })
+
+    # --- half-resolution height maps for the browser ------------------------
+    frames = []
+    for i in range(n_days):
+        entry = {}
+        for key, arr in (('smoothFirst', smooth[i, 0]), ('smoothLast', smooth[i, 1]),
+                         ('rawFirst', raw[i, 0]), ('rawLast', raw[i, 1])):
+            src, m = encode_depth(half(arr))
+            entry[key] = {'src': src, 'meta': m}
+        frames.append(entry)
+
+    return {
+        'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
+        'frameSize': [lp.width // 2, lp.height // 2],
+        'pixelLength': PIXEL_LENGTH,
+        'defaultThreshold': TOTAL_THRESHOLD,
+        'dailyThreshold': DAILY_THRESHOLD,
+        'thresholdSweep': THRESHOLD_SWEEP,
+        'days': day_stats, 'trials': trial_stats, 'frames': frames,
+        'baselines': {str(k): v for k, v in baseline_index.items()},
+        'built': str(datetime.datetime.now().replace(microsecond=0)),
+        'branch': fm.branch_name,
+    }
+
+
+DEPTH_PAGE = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root { --ink:#e8ecf1; --ink-dim:#93a0b0; --bg:#0e1116; --panel:#171c24;
+          --line:#262d38; --tray:#f2a33c; --ok:#5aa87a; --warn:#e0693f; --cool:#6fb2e8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
+  .wrap { max-width:1400px; margin:0 auto; padding:24px 22px 80px; }
+  h1 { font-size:24px; font-weight:600; margin:0 0 3px; }
+  h2 { font-size:15px; font-weight:600; margin:26px 0 10px; }
+  .sub { color:var(--ink-dim); margin:0 0 18px; }
+  a { color:var(--tray); text-decoration:none; } a:hover { text-decoration:underline; }
+  .back { display:inline-block; margin-bottom:12px; font-size:13px; color:var(--ink-dim); }
+  .tabs { display:flex; gap:4px; margin:16px 0 18px; flex-wrap:wrap; }
+  .tabs button { background:none; border:1px solid var(--line); color:var(--ink-dim);
+                 padding:8px 17px; border-radius:999px; cursor:pointer; font:inherit; font-size:14px; }
+  .tabs button[aria-selected="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .bar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:13px 0;
+         border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:16px; }
+  .bar label { font-size:13px; color:var(--ink-dim); }
+  .bar input[type=range] { width:190px; accent-color:var(--tray); }
+  .bar button { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+                padding:7px 13px; border-radius:6px; font:inherit; font-size:13px; cursor:pointer; }
+  .bar button[aria-pressed="true"] { background:var(--tray); color:#141414; border-color:var(--tray); }
+  .spacer { flex:1; }
+  .stat { font-size:13px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); font-weight:500; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px; }
+  figure { margin:0; background:var(--panel); border:1px solid var(--line);
+           border-radius:8px; overflow:hidden; }
+  figcaption { padding:10px 13px; font-size:13px; color:var(--ink-dim); border-top:1px solid var(--line); }
+  figcaption b { color:var(--ink); font-weight:500; }
+  .stage { position:relative; line-height:0; background:#000; }
+  .stage canvas, .stage img { width:100%; display:block; }
+  .readout { position:absolute; left:8px; bottom:8px; background:rgba(6,9,13,.82);
+             padding:3px 8px; border-radius:4px; font-size:12px; color:var(--ink);
+             font-variant-numeric:tabular-nums; pointer-events:none; opacity:0; transition:opacity .12s; }
+  .stage:hover .readout { opacity:1; }
+  .scalebar { height:9px; border-radius:2px; margin:0 13px 4px; }
+  .scalelab { display:flex; justify-content:space-between; padding:0 13px 10px;
+              font-size:11px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden;
+          cursor:pointer; }
+  .card:hover { border-color:var(--tray); }
+  .card .body { padding:12px 14px; }
+  .card h3 { margin:0 0 6px; font-size:15px; font-weight:600; }
+  .card table { width:100%; font-size:12px; border-collapse:collapse;
+                font-variant-numeric:tabular-nums; }
+  .card td { padding:2px 0; color:var(--ink-dim); }
+  .card td:last-child { text-align:right; color:var(--ink); }
+  .days { display:flex; gap:3px; flex-wrap:wrap; margin-bottom:14px; }
+  .days button { background:var(--panel); border:1px solid var(--line); color:var(--ink-dim);
+                 padding:5px 9px; border-radius:5px; font:inherit; font-size:12px; cursor:pointer;
+                 font-variant-numeric:tabular-nums; }
+  .days button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .days button.partial { border-style:dashed; }
+  .note { background:rgba(224,105,63,.1); border:1px solid rgba(224,105,63,.35);
+          color:#f0c3ae; padding:10px 13px; border-radius:7px; font-size:13px; margin:0 0 14px; }
+  table.vol { width:100%; border-collapse:collapse; font-size:13px;
+              font-variant-numeric:tabular-nums; }
+  table.vol th, table.vol td { text-align:right; padding:5px 9px; border-bottom:1px solid var(--line); }
+  table.vol th:first-child, table.vol td:first-child { text-align:left; }
+  table.vol th { color:var(--ink-dim); font-weight:500; }
+  .chart { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .chart svg { width:100%; height:230px; display:block; }
+  .foot { margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
+          color:var(--ink-dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">All projects in __ANALYSIS__</a>
+  <h1 id="title"></h1>
+  <p class="sub" id="sub"></p>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div id="body"></div>
+  <p class="foot" id="foot"></p>
+</div>
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>
+const D = JSON.parse(document.getElementById('payload').textContent);
+const W = D.frameSize[0], H = D.frameSize[1];
+const cache = {};
+
+function jet(t) {
+  t = Math.min(1, Math.max(0, t));
+  return [Math.max(0,Math.min(1,1.5-Math.abs(4*t-3)))*255,
+          Math.max(0,Math.min(1,1.5-Math.abs(4*t-2)))*255,
+          Math.max(0,Math.min(1,1.5-Math.abs(4*t-1)))*255];
+}
+
+// Height maps arrive as PNGs with the value packed into red and green and
+// validity in blue, so the browser recovers real centimetres and can subtract
+// two frames to make any change map it needs.
+function decode(layer) {
+  if (cache[layer.src]) return cache[layer.src];
+  const m = layer.meta;
+  const c = document.createElement('canvas');
+  c.width = m.width; c.height = m.height;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(layer.img, 0, 0);
+  const px = ctx.getImageData(0, 0, m.width, m.height).data;
+  const out = new Float32Array(m.width * m.height);
+  for (let i = 0, p = 0; i < out.length; i++, p += 4)
+    out[i] = px[p+2] === 0 ? NaN : ((px[p] << 8) | px[p+1]) * m.scale + m.offset;
+  cache[layer.src] = out;
+  return out;
+}
+
+function loadAll(layers) {
+  return Promise.all(layers.map(l => new Promise(res => {
+    if (l.img) return res();
+    const im = new Image();
+    im.onload = () => { l.img = im; res(); };
+    im.onerror = () => res();
+    im.src = l.src;
+  })));
+}
+
+function diff(a, b) {
+  const out = new Float32Array(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = a[i] - b[i];
+  return out;
+}
+
+function mapPanel(values, caption, opts) {
+  opts = opts || {};
+  const range = opts.range === undefined ? 2 : opts.range;
+  const fig = document.createElement('figure');
+  fig.innerHTML = '<div class="stage"><canvas width="' + W + '" height="' + H + '"></canvas>' +
+    '<span class="readout">—</span></div><div class="scalebar"></div>' +
+    '<div class="scalelab"><span>-' + range + ' cm</span><span>pit &larr; 0 &rarr; castle</span>' +
+    '<span>+' + range + ' cm</span></div>' +
+    '<figcaption>' + caption + '</figcaption>';
+  const canvas = fig.querySelector('canvas');
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const thr = opts.threshold || 0;
+  for (let i = 0, p = 0; i < values.length; i++, p += 4) {
+    const v = values[i];
+    if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
+    if (thr && Math.abs(v) < thr) {           // below threshold: grey, not coloured
+      img.data[p]=img.data[p+1]=img.data[p+2]=44; img.data[p+3]=255; continue;
+    }
+    const [r,g,b] = jet((v + range) / (2*range));
+    img.data[p]=r; img.data[p+1]=g; img.data[p+2]=b; img.data[p+3]=255;
+  }
+  ctx.putImageData(img, 0, 0);
+  let stops = [];
+  for (let i=0;i<=10;i++){ const c=jet(i/10); stops.push('rgb('+[c[0]|0,c[1]|0,c[2]|0]+') '+(i*10)+'%'); }
+  fig.querySelector('.scalebar').style.background='linear-gradient(to right,'+stops.join(',')+')';
+  const ro = fig.querySelector('.readout');
+  fig.querySelector('.stage').addEventListener('mousemove', ev => {
+    const r = canvas.getBoundingClientRect();
+    const x = Math.floor((ev.clientX-r.left)/r.width*W), y = Math.floor((ev.clientY-r.top)/r.height*H);
+    if (x<0||y<0||x>=W||y>=H) return;
+    const v = values[y*W+x];
+    ro.textContent = (Number.isNaN(v) ? 'no data' : (v>=0?'+':'') + v.toFixed(2) + ' cm') +
+                     '  ·  ' + x + ', ' + y;
+  });
+  return fig;
+}
+
+function volTable(rows) {
+  const t = document.createElement('table');
+  t.className = 'vol';
+  t.innerHTML = '<tr><th></th><th>castle cm³</th><th>pit cm³</th><th>total cm³</th>' +
+                '<th>castle cm²</th><th>pit cm²</th></tr>' +
+    rows.map(([lab, v]) => v ? '<tr><td>' + lab + '</td><td>' + v.castleVolume +
+      '</td><td>' + v.pitVolume + '</td><td>' + v.bowerVolume + '</td><td>' +
+      v.castleArea + '</td><td>' + v.pitArea + '</td></tr>'
+      : '<tr><td>' + lab + '</td><td colspan="5" style="text-align:left;color:#93a0b0">not available</td></tr>').join('');
+  return t;
+}
+
+// ------------------------------------------------------------------ landing
+function renderLanding() {
+  const box = document.createElement('div');
+  const cards = document.createElement('div');
+  cards.className = 'cards';
+  D.trials.forEach(t => {
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.innerHTML = '<div class="stage"><canvas width="' + W + '" height="' + H + '"></canvas></div>' +
+      '<div class="body"><h3>Trial ' + t.trial + '</h3>' +
+      '<table><tr><td>days</td><td>' + t.nDays + '</td></tr>' +
+      '<tr><td>' + t.start.slice(0,10) + ' to ' + t.stop.slice(0,10) + '</td><td></td></tr>' +
+      '<tr><td>bower volume</td><td>' + t.total.bowerVolume + ' cm³</td></tr>' +
+      '<tr><td>castle</td><td>' + t.total.castleVolume + ' cm³</td></tr>' +
+      '<tr><td>pit</td><td>' + t.total.pitVolume + ' cm³</td></tr></table></div>';
+    c.addEventListener('click', () => show(D.trials.indexOf(t) + 1));
+    cards.appendChild(c);
+    loadAll([t.totalMap]).then(() => {
+      const v = decode(t.totalMap);
+      const ctx = c.querySelector('canvas').getContext('2d');
+      const img = ctx.createImageData(W, H);
+      for (let i=0,p=0;i<v.length;i++,p+=4){
+        const x=v[i];
+        if (Number.isNaN(x)){img.data[p]=img.data[p+1]=img.data[p+2]=0;img.data[p+3]=255;continue;}
+        const c2=jet((x+2)/4); img.data[p]=c2[0];img.data[p+1]=c2[1];img.data[p+2]=c2[2];img.data[p+3]=255;
+      }
+      ctx.putImageData(img,0,0);
+    });
+  });
+  box.appendChild(cards);
+
+  const h = document.createElement('h2');
+  h.textContent = 'Volume built per day';
+  box.appendChild(h);
+  box.appendChild(dailyChart());
+  return box;
+}
+
+function dailyChart() {
+  const host = document.createElement('div');
+  host.className = 'chart';
+  const days = D.days;
+  const vals = days.map(d => d.daily.bowerVolume);
+  const over = days.map(d => d.overnight ? d.overnight.bowerVolume : null);
+  const max = Math.max(1, ...vals, ...over.filter(v => v !== null));
+  const w = 1000, hgt = 230, pad = 34, bw = (w - 2*pad) / days.length;
+  let s = '';
+  days.forEach((d, i) => {
+    const x = pad + i*bw;
+    const hh = (vals[i]/max) * (hgt - 2*pad);
+    s += '<rect x="' + (x+1) + '" y="' + (hgt-pad-hh) + '" width="' + (bw-2) + '" height="' + hh +
+         '" fill="' + (d.partial ? '#6b5334' : 'var(--tray)') + '"><title>Day ' + i + ' (' + d.date +
+         ') daily ' + vals[i] + ' cm³' + (d.partial ? ', partial day' : '') + '</title></rect>';
+    if (over[i] !== null) {
+      const oh = (over[i]/max) * (hgt - 2*pad);
+      s += '<rect x="' + (x+bw*0.3) + '" y="' + (hgt-pad-oh) + '" width="' + (bw*0.4) +
+           '" height="' + oh + '" fill="var(--cool)" opacity="0.85"><title>Day ' + i +
+           ' overnight ' + over[i] + ' cm³</title></rect>';
+    } else if (d.overnightNote) {
+      s += '<text x="' + (x+bw/2) + '" y="' + (hgt-pad+12) + '" fill="#e0693f" font-size="11" ' +
+           'text-anchor="middle">✕</text><title>' + d.overnightNote + '</title>';
+    }
+  });
+  s += '<line x1="' + pad + '" y1="' + (hgt-pad) + '" x2="' + (w-pad) + '" y2="' + (hgt-pad) +
+       '" stroke="#262d38"/>';
+  s += '<text x="' + pad + '" y="' + (pad-12) + '" fill="#93a0b0" font-size="12">cm³, ' +
+       'orange = daytime, blue = overnight, dashed bars are partial days, ✕ marks a gap that is not a night</text>';
+  for (let k=0;k<=2;k++){
+    const y = hgt-pad-(k/2)*(hgt-2*pad);
+    s += '<text x="4" y="' + (y+4) + '" fill="#93a0b0" font-size="11">' + Math.round(max*k/2) + '</text>';
+  }
+  host.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" preserveAspectRatio="none">' + s + '</svg>';
+  return host;
+}
+
+// -------------------------------------------------------------- trial view
+function renderTrial(t) {
+  const box = document.createElement('div');
+  const days = D.days.filter(d => d.trial === t.trial);
+  let selected = days[0].day;
+  let threshold = D.defaultThreshold;
+  let showRaw = false;
+
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.innerHTML = '<label>Threshold <b id="thv">' + threshold.toFixed(2) + '</b> cm</label>' +
+    '<input type="range" id="thr" min="0.1" max="3" step="0.05" value="' + threshold + '">' +
+    '<button id="rawBtn" aria-pressed="false">Show raw instead of interpolated</button>' +
+    '<span class="spacer"></span><span class="stat" id="dayInfo"></span>';
+  box.appendChild(bar);
+
+  const strip = document.createElement('div');
+  strip.className = 'days';
+  days.forEach(d => {
+    const b = document.createElement('button');
+    b.textContent = d.date.slice(5);
+    if (d.partial) b.className = 'partial';
+    b.title = d.nFrames + ' frames, ' + d.firstTime + ' to ' + d.lastTime +
+              (d.partial ? ' (partial day)' : '');
+    b.addEventListener('click', () => { selected = d.day; draw(); });
+    b.dataset.day = d.day;
+    strip.appendChild(b);
+  });
+  box.appendChild(strip);
+
+  const noteSlot = document.createElement('div');
+  box.appendChild(noteSlot);
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  box.appendChild(grid);
+  const tableSlot = document.createElement('div');
+  box.appendChild(tableSlot);
+
+  function draw() {
+    const d = D.days[selected];
+    Array.from(strip.children).forEach(b =>
+      b.setAttribute('aria-pressed', String(+b.dataset.day === selected)));
+    bar.querySelector('#dayInfo').innerHTML =
+      'Day ' + (d.day - t.firstDay + 1) + ' of ' + t.nDays + ' · <b>' + d.nFrames +
+      '</b> frames · raw valid <b>' + (d.rawValid[0]*100).toFixed(1) + '%</b>';
+
+    noteSlot.innerHTML = '';
+    const notes = [];
+    if (d.partial) notes.push('This day is only ' + d.nFrames +
+      ' frames (' + d.firstTime + ' to ' + d.lastTime + '), so its daily total is not comparable to a full day.');
+    if (d.overnightNote) notes.push('No overnight value after this day: ' + d.overnightNote + '.');
+    if (notes.length) noteSlot.innerHTML = '<div class="note">' + notes.join(' ') + '</div>';
+
+    const f = D.frames[selected];
+    const need = [f.smoothFirst, f.smoothLast];
+    if (showRaw) need.push(f.rawFirst, f.rawLast);
+    const baseline = D.frames[+D.baselines[t.trial]];
+    need.push(baseline.smoothFirst);
+    const nextF = d.overnightOK ? D.frames[selected + 1] : null;
+    if (nextF) need.push(nextF.smoothFirst);
+
+    loadAll(need).then(() => {
+      const first = decode(showRaw ? f.rawFirst : f.smoothFirst);
+      const last = decode(showRaw ? f.rawLast : f.smoothLast);
+      grid.textContent = '';
+      grid.appendChild(mapPanel(diff(first, last),
+        '<b>Daily change</b> — ' + d.firstTime + ' to ' + d.lastTime +
+        (showRaw ? ', from the raw frames' : ''), { threshold: threshold }));
+      grid.appendChild(mapPanel(diff(decode(baseline.smoothFirst), decode(f.smoothLast)),
+        '<b>Cumulative</b> — trial start to the end of this day', { threshold: threshold, range: 4 }));
+      if (nextF) {
+        grid.appendChild(mapPanel(diff(last, decode(nextF.smoothFirst)),
+          '<b>Overnight</b> — ' + d.lastTime + ' to ' + D.days[selected+1].firstTime +
+          ' the next morning', { threshold: threshold }));
+      }
+      grid.appendChild(mapPanel(diff(decode(f.rawFirst), decode(f.smoothFirst)),
+        '<b>Raw minus interpolated</b>, morning frame — where the fill changed the surface',
+        { range: 0.5 }));
+
+      tableSlot.textContent = '';
+      const h = document.createElement('h2'); h.textContent = 'Volumes';
+      tableSlot.appendChild(h);
+      tableSlot.appendChild(volTable([
+        ['This day', d.daily],
+        ['Overnight after', d.overnight],
+        ['Cumulative to date', d.cumulative],
+        ['Whole trial', t.total],
+      ]));
+      const p = document.createElement('p');
+      p.className = 'stat';
+      p.style.marginTop = '8px';
+      p.textContent = 'Volumes are computed at full resolution on the server, at the ' +
+        'pipeline thresholds (' + D.dailyThreshold + ' cm daily, ' + D.defaultThreshold +
+        ' cm total). The threshold slider changes only what is coloured in the maps.';
+      tableSlot.appendChild(p);
+      tableSlot.appendChild(sweepChart(t));
+    });
+  }
+
+  bar.querySelector('#thr').addEventListener('input', e => {
+    threshold = parseFloat(e.target.value);
+    bar.querySelector('#thv').textContent = threshold.toFixed(2);
+    draw();
+  });
+  bar.querySelector('#rawBtn').addEventListener('click', e => {
+    showRaw = !showRaw;
+    e.target.setAttribute('aria-pressed', String(showRaw));
+    draw();
+  });
+  draw();
+  return box;
+}
+
+function sweepChart(t) {
+  const host = document.createElement('div');
+  host.className = 'chart';
+  host.style.marginTop = '16px';
+  const pts = t.sweep;
+  const max = Math.max(1, ...pts.map(p => p.bowerVolume));
+  const w = 1000, hgt = 230, pad = 36;
+  const x = i => pad + (i/(pts.length-1))*(w-2*pad);
+  const y = v => hgt - pad - (v/max)*(hgt-2*pad);
+  const line = key => pts.map((p,i) => (i?'L':'M') + x(i) + ' ' + y(p[key])).join(' ');
+  let s = '<path d="' + line('bowerVolume') + '" fill="none" stroke="var(--tray)" stroke-width="2"/>' +
+          '<path d="' + line('castleVolume') + '" fill="none" stroke="var(--ok)" stroke-width="1.5"/>' +
+          '<path d="' + line('pitVolume') + '" fill="none" stroke="var(--cool)" stroke-width="1.5"/>';
+  pts.forEach((p,i) => {
+    s += '<circle cx="' + x(i) + '" cy="' + y(p.bowerVolume) + '" r="3" fill="var(--tray)">' +
+         '<title>threshold ' + p.threshold + ' cm: total ' + p.bowerVolume + ' cm³, castle ' +
+         p.castleVolume + ', pit ' + p.pitVolume + '</title></circle>';
+    s += '<text x="' + x(i) + '" y="' + (hgt-pad+14) + '" fill="#93a0b0" font-size="11" ' +
+         'text-anchor="middle">' + p.threshold + '</text>';
+  });
+  s += '<text x="' + pad + '" y="' + (pad-12) + '" fill="#93a0b0" font-size="12">' +
+       'Whole-trial volume against threshold (cm³) — orange total, green castle, blue pit</text>';
+  host.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" preserveAspectRatio="none">' + s + '</svg>';
+  return host;
+}
+
+// ------------------------------------------------------------------- shell
+function show(i) {
+  Array.from(document.getElementById('tabs').children).forEach((b, j) =>
+    b.setAttribute('aria-selected', String(j === i)));
+  const body = document.getElementById('body');
+  body.textContent = '';
+  body.appendChild(i === 0 ? renderLanding() : renderTrial(D.trials[i-1]));
+}
+
+function build() {
+  document.getElementById('title').textContent = D.projectID + ' — depth';
+  const nd = D.days.length, bad = D.days.filter(d => d.partial).length;
+  document.getElementById('sub').textContent =
+    nd + ' days across ' + D.trials.length + ' trial' + (D.trials.length===1?'':'s') +
+    (bad ? ', ' + bad + ' of them partial' : '') +
+    '. Maps are at half resolution; volumes are computed at full resolution.';
+  const tabs = document.getElementById('tabs');
+  ['Overview'].concat(D.trials.map(t => 'Trial ' + t.trial)).forEach((name, i) => {
+    const b = document.createElement('button');
+    b.textContent = name; b.setAttribute('role','tab');
+    b.addEventListener('click', () => show(i));
+    tabs.appendChild(b);
+  });
+  document.getElementById('foot').textContent = 'Built ' + D.built + ' from branch ' + D.branch + '.';
+  show(0);
+}
+build();
+</script>
+</body>
+</html>
+"""
+
+
+def write_depth(path, analysis_id, payload):
+    html = DEPTH_PAGE.replace('__TITLE__', payload['projectID'] + ' \u00b7 Depth')
     html = html.replace('__ANALYSIS__', analysis_id)
     html = html.replace('__PAYLOAD__', json.dumps(payload).replace('</', '<\\/'))
     with open(path, 'w') as f:
@@ -1697,7 +2333,7 @@ def apply_submission(fm_obj, sub, s_dt):
     return record
 
 
-def build_one(fm_obj, projectID, out_root, category='', delete=False):
+def build_one(fm_obj, projectID, out_root, category='', delete=False, page_type='Prep'):
     """Build the Prep and Register pages for a single project.
 
     Never raises: a project that cannot be built is recorded so the sweep
@@ -1728,6 +2364,32 @@ def build_one(fm_obj, projectID, out_root, category='', delete=False):
     for f in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile, fm_obj.localTransMFile,
               fm_obj.localPrepLogfile]:
         fetch_optional(f.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir), f)
+
+    if page_type == 'Depth':
+        depth_dir = fm_obj.localProjectDir + 'DepthFiles/'
+        fm_obj.createDirectory(depth_dir)
+        fetch_optional(depth_dir.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir),
+                       depth_dir, directory=True)
+        try:
+            raw, smooth, dmeta = load_depth_endpoints(fm_obj)
+        except DepthFilesMissing as e:
+            entry['status'] = 'needs_depthfiles'
+            entry['error'] = str(e) + ' — rerun the Depth stage of runAnalysis.py'
+            return entry
+        payload = build_depth_payload(fm_obj, lp, raw, smooth, dmeta)
+        project_dir = out_root + projectID + '/'
+        fm_obj.createDirectory(project_dir)
+        entry['size'] = write_depth(project_dir + 'Depth.html', fm_obj.analysisID, payload)
+        entry['pages']['Depth'] = 'Depth.html'
+        entry['files'].append('Depth.html')
+        entry['trials'] = len(payload['trials'])
+        first = load_npy(fm_obj.localFirstFrame)
+        last = load_npy(fm_obj.localLastFrame)
+        change, _ = filtered_change(first, last)
+        entry['thumb'] = thumbnail(change)
+        if delete:
+            shutil.rmtree(fm_obj.localPrepDir, ignore_errors=True)
+        return entry
 
     problems, trial_status = check_prep_files(fm_obj, lp)
     blocking = [p for p in problems if p.startswith('missing ')]
@@ -1934,7 +2596,7 @@ def main():
     if args.PageType == 'ApplyRegistration':
         return apply_registrations(args)
 
-    if args.PageType != 'Prep':
+    if args.PageType not in ('Prep', 'Depth'):
         print(args.PageType + ' pages are not implemented yet.')
         return 1
 
@@ -1975,11 +2637,13 @@ def main():
         if not args.NoUpload:
             upload(fm_obj, readme)
 
-    print('Building Prep pages for ' + str(len(projectIDs)) + ' project(s) in ' + args.AnalysisID)
+    print('Building ' + args.PageType + ' pages for ' + str(len(projectIDs)) +
+          ' project(s) in ' + args.AnalysisID)
     entries, failed = [], []
     for i, projectID in enumerate(projectIDs, 1):
         prefix = '[' + str(i) + '/' + str(len(projectIDs)) + '] ' + projectID
-        if args.SkipExisting and os.path.exists(out_root + projectID + '/Prep.html'):
+        if args.SkipExisting and os.path.exists(
+                out_root + projectID + '/' + args.PageType + '.html'):
             print(prefix + ': already built, skipping')
             continue
         print(prefix + ' ' + str(datetime.datetime.now()), flush=True)
@@ -1988,7 +2652,8 @@ def main():
             raw = s_dt.loc[projectID, 'Category']
             category = '' if raw is None or str(raw).strip().lower() in ('nan', '') else str(raw).strip()
         try:
-            entry = build_one(fm_obj, projectID, out_root, category=category, delete=args.Delete)
+            entry = build_one(fm_obj, projectID, out_root, category=category,
+                              delete=args.Delete, page_type=args.PageType)
         except Exception as e:
             entry = {'id': projectID, 'tank': '', 'category': category, 'trials': 0, 'start': '',
                      'thumb': None, 'missing': 0, 'status': 'failed', 'pages': {}, 'files': [],
@@ -1999,18 +2664,27 @@ def main():
             failed.append(projectID)
             print('    ' + entry['status'] + ': ' + entry['error'])
             continue
-        print('    wrote ' + entry['id'] + '/Prep.html (' +
+        print('    wrote ' + entry['id'] + '/' + args.PageType + '.html (' +
               str(round(entry['size'] / 1e6, 2)) + ' MB, ' + str(entry['trials']) + ' trials)')
         if not args.NoUpload:
             for name in entry.get('files', []):
                 upload(fm_obj, out_root + projectID + '/' + name)
 
+    # a Depth sweep must not blank the Prep buttons written by an earlier run
+    for e in entries:
+        d = out_root + e['id'] + '/'
+        for name in ('Prep', 'Depth', 'Cluster', 'IntegratedData'):
+            if name not in e['pages'] and os.path.exists(d + name + '.html'):
+                e['pages'][name] = name + '.html'
     index_size = write_index(out_root + 'index.html', args.AnalysisID, entries, fm_obj.branch_name)
     print('Wrote ' + out_root + 'index.html (' + str(round(index_size / 1e6, 2)) + ' MB)')
 
     built = len([e for e in entries if e['status'] == 'ok'])
     incomplete = [e['id'] for e in entries if e['status'] == 'ok' and e['missing']]
     needs = [e['id'] for e in entries if e['status'] == 'needs_prepfiles2']
+    needs_depth = [e['id'] for e in entries if e['status'] == 'needs_depthfiles']
+    if needs_depth:
+        print('Missing DepthFiles (' + str(len(needs_depth)) + '): ' + ', '.join(needs_depth))
     print('Built ' + str(built) + ' of ' + str(len(entries)) + ' pages.')
     if needs:
         print('Missing PrepFiles2 (' + str(len(needs)) + '). Build them with:')
