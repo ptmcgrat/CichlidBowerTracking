@@ -14,7 +14,7 @@ import pandas as pd
 from skimage import morphology
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from helper_modules.depth_interpolation import process_day
-
+from helper_modules.depth_endpoints import saveDailyEndpoints
 warnings.filterwarnings('ignore')
 
 
@@ -137,8 +137,8 @@ class DepthPreparer:
 				#dailyData = scipy.signal.savgol_filter(dailyData, tunits, order, axis = 0, mode = 'mirror')
 
 		# Save interpolated data
-		np.save(self.fileManager.localSmoothedDepthFile, interpDepthData)
-
+		np.save(self.fileManager.localSmoothDepthFile, interpDepthData)
+		saveDailyEndpoints(self.fileManager, self.lp, rawDepthData, interpDepthData)
 		# Smooth and filter out bad data 
 		#smoothDepthData = interpDepthData.copy()
 		
