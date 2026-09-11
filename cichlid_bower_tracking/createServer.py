@@ -245,84 +245,69 @@ def check_prep_files(fm, lp):
 
 
 def build_prep_payload(fm, lp, trial_status, pairs):
+    """Three views of the same thing: the depth crop, the video crop, and the
+    registration between them, each with one row per trial."""
     depth_points = parse_points(fm.localDepthCropFile)
     video_points = parse_points(fm.localVideoCropFile)
     transM = np.load(fm.localTransMFile)
     crop_mask = polygon_mask((lp.height, lp.width), depth_points)
 
-    # Overview: one depth still and one warped Pi still per pair, so the
-    # registration can be checked against any trial rather than just setup.
-    overview_pairs = []
-    for p in pairs:
-        depth_img = cv2.imread(p['depth_jpg'])
-        pi_img = cv2.imread(p['pi_jpg'])
-        if depth_img is None or pi_img is None:
-            continue
-        warped = cv2.warpPerspective(pi_img, transM, (lp.width, lp.height))
-        overview_pairs.append({
-            'key': p['key'], 'label': p['label'], 'gapMinutes': p['gapMinutes'],
-            'depth': encode_image(depth_img, max_width=lp.width),
-            'piWarped': encode_image(warped, max_width=lp.width),
-        })
-
-    first = pairs[0]
-    pi_first = cv2.imread(first['pi_jpg'])
-    overview = {
-        'pairs': overview_pairs,
-        'depthCropImage': encode_image(cv2.imread(first['depth_jpg']), max_width=lp.width),
-        'videoCropImage': encode_image(pi_first, max_width=min(pi_first.shape[1], 900)),
-        'piSize': [int(pi_first.shape[1]), int(pi_first.shape[0])],
-    }
-
-    trials = []
     by_trial = {}
     for p in pairs:
         by_trial.setdefault(p['trial'], {})[p['side']] = p
 
+    trials, pi_size = [], None
     for i, trial in enumerate(lp.trials, 1):
         sides = by_trial.get(i, {})
         entry = {
             'number': i,
             'start': str(trial.startTime), 'stop': str(trial.stopTime),
-            'reset': str(trial.resetTime) if trial.resetTime is not None else None,
             'numDays': int(trial.num_days),
-            'nFrames': len(trial.frames), 'nDaylightFrames': len(trial.daylight_frames),
+            'nDaylightFrames': len(trial.daylight_frames), 'nFrames': len(trial.frames),
             'movies': [int(m.index) for m in trial.movies],
-            'missing': [] if len(sides) == 2 else ['PrepFiles2 pair for this trial'],
-            'panels': {},
+            'complete': len(sides) == 2,
         }
         if len(sides) != 2:
             trials.append(entry)
             continue
 
-        t_first = load_npy(sides['First']['depth_npy'])
-        t_last = load_npy(sides['Last']['depth_npy'])
-        t_change, _ = filtered_change(t_first, t_last)
-        t_src, t_meta = encode_depth(t_change)
+        first, last = sides['First'], sides['Last']
+        entry['gaps'] = {'first': first['gapMinutes'], 'last': last['gapMinutes']}
+        entry['pairKeys'] = {'first': first['key'], 'last': last['key']}
 
-        panels = {
-            'firstDepthRGB': encode_image(cv2.imread(sides['First']['depth_jpg'])),
-            'lastDepthRGB': encode_image(cv2.imread(sides['Last']['depth_jpg'])),
-            'firstPi': encode_image(cv2.warpPerspective(
-                cv2.imread(sides['First']['pi_jpg']), transM, (lp.width, lp.height))),
-            'lastPi': encode_image(cv2.warpPerspective(
-                cv2.imread(sides['Last']['pi_jpg']), transM, (lp.width, lp.height))),
-            'change': {'src': t_src, 'meta': t_meta,
-                       'stats': depth_stats(t_change, crop_mask),
-                       'label': 'Trial ' + str(i) + ' — height change, positive is sand added'},
-        }
+        d_first = cv2.imread(first['depth_jpg'])
+        d_last = cv2.imread(last['depth_jpg'])
+        p_first = cv2.imread(first['pi_jpg'])
+        p_last = cv2.imread(last['pi_jpg'])
+        if pi_size is None and p_first is not None:
+            pi_size = [int(p_first.shape[1]), int(p_first.shape[0])]
 
-        # The reset frame only exists in the original PrepFiles.
-        reset_path = fm.localPrepDir + 'Trial_' + str(i) + 'ResetDepth.npy'
-        if os.path.exists(reset_path):
-            r_change, _ = filtered_change(load_npy(reset_path), t_last)
-            r_src, r_meta = encode_depth(r_change)
-            panels['resetChange'] = {'src': r_src, 'meta': r_meta,
-                                     'stats': depth_stats(r_change, crop_mask),
-                                     'label': 'Trial ' + str(i) + ' — change since the tank reset'}
-        entry['panels'] = panels
-        entry['gaps'] = {side: sides[side]['gapMinutes'] for side, _ in TRIAL_SIDES}
+        entry['depthFirst'] = encode_image(d_first, max_width=lp.width)
+        entry['depthLast'] = encode_image(d_last, max_width=lp.width)
+        entry['piFirst'] = encode_image(p_first, max_width=min(p_first.shape[1], 900))
+        entry['piLast'] = encode_image(p_last, max_width=min(p_last.shape[1], 900))
+        entry['piFirstWarped'] = encode_image(
+            cv2.warpPerspective(p_first, transM, (lp.width, lp.height)), max_width=lp.width)
+        entry['piLastWarped'] = encode_image(
+            cv2.warpPerspective(p_last, transM, (lp.width, lp.height)), max_width=lp.width)
+
+        change, _ = filtered_change(load_npy(first['depth_npy']), load_npy(last['depth_npy']))
+        c_src, c_meta = encode_depth(change)
+        entry['change'] = {'src': c_src, 'meta': c_meta,
+                           'stats': depth_stats(change, crop_mask),
+                           'label': 'Trial ' + str(i) + ' \u2014 height change, positive is sand added'}
         trials.append(entry)
+
+    # the depth crop inverse-warped into Pi coordinates, so the video crop can be
+    # checked against what the depth camera can actually see
+    depth_in_video = None
+    try:
+        inv = np.linalg.inv(transM)
+        pts = cv2.perspectiveTransform(
+            np.array(depth_points, np.float32).reshape(-1, 1, 2), inv).reshape(-1, 2)
+        depth_in_video = [[int(round(x)), int(round(y))] for x, y in pts]
+    except np.linalg.LinAlgError:
+        pass
 
     prep_log = ''
     if os.path.exists(fm.localPrepLogfile):
@@ -336,8 +321,9 @@ def build_prep_payload(fm, lp, trial_status, pairs):
         'masterStart': str(lp.master_start), 'masterStop': str(getattr(lp, 'master_stop', '')),
         'nFrames': len(lp.frames), 'nMovies': len(lp.movies),
         'depthPoints': depth_points, 'videoPoints': video_points,
-        'frameSize': [lp.width, lp.height],
-        'overview': overview, 'trials': trials,
+        'depthInVideo': depth_in_video,
+        'frameSize': [lp.width, lp.height], 'piSize': pi_size or [1296, 972],
+        'trials': trials,
         'logIssues': lp.malformed_file, 'prepLog': prep_log,
         'built': str(datetime.datetime.now().replace(microsecond=0)),
         'branch': fm.branch_name,
@@ -354,6 +340,7 @@ PAGE = r"""<!DOCTYPE html>
 <title>__TITLE__</title>
 <style>
   :root {
+    --video: #6fb2e8;
     --ink: #e8ecf1;
     --ink-dim: #93a0b0;
     --bg: #0e1116;
@@ -392,7 +379,14 @@ PAGE = r"""<!DOCTYPE html>
   .stage { position: relative; line-height: 0; background: #000; }
   .stage img, .stage canvas { width: 100%; display: block; }
   .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .stage polygon.video { stroke: var(--video); }
   .stage polygon { fill: none; stroke: var(--tray); stroke-width: 3; vector-effect: non-scaling-stroke; }
+  .stage polygon.derived { stroke: rgba(242,163,60,.45); stroke-width: 2; stroke-dasharray: 8 6; }
+  .trial { margin-bottom: 26px; }
+  .trial h2 { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
+              border-bottom: 1px solid var(--line); padding-bottom: 8px; margin: 0 0 14px; }
+  .trial h2 span { font-weight: 400; font-size: 13px; color: var(--ink-dim);
+                   font-variant-numeric: tabular-nums; }
   .readout { position: absolute; left: 8px; bottom: 8px; background: rgba(6,9,13,.82);
              padding: 3px 8px; border-radius: 4px; font-size: 12px;
              font-variant-numeric: tabular-nums; color: var(--ink); pointer-events: none;
@@ -435,24 +429,20 @@ PAGE = r"""<!DOCTYPE html>
   <h1 id="title"></h1>
   <p class="sub" id="subtitle"></p>
   <div class="meta" id="meta"></div>
+  <div class="bar"><span class="stat">Crops and registration are reviewed per trial.</span>
+    <a class="btn" id="fixLink" href="Register.html">Fix registration or crops</a></div>
   <div class="tabs" id="tabs" role="tablist"></div>
   <div id="body"></div>
   <p class="foot" id="foot"></p>
 </div>
+
 <script id="payload" type="application/json">__PAYLOAD__</script>
 <script>
 const D = JSON.parse(document.getElementById('payload').textContent);
 
-// jet, matching the colormap the pipeline figures use
-function jet(t) {
-  t = Math.min(1, Math.max(0, t));
-  const r = Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 3)));
-  const g = Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 2)));
-  const b = Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 1)));
-  return [r*255, g*255, b*255];
-}
+function jet(t){t=Math.min(1,Math.max(0,t));return[Math.max(0,Math.min(1,1.5-Math.abs(4*t-3)))*255,
+  Math.max(0,Math.min(1,1.5-Math.abs(4*t-2)))*255,Math.max(0,Math.min(1,1.5-Math.abs(4*t-1)))*255];}
 
-// Pull exact centimetre values back out of the packed PNG.
 function decodeDepth(img, meta) {
   const c = document.createElement('canvas');
   c.width = meta.width; c.height = meta.height;
@@ -460,49 +450,52 @@ function decodeDepth(img, meta) {
   ctx.drawImage(img, 0, 0);
   const px = ctx.getImageData(0, 0, meta.width, meta.height).data;
   const out = new Float32Array(meta.width * meta.height);
-  for (let i = 0, p = 0; i < out.length; i++, p += 4) {
+  for (let i = 0, p = 0; i < out.length; i++, p += 4)
     out[i] = px[p+2] === 0 ? NaN : ((px[p] << 8) | px[p+1]) * meta.scale + meta.offset;
-  }
   return out;
 }
 
-function polygonSVG(points, w, h) {
-  const pts = points.map(p => p.join(',')).join(' ');
-  return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true">' +
-         '<polygon points="' + pts + '"/></svg>';
+function polySVG(polys, w, h) {
+  let s = '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" aria-hidden="true">';
+  polys.forEach(p => {
+    if (!p.points) return;
+    s += '<polygon class="crop ' + (p.cls || '') + '" points="' +
+         p.points.map(q => q.join(',')).join(' ') + '"/>';
+  });
+  return s + '</svg>';
+}
+
+function imagePanel(src, caption, polys, size) {
+  const fig = document.createElement('figure');
+  const w = (size || D.frameSize)[0], h = (size || D.frameSize)[1];
+  fig.innerHTML = '<div class="stage">' +
+    (src ? '<img src="' + src + '" alt="">' : '<div style="aspect-ratio:4/3"></div>') +
+    (polys ? polySVG(polys, w, h) : '') + '</div>' +
+    '<figcaption>' + caption + '</figcaption>';
+  return fig;
 }
 
 function statLine(s) {
   if (!s || s.median === undefined) return 'No valid pixels inside the tray.';
-  return 'Median ' + s.median.toFixed(2) + ' cm · 1–99% ' + s.p1.toFixed(2) + ' to ' +
-         s.p99.toFixed(2) + ' cm · ' + (100*s.valid_fraction).toFixed(1) + '% of tray pixels valid';
+  return 'Median ' + s.median.toFixed(2) + ' cm \u00b7 1\u201399% ' + s.p1.toFixed(2) + ' to ' +
+         s.p99.toFixed(2) + ' cm \u00b7 ' + (100*s.valid_fraction).toFixed(1) + '% of tray pixels valid';
 }
 
-// A depth panel: colours itself from the decoded array, range adjustable, and
-// reports the value under the cursor.
-function depthPanel(layer, initialRange) {
+function depthPanel(layer, caption, polys) {
   const fig = document.createElement('figure');
   fig.innerHTML =
-    '<div class="stage"><canvas></canvas>' + polygonSVG(D.depthPoints, D.frameSize[0], D.frameSize[1]) +
-    '<span class="readout">—</span></div>' +
+    '<div class="stage"><canvas></canvas>' + (polys ? polySVG(polys, D.frameSize[0], D.frameSize[1]) : '') +
+    '<span class="readout">\u2014</span></div>' +
     '<div class="scalebar"></div>' +
-    '<div class="controls"><label>Range ±<span class="rangeval"></span> cm</label>' +
-    '<input type="range" min="0.5" max="10" step="0.5"></div>' +
-    '<figcaption><b>' + layer.label + '</b><br>' + statLine(layer.stats) + '</figcaption>';
-
-  const canvas = fig.querySelector('canvas');
-  const readout = fig.querySelector('.readout');
-  const slider = fig.querySelector('input');
-  const rangeval = fig.querySelector('.rangeval');
-  const scalebar = fig.querySelector('.scalebar');
-  slider.value = initialRange;
-
+    '<div class="controls"><label>Range \u00b1<span class="rangeval"></span> cm</label>' +
+    '<input type="range" min="0.5" max="10" step="0.5" value="2"></div>' +
+    '<figcaption>' + caption + '<br>' + statLine(layer.stats) + '</figcaption>';
+  const canvas = fig.querySelector('canvas'), readout = fig.querySelector('.readout');
+  const slider = fig.querySelector('input'), rangeval = fig.querySelector('.rangeval');
   const meta = layer.meta;
   canvas.width = meta.width; canvas.height = meta.height;
   const ctx = canvas.getContext('2d');
-  const img = new Image();
   let values = null;
-
   function paint() {
     if (!values) return;
     const range = parseFloat(slider.value);
@@ -510,44 +503,31 @@ function depthPanel(layer, initialRange) {
     const out = ctx.createImageData(meta.width, meta.height);
     for (let i = 0, p = 0; i < values.length; i++, p += 4) {
       const v = values[i];
-      if (Number.isNaN(v)) { out.data[p] = out.data[p+1] = out.data[p+2] = 0; out.data[p+3] = 255; continue; }
-      const [r, g, b] = jet((v + range) / (2 * range));
-      out.data[p] = r; out.data[p+1] = g; out.data[p+2] = b; out.data[p+3] = 255;
+      if (Number.isNaN(v)) { out.data[p]=out.data[p+1]=out.data[p+2]=0; out.data[p+3]=255; continue; }
+      const c = jet((v + range) / (2*range));
+      out.data[p]=c[0]; out.data[p+1]=c[1]; out.data[p+2]=c[2]; out.data[p+3]=255;
     }
     ctx.putImageData(out, 0, 0);
-    let stops = [];
-    for (let i = 0; i <= 10; i++) { const [r,g,b] = jet(i/10); stops.push('rgb('+[r|0,g|0,b|0]+') '+(i*10)+'%'); }
-    scalebar.style.background = 'linear-gradient(to right,' + stops.join(',') + ')';
+    let stops=[]; for(let i=0;i<=10;i++){const c=jet(i/10);stops.push('rgb('+[c[0]|0,c[1]|0,c[2]|0]+') '+(i*10)+'%');}
+    fig.querySelector('.scalebar').style.background='linear-gradient(to right,'+stops.join(',')+')';
   }
-
+  const img = new Image();
   img.onload = () => { values = decodeDepth(img, meta); paint(); };
   img.src = layer.src;
   slider.addEventListener('input', paint);
-
-  canvas.parentElement.addEventListener('mousemove', ev => {
+  fig.querySelector('.stage').addEventListener('mousemove', ev => {
     if (!values) return;
     const r = canvas.getBoundingClientRect();
-    const col = Math.floor((ev.clientX - r.left) / r.width * meta.width);
-    const row = Math.floor((ev.clientY - r.top) / r.height * meta.height);
-    if (col < 0 || row < 0 || col >= meta.width || row >= meta.height) return;
-    const v = values[row * meta.width + col];
-    readout.textContent = (Number.isNaN(v) ? 'masked' : v.toFixed(2) + ' cm') +
-                          '  ·  row ' + row + ', col ' + col;
+    const col = Math.floor((ev.clientX-r.left)/r.width*meta.width);
+    const row = Math.floor((ev.clientY-r.top)/r.height*meta.height);
+    if (col<0||row<0||col>=meta.width||row>=meta.height) return;
+    const v = values[row*meta.width+col];
+    readout.textContent = (Number.isNaN(v) ? 'masked' : (v>=0?'+':'') + v.toFixed(2) + ' cm') +
+                          '  \u00b7  row ' + row + ', col ' + col;
   });
   return fig;
 }
 
-function imagePanel(src, caption, points, size) {
-  const fig = document.createElement('figure');
-  const w = size ? size[0] : D.frameSize[0], h = size ? size[1] : D.frameSize[1];
-  fig.innerHTML = '<div class="stage"><img src="' + src + '" alt="">' +
-                  (points ? polygonSVG(points, w, h) : '') + '</div>' +
-                  '<figcaption>' + caption + '</figcaption>';
-  return fig;
-}
-
-// The registration check: the divider follows the cursor across the panel, so the
-// warped Pi frame and the depth frame can be compared edge to edge.
 function swipePanel(base, overSrc, caption) {
   const fig = document.createElement('figure');
   fig.innerHTML =
@@ -557,167 +537,129 @@ function swipePanel(base, overSrc, caption) {
     '<div class="controls"><label>Divider</label>' +
     '<input type="range" min="0" max="100" step="1" value="50" aria-label="Divider position"></div>' +
     '<figcaption>' + caption + '</figcaption>';
-
-  const stage = fig.querySelector('.stage');
-  const baseImg = fig.querySelector('img.base');
-  const swipe = fig.querySelector('.swipe');
-  const over = fig.querySelector('.over');
-  const overImg = over.querySelector('img');
-  const handle = fig.querySelector('.handle');
+  const stage = fig.querySelector('.stage'), baseImg = fig.querySelector('img.base');
+  const swipe = fig.querySelector('.swipe'), over = fig.querySelector('.over');
+  const overImg = over.querySelector('img'), handle = fig.querySelector('.handle');
   const slider = fig.querySelector('input');
   let frac = 0.5;
-
-  // The overlay is clipped by its parent's width, so its own image must stay
-  // pinned at the full panel width or it would squeeze as the divider moves.
   function sync() {
     const w = stage.clientWidth, h = stage.clientHeight;
     if (!w) return;
-    overImg.style.width = w + 'px';
-    overImg.style.height = h + 'px';
-    over.style.width = (frac * 100) + '%';
-    handle.style.left = (frac * 100) + '%';
+    overImg.style.width = w + 'px'; overImg.style.height = h + 'px';
+    over.style.width = (frac*100) + '%'; handle.style.left = (frac*100) + '%';
   }
-  function set(f) { frac = Math.min(1, Math.max(0, f)); slider.value = frac * 100; sync(); }
-
+  function set(f){ frac=Math.min(1,Math.max(0,f)); slider.value=frac*100; sync(); }
   swipe.addEventListener('mousemove', ev => {
-    const r = swipe.getBoundingClientRect();
-    set((ev.clientX - r.left) / r.width);
+    const r = swipe.getBoundingClientRect(); set((ev.clientX-r.left)/r.width);
   });
-  swipe.addEventListener('touchmove', ev => {
-    const r = swipe.getBoundingClientRect();
-    set((ev.touches[0].clientX - r.left) / r.width);
-  }, { passive: true });
-  slider.addEventListener('input', () => set(slider.value / 100));
-
+  slider.addEventListener('input', () => set(slider.value/100));
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(sync).observe(stage);
   if (baseImg.complete) sync(); else baseImg.addEventListener('load', sync);
   return fig;
 }
 
-function renderOverview() {
-  const o = D.overview, box = document.createElement('div');
+const DEPTH_POLY = [{ points: D.depthPoints }];
+const VIDEO_POLY = [{ points: D.videoPoints },
+                    { points: D.depthInVideo, cls: 'derived' }];
 
-  const bar = document.createElement('div');
-  bar.className = 'bar';
-  bar.innerHTML =
-    '<label for="pairPick">Registration checked against</label>' +
-    '<select id="pairPick">' + o.pairs.map(p =>
-      '<option value="' + p.key + '">' + p.label +
-      (p.gapMinutes === null || p.gapMinutes === undefined ? '' :
-        ' (' + p.gapMinutes + ' min apart)') + '</option>').join('') + '</select>' +
-    '<a class="btn" id="fixLink" href="Register.html">Fix registration or crops</a>';
-  box.appendChild(bar);
-
+function trialRow(t, build) {
+  const sec = document.createElement('section');
+  sec.className = 'trial';
+  const gaps = t.gaps ? ' \u00b7 pairs matched to ' + t.gaps.first + ' and ' + t.gaps.last + ' min'
+                      : '';
+  sec.innerHTML = '<h2>Trial ' + t.number + '<span>' + t.start.slice(0,16) + ' to ' +
+    t.stop.slice(0,16) + ' \u00b7 ' + t.numDays + ' days \u00b7 ' + t.nDaylightFrames +
+    ' daylight frames' + gaps + '</span></h2>';
+  if (!t.complete) {
+    sec.innerHTML += '<div class="note">No complete PrepFiles2 pair for this trial.</div>';
+    return sec;
+  }
   const grid = document.createElement('div');
   grid.className = 'grid';
-  grid.appendChild(imagePanel(o.depthCropImage,
-    'Depth camera with the tray crop.', D.depthPoints));
-  grid.appendChild(imagePanel(o.videoCropImage,
-    'Pi camera with the video crop.', D.videoPoints, o.piSize));
-
-  const slot = document.createElement('div');
-  grid.appendChild(slot);
-  box.appendChild(grid);
-
-  // This subtree is built before it is attached, so look elements up within it
-  // rather than through document.
-  const fixLink = bar.querySelector('#fixLink');
-
-  function showPair(key) {
-    const p = o.pairs.find(x => x.key === key) || o.pairs[0];
-    slot.textContent = '';
-    slot.appendChild(swipePanel(p.depth, p.piWarped,
-      'Registration on ' + p.label + '. Move the pointer across to wipe the warped Pi ' +
-      'frame over the depth frame — the tray edges should stay continuous.'));
-    fixLink.href = 'Register.html?pair=' + encodeURIComponent(p.key);
-  }
-  bar.querySelector('#pairPick').addEventListener('change', e => showPair(e.target.value));
-  if (o.pairs.length) showPair(o.pairs[0].key);
-  else slot.innerHTML = '<div class="note">No image pairs are available.</div>';
-  return box;
+  build(grid, t);
+  sec.appendChild(grid);
+  return sec;
 }
 
-function renderTrial(t) {
+function viewDepthCrop() {
   const box = document.createElement('div');
-  if (t.missing.length) {
-    box.innerHTML = '<div class="note">This trial is missing prep files, so its panels ' +
-      'cannot be drawn:<ul>' + t.missing.map(m => '<li>' + m + '</li>').join('') + '</ul></div>';
-    return box;
-  }
-  const p = t.panels, grid = document.createElement('div');
-  grid.className = 'grid';
-  grid.appendChild(imagePanel(p.firstDepthRGB, 'Depth view, first daylight frame.', D.depthPoints));
-  grid.appendChild(imagePanel(p.lastDepthRGB, 'Depth view, last daylight frame.', D.depthPoints));
-  grid.appendChild(imagePanel(p.firstPi, 'Pi view at the start, warped into depth space.', D.depthPoints));
-  grid.appendChild(imagePanel(p.lastPi, 'Pi view at the end, warped into depth space.', D.depthPoints));
-  grid.appendChild(depthPanel(p.change, 2));
-  if (p.resetChange) grid.appendChild(depthPanel(p.resetChange, 2));
-  box.appendChild(grid);
+  box.innerHTML = '<p class="sub">The polygon should follow the tray walls. Change that ' +
+    'reaches the boundary means the crop is clipping part of the bower.</p>';
+  D.trials.forEach(t => box.appendChild(trialRow(t, (grid, t) => {
+    grid.appendChild(imagePanel(t.depthFirst, '<b>Start</b> \u2014 depth camera', DEPTH_POLY));
+    grid.appendChild(imagePanel(t.depthLast, '<b>Stop</b> \u2014 depth camera', DEPTH_POLY));
+    grid.appendChild(depthPanel(t.change, '<b>Total change over the trial</b>', DEPTH_POLY));
+  })));
   return box;
 }
 
-function meta(pairs) {
-  document.getElementById('meta').innerHTML =
-    pairs.map(([k, v]) => '<div>' + k + '<b>' + v + '</b></div>').join('');
+function viewVideoCrop() {
+  const box = document.createElement('div');
+  box.innerHTML = '<p class="sub">Blue is the video crop. The faint orange outline is the ' +
+    'depth crop mapped into Pi coordinates \u2014 the video crop should contain it.</p>';
+  D.trials.forEach(t => box.appendChild(trialRow(t, (grid, t) => {
+    grid.appendChild(imagePanel(t.piFirst, '<b>Start</b> \u2014 Pi camera', VIDEO_POLY, D.piSize));
+    grid.appendChild(imagePanel(t.piLast, '<b>Stop</b> \u2014 Pi camera', VIDEO_POLY, D.piSize));
+  })));
+  return box;
+}
+
+function viewRegistration() {
+  const box = document.createElement('div');
+  box.innerHTML = '<p class="sub">Move the pointer across to wipe the warped Pi frame over the ' +
+    'depth frame. Tray edges should stay continuous across the divider. The cameras are fixed, ' +
+    'so a start that looks right and a stop that looks wrong means the sand moved, not the ' +
+    'registration.</p>';
+  D.trials.forEach(t => box.appendChild(trialRow(t, (grid, t) => {
+    grid.appendChild(swipePanel(t.depthFirst, t.piFirstWarped, '<b>Start</b>'));
+    grid.appendChild(swipePanel(t.depthLast, t.piLastWarped, '<b>Stop</b>'));
+  })));
+  return box;
 }
 
 function build() {
   document.getElementById('title').textContent = D.projectID;
   document.getElementById('subtitle').textContent =
-    'Prep — tray crop and camera registration, reviewed per trial.';
-  meta([
-    ['Tank', D.tankID], ['Analysis', D.analysisID], ['Sensor', D.device],
-    ['Recording', D.masterStart.slice(0, 16) + ' to ' + D.masterStop.slice(0, 16)],
-    ['Depth frames', D.nFrames], ['Videos', D.nMovies], ['Trials', D.trials.length],
-  ]);
+    'Prep \u2014 tray crop, video crop and camera registration.';
+  document.getElementById('meta').innerHTML =
+    [['Tank', D.tankID], ['Analysis', D.analysisID], ['Sensor', D.device],
+     ['Recording', D.masterStart.slice(0,16) + ' to ' + D.masterStop.slice(0,16)],
+     ['Depth frames', D.nFrames], ['Videos', D.nMovies], ['Trials', D.trials.length]]
+    .map(([k,v]) => '<div>' + k + '<b>' + v + '</b></div>').join('');
 
-  const body = document.getElementById('body');
-  const tabs = document.getElementById('tabs');
-  const views = [{ name: 'Overview', render: renderOverview }].concat(
-    D.trials.map(t => ({
-      name: 'Trial ' + t.number + (t.missing.length ? ' ⚠' : ''),
-      render: () => {
-        const wrap = document.createElement('div');
-        const bits = ['Ran ' + t.start.slice(0, 16) + ' to ' + t.stop.slice(0, 16),
-                      t.numDays + ' days', t.nDaylightFrames + ' daylight frames of ' + t.nFrames,
-                      'videos ' + (t.movies.length ? t.movies.join(', ') : 'none')];
-        if (t.gaps) bits.push('pairs matched to ' + t.gaps.First + ' and ' +
-                              t.gaps.Last + ' min');
-        if (t.reset) bits.push('tank reset ' + t.reset.slice(0, 16));
-        const p = document.createElement('p');
-        p.className = 'sub'; p.textContent = bits.join(' · ');
-        wrap.appendChild(p);
-        wrap.appendChild(renderTrial(t));
-        return wrap;
-      }
-    })));
+  const firstKey = (D.trials.find(t => t.pairKeys) || {}).pairKeys;
+  document.getElementById('fixLink').href =
+    'Register.html' + (firstKey ? '?pair=' + encodeURIComponent(firstKey.first) : '');
 
   if (D.logIssues && D.logIssues.length) {
     const n = document.createElement('div');
     n.className = 'note';
     n.innerHTML = 'The log parser flagged this project:<ul>' +
-                  D.logIssues.map(x => '<li>' + x + '</li>').join('') + '</ul>';
-    body.parentElement.insertBefore(n, tabs);
+      D.logIssues.map(x => '<li>' + x + '</li>').join('') + '</ul>';
+    document.getElementById('tabs').before(n);
   }
 
+  const views = [['Depth Crop', viewDepthCrop], ['Video Crop', viewVideoCrop],
+                 ['Registration', viewRegistration]];
+  const tabs = document.getElementById('tabs'), body = document.getElementById('body');
+  const cache = [];
   const buttons = views.map((v, i) => {
     const b = document.createElement('button');
-    b.textContent = v.name; b.setAttribute('role', 'tab');
+    b.textContent = v[0]; b.setAttribute('role','tab');
     b.addEventListener('click', () => show(i));
     tabs.appendChild(b);
     return b;
   });
-  const cache = [];
   function show(i) {
-    buttons.forEach((b, j) => b.setAttribute('aria-selected', j === i));
+    buttons.forEach((b, j) => b.setAttribute('aria-selected', String(j === i)));
     body.textContent = '';
-    if (!cache[i]) cache[i] = views[i].render();
+    if (!cache[i]) cache[i] = views[i][1]();
     body.appendChild(cache[i]);
   }
   show(0);
 
   document.getElementById('foot').textContent =
-    'Built ' + D.built + ' from branch ' + D.branch + '. ' + D.prepLog.replace(/\n/g, ' · ');
+    'Built ' + D.built + ' from branch ' + D.branch + '. ' + D.prepLog.replace(/\n/g, ' \u00b7 ');
 }
 build();
 </script>

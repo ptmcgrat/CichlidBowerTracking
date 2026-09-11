@@ -134,6 +134,8 @@ class DepthPreparer:
 				day = interpDepthData[start_f.index:stop_f.index + 1]
 				day[:] = interpolate_time(day, min_good=goodDataCutoff)
 
+			trial_std_mean = np.nanmean(np.stack(
+    		[np.nanmean(rawStdData[a.index:b.index + 1], axis=0) for a, b in trial.days]), axis=0)
 			mask, stats = trialChurnMask(interpDepthData, self.lp, trial,
 										 tray_mask=self.tray_mask, k=5,
 										 std_mean=trial_std_mean)
