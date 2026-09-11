@@ -13,7 +13,7 @@ from matplotlib import (cm, colors, gridspec, ticker)
 import pandas as pd 
 from skimage import morphology
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from helper_modules.depth_interpolation import process_day, nansum
+from helper_modules.depth_interpolation import process_day
 
 warnings.filterwarnings('ignore')
 
