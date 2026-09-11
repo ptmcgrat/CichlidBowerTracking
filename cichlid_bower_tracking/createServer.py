@@ -64,34 +64,65 @@ def encode_image(img, max_width=760):
     return b64(buf.tobytes(), 'image/jpeg')
 
 
-def encode_depth(arr, scale=DEPTH_SCALE):
+def encode_depth(arr, scale=DEPTH_SCALE, clip_percentile=0.2, clip_range=None):
     """Float array in cm -> base64 PNG carrying exact values.
 
     Value is quantized to int16 counts and split across the red (high byte) and
     green (low byte) channels; blue is 255 where the pixel is valid and 0 where
     it was NaN. Alpha is left fully opaque throughout so the browser never
-    premultiplies away the payload."""
+    premultiplies away the payload.
+
+    Raw sensor frames are not range-filtered the way the interpolated ones are,
+    so a handful of pixels with no return can hold values thousands of cm away.
+    Those are clamped to a percentile window first — they are meaningless for
+    display — and if the remaining span still will not fit in 16 bits the scale
+    is coarsened rather than the encode failing.
+    """
     finite = arr[np.isfinite(arr)]
     if finite.size == 0:
         return None, None
-    offset = float(np.floor(finite.min() / scale) - 1) * scale
+
+    lo, hi = float(finite.min()), float(finite.max())
+    clipped = 0
+    if clip_range is not None:
+        # caller knows the physical window — used for raw frames, where anything
+        # outside the range the sand occupies is a no-return pixel, not a reading
+        c_lo, c_hi = clip_range
+        clipped = int(np.count_nonzero((finite < c_lo) | (finite > c_hi)))
+        arr = np.clip(arr, c_lo, c_hi)
+        lo, hi = c_lo, c_hi
+    elif clip_percentile and finite.size > 100:
+        p_lo = float(np.percentile(finite, clip_percentile))
+        p_hi = float(np.percentile(finite, 100 - clip_percentile))
+        pad = max(0.5, 0.05 * (p_hi - p_lo))
+        p_lo, p_hi = p_lo - pad, p_hi + pad
+        if p_hi > p_lo and (p_lo > lo or p_hi < hi):
+            clipped = int(np.count_nonzero((finite < p_lo) | (finite > p_hi)))
+            arr = np.clip(arr, p_lo, p_hi)
+            lo, hi = p_lo, p_hi
+
+    # coarsen the step until the span fits, rather than raising
+    while (hi - lo) / scale > 65000 and scale < 10:
+        scale *= 2
+
+    offset = float(np.floor(lo / scale) - 1) * scale
     counts = np.round((arr - offset) / scale)
     counts = np.where(np.isfinite(counts), counts, 0)
-    if counts.max() > 65535:
-        raise ValueError('Depth range too wide for 16 bits at scale ' + str(scale))
-    counts = counts.astype(np.uint16)
+    counts = np.clip(counts, 0, 65535).astype(np.uint16)
 
     valid = np.isfinite(arr)
     h, w = arr.shape
     bgra = np.zeros((h, w, 4), np.uint8)
-    bgra[:, :, 0] = np.where(valid, 255, 0)          # blue: validity flag
-    bgra[:, :, 1] = (counts & 0xFF).astype(np.uint8)  # green: low byte
-    bgra[:, :, 2] = (counts >> 8).astype(np.uint8)    # red: high byte
+    bgra[:, :, 0] = np.where(valid, 255, 0)           # blue: validity flag
+    bgra[:, :, 1] = (counts & 0xFF).astype(np.uint8)   # green: low byte
+    bgra[:, :, 2] = (counts >> 8).astype(np.uint8)     # red: high byte
     bgra[:, :, 3] = 255
     ok, buf = cv2.imencode('.png', bgra)
     if not ok:
         raise RuntimeError('PNG encoding failed')
     meta = {'scale': scale, 'offset': offset, 'width': w, 'height': h}
+    if clipped:
+        meta['clipped'] = clipped
     return b64(buf.tobytes(), 'image/png'), meta
 
 
@@ -1093,12 +1124,16 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
     # --- half-resolution height maps for the browser ------------------------
     extras = meta.get('_extras', {})
     depth_dir = fm.localProjectDir + 'DepthFiles/'
+    # the interpolated array is range-filtered, so it defines what counts as sand
+    s_finite = smooth[np.isfinite(smooth)]
+    s_med = float(np.median(s_finite)) if s_finite.size else 60.0
+    height_window = (s_med - 30.0, s_med + 30.0)
     frames = []
     for i in range(n_days):
         entry = {}
         for key, arr in (('smoothFirst', smooth[i, 0]), ('smoothLast', smooth[i, 1]),
                          ('rawFirst', raw[i, 0]), ('rawLast', raw[i, 1])):
-            s, m = encode_depth(half(arr))
+            s, m = encode_depth(half(arr), clip_range=height_window)
             entry[key] = {'src': s, 'meta': m}
         for key, arr in (('travel', extras.get('travel')),
                          ('stdMean', extras.get('stdMean')),
