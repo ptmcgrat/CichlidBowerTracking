@@ -1299,7 +1299,10 @@ function mapPanel(values, caption, opts) {
   // three scales: signed change about zero, absolute height, and one-sided
   // diagnostics like variability where only the magnitude means anything
   let lo, hi, label;
-  if (opts.absolute) {
+  if (opts.fixed) {
+    lo = opts.fixed[0]; hi = opts.fixed[1];
+    label = ['%L cm', 'sensor distance', '%H cm'];
+  } else if (opts.absolute) {
     const fin = Array.from(values).filter(v => !Number.isNaN(v));
     fin.sort((a,b) => a-b);
     lo = fin.length ? fin[Math.floor(fin.length*0.02)] : 0;
@@ -1323,7 +1326,7 @@ function mapPanel(values, caption, opts) {
   const canvas = fig.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(W, H);
-  const thr = (opts.absolute || opts.positive !== undefined) ? 0 : (opts.threshold || 0);
+  const thr = (opts.absolute || opts.fixed || opts.positive !== undefined) ? 0 : (opts.threshold || 0);
   for (let i = 0, p = 0; i < values.length; i++, p += 4) {
     const v = values[i];
     if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
@@ -1469,13 +1472,11 @@ function renderTrial(t) {
   const days = D.days.filter(d => d.trial === t.trial);
   let selected = days[0].day;
   let threshold = D.defaultThreshold;
-  let showRaw = false;
 
   const bar = document.createElement('div');
   bar.className = 'bar';
   bar.innerHTML = '<label>Threshold <b id="thv">' + threshold.toFixed(2) + '</b> cm</label>' +
     '<input type="range" id="thr" min="0" max="3" step="0.05" value="' + threshold + '">' +
-    '<button id="rawBtn" aria-pressed="false">Show raw instead of interpolated</button>' +
     '<span class="spacer"></span><span class="stat" id="dayInfo"></span>';
   box.appendChild(bar);
 
@@ -1496,9 +1497,15 @@ function renderTrial(t) {
   const noteSlot = document.createElement('div');
   box.appendChild(noteSlot);
   const rowA = document.createElement('div'); rowA.className = 'grid';
-  const hB = document.createElement('h2'); hB.textContent = 'Raw against interpolated, and sensor variability';
+  const hB = document.createElement('h2'); hB.textContent = 'Change, and how variable the sensor was';
   const rowB = document.createElement('div'); rowB.className = 'grid';
+  const hC = document.createElement('h2'); hC.textContent = 'Raw against interpolated, on a shared scale';
+  const rowC = document.createElement('div'); rowC.className = 'grid';
+  const hD = document.createElement('h2'); hD.textContent = 'Further diagnostics';
+  const rowD = document.createElement('div'); rowD.className = 'grid';
   box.appendChild(rowA); box.appendChild(hB); box.appendChild(rowB);
+  box.appendChild(hC); box.appendChild(rowC);
+  box.appendChild(hD); box.appendChild(rowD);
   const tableSlot = document.createElement('div');
   box.appendChild(tableSlot);
 
@@ -1518,63 +1525,73 @@ function renderTrial(t) {
     if (notes.length) noteSlot.innerHTML = '<div class="note">' + notes.join(' ') + '</div>';
 
     const f = D.frames[selected];
-    const need = [f.smoothFirst, f.smoothLast];
-    if (showRaw) need.push(f.rawFirst, f.rawLast);
+    const need = [f.smoothFirst, f.smoothLast, f.rawFirst, f.rawLast];
+    ['stdMean', 'stdMax', 'travel'].forEach(k => { if (f[k]) need.push(f[k]); });
     const baseline = D.frames[+D.baselines[t.trial]];
     need.push(baseline.smoothFirst);
     const nextF = d.overnightOK ? D.frames[selected + 1] : null;
     if (nextF) need.push(nextF.smoothFirst);
 
     loadAll(need).then(() => {
-      const first = decode(showRaw ? f.rawFirst : f.smoothFirst);
-      const last = decode(showRaw ? f.rawLast : f.smoothLast);
+      const sFirst = decode(f.smoothFirst), sLast = decode(f.smoothLast);
+      const rFirst = decode(f.rawFirst), rLast = decode(f.rawLast);
 
-      // row one: what the camera saw, and what changed
+      // row one: what the depth camera saw
       rowA.textContent = '';
       rowA.appendChild(photoPanel(f.jpgFirst, '<b>Depth camera</b> — morning, ' + d.firstTime));
       rowA.appendChild(photoPanel(f.jpgLast, '<b>Depth camera</b> — evening, ' + d.lastTime));
-      rowA.appendChild(mapPanel(diff(decode(baseline.smoothFirst), decode(f.smoothLast)),
+
+      // row two: change, always from the interpolated array
+      rowB.textContent = '';
+      rowB.appendChild(mapPanel(diff(decode(baseline.smoothFirst), sLast),
         '<b>Cumulative</b> — trial start to the end of this day',
         { threshold: threshold, range: 4 }));
-      rowA.appendChild(mapPanel(diff(first, last),
-        '<b>Daily change</b> — ' + d.firstTime + ' to ' + d.lastTime +
-        (showRaw ? ', from the raw frames' : ''), { threshold: threshold }));
+      rowB.appendChild(mapPanel(diff(sFirst, sLast),
+        '<b>Daily change</b> — ' + d.firstTime + ' to ' + d.lastTime,
+        { threshold: threshold }));
       if (nextF) {
-        rowA.appendChild(mapPanel(diff(last, decode(nextF.smoothFirst)),
+        rowB.appendChild(mapPanel(diff(sLast, decode(nextF.smoothFirst)),
           '<b>Overnight</b> — ' + d.lastTime + ' to ' + D.days[selected+1].firstTime,
           { threshold: threshold }));
       } else {
-        rowA.appendChild(photoPanel(null, '<b>Overnight</b> — ' +
+        rowB.appendChild(photoPanel(null, '<b>Overnight</b> — ' +
           (d.overnightNote || 'no following day')));
       }
-
-      // row two: the interpolation, and the sensor variability behind it
-      rowB.textContent = '';
-      rowB.appendChild(mapPanel(decode(f.rawFirst), '<b>Raw</b> — morning frame',
-        { absolute: true }));
-      rowB.appendChild(mapPanel(decode(f.smoothFirst), '<b>Interpolated</b> — morning frame',
-        { absolute: true }));
-      rowB.appendChild(mapPanel(decode(f.rawLast), '<b>Raw</b> — evening frame',
-        { absolute: true }));
-      rowB.appendChild(mapPanel(decode(f.smoothLast), '<b>Interpolated</b> — evening frame',
-        { absolute: true }));
       if (f.stdMean) {
         rowB.appendChild(mapPanel(decode(f.stdMean),
           '<b>Capture variability</b> — mean standard deviation across the ~30 captures ' +
-          'behind each frame, averaged over the day. Reflections off the water surface ' +
-          'show up here.', { positive: 1.0 }));
+          'behind each frame, averaged over the day', { positive: 1.0 }));
+      } else {
+        rowB.appendChild(photoPanel(null, '<b>Capture variability</b>'));
       }
-      if (f.stdMax) {
-        rowB.appendChild(mapPanel(decode(f.stdMax),
-          '<b>Worst capture variability</b> — the highest value any frame reached today',
-          { positive: 2.0 }));
+
+      // row three: raw against interpolated, all four on one scale so the
+      // difference between them is the only thing that changes
+      const fin = [];
+      for (let i = 0; i < sFirst.length; i++) {
+        if (!Number.isNaN(sFirst[i])) fin.push(sFirst[i]);
+        if (!Number.isNaN(sLast[i])) fin.push(sLast[i]);
       }
-      if (f.travel) {
-        rowB.appendChild(mapPanel(decode(f.travel),
-          '<b>Total travel</b> — how far each pixel moved over the day, summed. ' +
-          'Steady building gives a small number; churn gives a large one.',
-          { positive: 6.0 }));
-      }
+      fin.sort((a,b) => a-b);
+      const shared = fin.length
+        ? [fin[Math.floor(fin.length*0.02)], fin[Math.floor(fin.length*0.98)]]
+        : [0, 1];
+      rowC.textContent = '';
+      rowC.appendChild(mapPanel(rFirst, '<b>Raw</b> — morning frame', { fixed: shared }));
+      rowC.appendChild(mapPanel(sFirst, '<b>Interpolated</b> — morning frame', { fixed: shared }));
+      rowC.appendChild(mapPanel(rLast, '<b>Raw</b> — evening frame', { fixed: shared }));
+      rowC.appendChild(mapPanel(sLast, '<b>Interpolated</b> — evening frame', { fixed: shared }));
+
+      // row four: the rest
+      rowD.textContent = '';
+      if (f.stdMax) rowD.appendChild(mapPanel(decode(f.stdMax),
+        '<b>Worst capture variability</b> — the highest any frame reached today',
+        { positive: 2.0 }));
+      if (f.travel) rowD.appendChild(mapPanel(decode(f.travel),
+        '<b>Total travel</b> — how far each pixel moved over the day, summed. ' +
+        'Steady building gives a small number; churn gives a large one.',
+        { positive: 6.0 }));
+      hD.style.display = rowD.children.length ? '' : 'none';
 
       tableSlot.textContent = '';
       const h = document.createElement('h2'); h.textContent = 'Volumes';
@@ -1599,11 +1616,6 @@ function renderTrial(t) {
   bar.querySelector('#thr').addEventListener('input', e => {
     threshold = parseFloat(e.target.value);
     bar.querySelector('#thv').textContent = threshold.toFixed(2);
-    draw();
-  });
-  bar.querySelector('#rawBtn').addEventListener('click', e => {
-    showRaw = !showRaw;
-    e.target.setAttribute('aria-pressed', String(showRaw));
     draw();
   });
   draw();
