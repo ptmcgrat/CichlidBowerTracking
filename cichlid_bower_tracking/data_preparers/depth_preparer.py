@@ -4,6 +4,8 @@ import skvideo.io
 import numpy as np
 import pdb, os, sys, datetime, warnings, copy, subprocess, shutil, io
 import matplotlib.pyplot as plt
+from matplotlib import path as mpl_path
+
 import matplotlib
 from PIL import Image,ImageDraw
 from helper_modules.depth_analyzer import DepthAnalyzer as DA
@@ -11,6 +13,7 @@ from matplotlib import (cm, colors, gridspec, ticker)
 import pandas as pd 
 from skimage import morphology
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from helper_modules.depth_interpolation import process_day, save_depth, load_depth, nansum
 
 warnings.filterwarnings('ignore')
 
@@ -62,6 +65,8 @@ class DepthPreparer:
 
 	def uploadProjectData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
+		self.fileManager.uploadData(self.fileManager.localRawDepthFile)
+		
 		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
 		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
@@ -95,7 +100,7 @@ class DepthPreparer:
 		# Read in each frame and store it. Also keep track of the indeces that are in the daytime
 		#day_idx = 0
 		#day_start_stop = OrderedDict() # Dictionary to hold first and last frame indeces for good and bad data for each day
-		
+
 		#ad_idx = 0
 		for i, frame in enumerate(self.lp.frames):
 			try:
@@ -106,6 +111,11 @@ class DepthPreparer:
 				rawDepthData[i] = rawDepthData[i-1]
 			else:
 				rawDepthData[i] = data
+
+		crop = eval('[' + open(self.fileManager.localDepthCropFile).read() + ']')
+		gy, gx = np.mgrid[0:self.lp.height, 0:self.lp.width]
+		pts = np.column_stack([gx.ravel(), gy.ravel()])
+		self.tray_mask = mpl_path.Path(crop).contains_points(pts).reshape(self.lp.height, self.lp.width)
 
 		# Save raw data file
 		np.save(self.fileManager.localRawDepthFile, rawDepthData)
@@ -119,44 +129,18 @@ class DepthPreparer:
 			for start_f,stop_f in trial.days:
 				dailyData = interpDepthData[start_f.index:stop_f.index+1] # Create view of numpy array just creating a single day during the daytime
 				median_height = np.nanmedian(dailyData)
+
 				dailyData[(dailyData > median_height + 10) | (dailyData < median_height - 10)] = np.nan
-				goodDataAll = np.count_nonzero(~np.isnan(dailyData), axis = 0)/dailyData.shape[0] # Calculate the fraction of good data points per pixel
-
-
-				# Process each pixel
-				for i in range(dailyData.shape[1]):
-					for j in range(dailyData.shape[2]):
-						if goodDataAll[i,j] > goodDataCutoff: # If enough data is present in the pixel then interpolate
-					
-							x_interp, = np.where(np.isnan(dailyData[:,i,j])) # Indices with missing data
-							x_good, = np.where(~np.isnan(dailyData[:,i,j])) # Indices with good data
-
-							if len(x_interp) != 0: # Only interpolate if there is missing data
-								interp_data = np.interp(x_interp, x_good, dailyData[x_good, i, j])
-								dailyData[x_interp, i, j] = interp_data
 				
-				for i in range(dailyData.shape[0]):
-					good_data = np.where(~np.isnan(dailyData[i]), True, False)
-					good_data = morphology.remove_small_objects(good_data, 100).astype(int)
-					dailyData[i][~good_data] = np.nan
-					for j in range(dailyData.shape[1]):
-						x_interp, = np.where(np.isnan(dailyData[i,j,:])) # Indices with missing data
-						x_good, = np.where(~np.isnan(dailyData[i,j,:])) # Indices with good data
-						if len(x_interp) != 0 and len(x_good)/dailyData.shape[2] > .5: # Only interpolate if there is missing data
-							interp_data = np.interp(x_interp, x_good, dailyData[i, j, x_good], left = np.nan, right = np.nan)
-							#if np.nansum(interp_data) > 0.0001:
-							#	pdb.set_trace()
+				dailyData[:] = process_day(dailyData, usable=self.tray_mask, min_good=goodDataCutoff)
 
-							dailyData[i, j, x_interp] = interp_data
-
-
-				dailyData = scipy.signal.savgol_filter(dailyData, tunits, order, axis = 0, mode = 'mirror')
+				#dailyData = scipy.signal.savgol_filter(dailyData, tunits, order, axis = 0, mode = 'mirror')
 
 		# Save interpolated data
-		np.save(self.fileManager.localInterpDepthFile, interpDepthData)
+		np.save(self.fileManager.localSmoothedDepthFile, interpDepthData)
 
 		# Smooth and filter out bad data 
-		smoothDepthData = interpDepthData.copy()
+		#smoothDepthData = interpDepthData.copy()
 		
 		# Read in manual crop and mask out data outside of crop
 		with open(self.fileManager.localDepthCropFile) as f:
