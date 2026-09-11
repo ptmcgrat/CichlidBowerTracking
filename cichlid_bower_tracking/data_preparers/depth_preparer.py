@@ -66,7 +66,7 @@ class DepthPreparer:
 	def uploadProjectData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
 		self.fileManager.uploadData(self.fileManager.localRawDepthFile)
-		
+		self.fileManager.uploadData(self.fileManager.localProjectDir + 'DepthFiles')
 		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
 
 		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
@@ -138,9 +138,8 @@ class DepthPreparer:
 
 		# Save interpolated data
 		np.save(self.fileManager.localSmoothDepthFile, interpDepthData)
-		saveDailyEndpoints(self.fileManager, self.lp, rawDepthData, interpDepthData)
 		# Smooth and filter out bad data 
-		#smoothDepthData = interpDepthData.copy()
+		smoothDepthData = interpDepthData.copy()
 		
 		# Read in manual crop and mask out data outside of crop
 		with open(self.fileManager.localDepthCropFile) as f:
@@ -180,6 +179,7 @@ class DepthPreparer:
 						pdb.set_trace()
 		# Smooth data with savgol_filter
 		np.save(self.fileManager.localSmoothDepthFile, smoothDepthData)
+		saveDailyEndpoints(self.fileManager, self.lp, rawDepthData, smoothDepthData)
 
 	def createDepthFigures(self, hourlyDelta=2):
 
