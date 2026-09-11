@@ -925,6 +925,9 @@ PIXEL_LENGTH = 0.1030168618          # cm per pixel
 THRESHOLD_SWEEP = [0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0]
 
 
+DIAGNOSTIC_KEYS = ('travel', 'residual', 'stdMean', 'stdMax')
+
+
 def load_depth_endpoints(fm):
     """Read DepthFiles/daily_endpoints.{npz,json}. Raises if absent."""
     d = fm.localProjectDir + 'DepthFiles/'
@@ -933,9 +936,14 @@ def load_depth_endpoints(fm):
         raise DepthFilesMissing('no DepthFiles/daily_endpoints.npz')
     with open(json_path) as f:
         meta = json.load(f)
+    extras = {}
     with np.load(npz_path) as z:
         raw = z['raw'].astype(np.float64)
         smooth = z['smooth'].astype(np.float64)
+        for k in DIAGNOSTIC_KEYS + ('trend',):
+            if k in z:
+                extras[k] = z[k].astype(np.float64)
+    meta['_extras'] = extras
     if raw.shape != smooth.shape:
         raise DepthFilesMissing('raw and smooth arrays disagree in shape')
     if raw.shape[0] != len(meta.get('days', [])):
@@ -1083,13 +1091,26 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
         })
 
     # --- half-resolution height maps for the browser ------------------------
+    extras = meta.get('_extras', {})
+    depth_dir = fm.localProjectDir + 'DepthFiles/'
     frames = []
     for i in range(n_days):
         entry = {}
         for key, arr in (('smoothFirst', smooth[i, 0]), ('smoothLast', smooth[i, 1]),
                          ('rawFirst', raw[i, 0]), ('rawLast', raw[i, 1])):
-            src, m = encode_depth(half(arr))
-            entry[key] = {'src': src, 'meta': m}
+            s, m = encode_depth(half(arr))
+            entry[key] = {'src': s, 'meta': m}
+        for key, arr in (('travel', extras.get('travel')),
+                         ('stdMean', extras.get('stdMean')),
+                         ('stdMax', extras.get('stdMax'))):
+            if arr is not None:
+                s, m = encode_depth(half(arr[i]))
+                entry[key] = {'src': s, 'meta': m}
+        # the depth camera stills copied out by depth_endpoints
+        for key, name in (('jpgFirst', days[i].get('first_jpg')),
+                          ('jpgLast', days[i].get('last_jpg'))):
+            if name and os.path.exists(depth_dir + name):
+                entry[key] = encode_image(cv2.imread(depth_dir + name), max_width=lp.width // 2)
         frames.append(entry)
 
     return {
@@ -1100,6 +1121,7 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
         'dailyThreshold': DAILY_THRESHOLD,
         'thresholdSweep': THRESHOLD_SWEEP,
         'days': day_stats, 'trials': trial_stats, 'frames': frames,
+        'hasStd': bool(meta.get('hasStd')), 'hasTravel': bool(meta.get('hasTravel')),
         'baselines': {str(k): v for k, v in baseline_index.items()},
         'built': str(datetime.datetime.now().replace(microsecond=0)),
         'branch': fm.branch_name,
@@ -1239,24 +1261,41 @@ function diff(a, b) {
 
 function mapPanel(values, caption, opts) {
   opts = opts || {};
-  const range = opts.range === undefined ? 2 : opts.range;
+  // three scales: signed change about zero, absolute height, and one-sided
+  // diagnostics like variability where only the magnitude means anything
+  let lo, hi, label;
+  if (opts.absolute) {
+    const fin = Array.from(values).filter(v => !Number.isNaN(v));
+    fin.sort((a,b) => a-b);
+    lo = fin.length ? fin[Math.floor(fin.length*0.02)] : 0;
+    hi = fin.length ? fin[Math.floor(fin.length*0.98)] : 1;
+    label = ['%L cm', 'sensor distance', '%H cm'];
+  } else if (opts.positive !== undefined) {
+    lo = 0; hi = opts.positive;
+    label = ['0', 'higher is worse', '%H cm'];
+  } else {
+    hi = opts.range === undefined ? 2 : opts.range; lo = -hi;
+    label = ['%L cm', 'pit \u2190 0 \u2192 castle', '+%H cm'];
+  }
+  const range = hi;
   const fig = document.createElement('figure');
+  const fmt = s => s.replace('%L', lo.toFixed(2)).replace('%H', hi.toFixed(2));
   fig.innerHTML = '<div class="stage"><canvas width="' + W + '" height="' + H + '"></canvas>' +
     '<span class="readout">—</span></div><div class="scalebar"></div>' +
-    '<div class="scalelab"><span>-' + range + ' cm</span><span>pit &larr; 0 &rarr; castle</span>' +
-    '<span>+' + range + ' cm</span></div>' +
+    '<div class="scalelab"><span>' + fmt(label[0]) + '</span><span>' + label[1] +
+    '</span><span>' + fmt(label[2]) + '</span></div>' +
     '<figcaption>' + caption + '</figcaption>';
   const canvas = fig.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(W, H);
-  const thr = opts.threshold || 0;
+  const thr = (opts.absolute || opts.positive !== undefined) ? 0 : (opts.threshold || 0);
   for (let i = 0, p = 0; i < values.length; i++, p += 4) {
     const v = values[i];
     if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
     if (thr && Math.abs(v) < thr) {           // below threshold: grey, not coloured
       img.data[p]=img.data[p+1]=img.data[p+2]=44; img.data[p+3]=255; continue;
     }
-    const [r,g,b] = jet((v + range) / (2*range));
+    const [r,g,b] = jet((v - lo) / (hi - lo));
     img.data[p]=r; img.data[p+1]=g; img.data[p+2]=b; img.data[p+3]=255;
   }
   ctx.putImageData(img, 0, 0);
@@ -1272,6 +1311,14 @@ function mapPanel(values, caption, opts) {
     ro.textContent = (Number.isNaN(v) ? 'no data' : (v>=0?'+':'') + v.toFixed(2) + ' cm') +
                      '  ·  ' + x + ', ' + y;
   });
+  return fig;
+}
+
+function photoPanel(src, caption) {
+  const fig = document.createElement('figure');
+  fig.innerHTML = (src ? '<div class="stage"><img src="' + src + '" alt=""></div>'
+                       : '<div class="stage" style="aspect-ratio:4/3"></div>') +
+                  '<figcaption>' + caption + (src ? '' : ' — not in this bundle') + '</figcaption>';
   return fig;
 }
 
@@ -1325,6 +1372,15 @@ function renderLanding() {
   return box;
 }
 
+function trialBand(run, pad, bw, hgt) {
+  const x0 = pad + run.from*bw, x1 = pad + (run.to+1)*bw;
+  const shade = run.trial % 2 ? 'rgba(242,163,60,.07)' : 'rgba(111,178,232,.07)';
+  return '<rect x="' + x0 + '" y="' + (pad-6) + '" width="' + (x1-x0) + '" height="' +
+         (hgt-pad-(pad-6)) + '" fill="' + shade + '"/>' +
+         '<text x="' + ((x0+x1)/2) + '" y="' + (pad+8) + '" fill="#93a0b0" font-size="12" ' +
+         'text-anchor="middle">Trial ' + run.trial + '</text>';
+}
+
 function dailyChart() {
   const host = document.createElement('div');
   host.className = 'chart';
@@ -1334,12 +1390,22 @@ function dailyChart() {
   const max = Math.max(1, ...vals, ...over.filter(v => v !== null));
   const w = 1000, hgt = 230, pad = 34, bw = (w - 2*pad) / days.length;
   let s = '';
+  // a band and a label per trial, so each day's trial is obvious
+  let run = null;
+  days.forEach((d, i) => {
+    if (!run || run.trial !== d.trial) {
+      if (run) s += trialBand(run, pad, bw, hgt);
+      run = { trial: d.trial, from: i, to: i };
+    } else run.to = i;
+  });
+  if (run) s += trialBand(run, pad, bw, hgt);
   days.forEach((d, i) => {
     const x = pad + i*bw;
     const hh = (vals[i]/max) * (hgt - 2*pad);
     s += '<rect x="' + (x+1) + '" y="' + (hgt-pad-hh) + '" width="' + (bw-2) + '" height="' + hh +
-         '" fill="' + (d.partial ? '#6b5334' : 'var(--tray)') + '"><title>Day ' + i + ' (' + d.date +
-         ') daily ' + vals[i] + ' cm³' + (d.partial ? ', partial day' : '') + '</title></rect>';
+         '" fill="' + (d.partial ? '#6b5334' : 'var(--tray)') + '"><title>Trial ' + d.trial +
+         ', day ' + i + ' (' + d.date + ') daily ' + vals[i] + ' cm³' +
+         (d.partial ? ', partial day' : '') + '</title></rect>';
     if (over[i] !== null) {
       const oh = (over[i]/max) * (hgt - 2*pad);
       s += '<rect x="' + (x+bw*0.3) + '" y="' + (hgt-pad-oh) + '" width="' + (bw*0.4) +
@@ -1373,7 +1439,7 @@ function renderTrial(t) {
   const bar = document.createElement('div');
   bar.className = 'bar';
   bar.innerHTML = '<label>Threshold <b id="thv">' + threshold.toFixed(2) + '</b> cm</label>' +
-    '<input type="range" id="thr" min="0.1" max="3" step="0.05" value="' + threshold + '">' +
+    '<input type="range" id="thr" min="0" max="3" step="0.05" value="' + threshold + '">' +
     '<button id="rawBtn" aria-pressed="false">Show raw instead of interpolated</button>' +
     '<span class="spacer"></span><span class="stat" id="dayInfo"></span>';
   box.appendChild(bar);
@@ -1394,9 +1460,10 @@ function renderTrial(t) {
 
   const noteSlot = document.createElement('div');
   box.appendChild(noteSlot);
-  const grid = document.createElement('div');
-  grid.className = 'grid';
-  box.appendChild(grid);
+  const rowA = document.createElement('div'); rowA.className = 'grid';
+  const hB = document.createElement('h2'); hB.textContent = 'Raw against interpolated, and sensor variability';
+  const rowB = document.createElement('div'); rowB.className = 'grid';
+  box.appendChild(rowA); box.appendChild(hB); box.appendChild(rowB);
   const tableSlot = document.createElement('div');
   box.appendChild(tableSlot);
 
@@ -1426,20 +1493,53 @@ function renderTrial(t) {
     loadAll(need).then(() => {
       const first = decode(showRaw ? f.rawFirst : f.smoothFirst);
       const last = decode(showRaw ? f.rawLast : f.smoothLast);
-      grid.textContent = '';
-      grid.appendChild(mapPanel(diff(first, last),
+
+      // row one: what the camera saw, and what changed
+      rowA.textContent = '';
+      rowA.appendChild(photoPanel(f.jpgFirst, '<b>Depth camera</b> — morning, ' + d.firstTime));
+      rowA.appendChild(photoPanel(f.jpgLast, '<b>Depth camera</b> — evening, ' + d.lastTime));
+      rowA.appendChild(mapPanel(diff(decode(baseline.smoothFirst), decode(f.smoothLast)),
+        '<b>Cumulative</b> — trial start to the end of this day',
+        { threshold: threshold, range: 4 }));
+      rowA.appendChild(mapPanel(diff(first, last),
         '<b>Daily change</b> — ' + d.firstTime + ' to ' + d.lastTime +
         (showRaw ? ', from the raw frames' : ''), { threshold: threshold }));
-      grid.appendChild(mapPanel(diff(decode(baseline.smoothFirst), decode(f.smoothLast)),
-        '<b>Cumulative</b> — trial start to the end of this day', { threshold: threshold, range: 4 }));
       if (nextF) {
-        grid.appendChild(mapPanel(diff(last, decode(nextF.smoothFirst)),
-          '<b>Overnight</b> — ' + d.lastTime + ' to ' + D.days[selected+1].firstTime +
-          ' the next morning', { threshold: threshold }));
+        rowA.appendChild(mapPanel(diff(last, decode(nextF.smoothFirst)),
+          '<b>Overnight</b> — ' + d.lastTime + ' to ' + D.days[selected+1].firstTime,
+          { threshold: threshold }));
+      } else {
+        rowA.appendChild(photoPanel(null, '<b>Overnight</b> — ' +
+          (d.overnightNote || 'no following day')));
       }
-      grid.appendChild(mapPanel(diff(decode(f.rawFirst), decode(f.smoothFirst)),
-        '<b>Raw minus interpolated</b>, morning frame — where the fill changed the surface',
-        { range: 0.5 }));
+
+      // row two: the interpolation, and the sensor variability behind it
+      rowB.textContent = '';
+      rowB.appendChild(mapPanel(decode(f.rawFirst), '<b>Raw</b> — morning frame',
+        { absolute: true }));
+      rowB.appendChild(mapPanel(decode(f.smoothFirst), '<b>Interpolated</b> — morning frame',
+        { absolute: true }));
+      rowB.appendChild(mapPanel(decode(f.rawLast), '<b>Raw</b> — evening frame',
+        { absolute: true }));
+      rowB.appendChild(mapPanel(decode(f.smoothLast), '<b>Interpolated</b> — evening frame',
+        { absolute: true }));
+      if (f.stdMean) {
+        rowB.appendChild(mapPanel(decode(f.stdMean),
+          '<b>Capture variability</b> — mean standard deviation across the ~30 captures ' +
+          'behind each frame, averaged over the day. Reflections off the water surface ' +
+          'show up here.', { positive: 1.0 }));
+      }
+      if (f.stdMax) {
+        rowB.appendChild(mapPanel(decode(f.stdMax),
+          '<b>Worst capture variability</b> — the highest value any frame reached today',
+          { positive: 2.0 }));
+      }
+      if (f.travel) {
+        rowB.appendChild(mapPanel(decode(f.travel),
+          '<b>Total travel</b> — how far each pixel moved over the day, summed. ' +
+          'Steady building gives a small number; churn gives a large one.',
+          { positive: 6.0 }));
+      }
 
       tableSlot.textContent = '';
       const h = document.createElement('h2'); h.textContent = 'Volumes';

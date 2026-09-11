@@ -159,7 +159,7 @@ elif args.AnalysisType == 'Depth':
 		s_dt.to_csv(fm_obj.localSummaryFile, index = True)
 		fm_obj.uploadData(fm_obj.localSummaryFile)
 
-	
+	"""
 	writer = pypdf.PdfWriter()
 	for projectID in s_dt[(s_dt.Depth == True)].index.to_list():
 		fm_obj.setProjectID(projectID)
@@ -173,7 +173,7 @@ elif args.AnalysisType == 'Depth':
 	print('Finished analysis: ' + str(datetime.datetime.now()), flush = True)
 	print(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf')
 	fm_obj.uploadData(fm_obj.localAnalysisStatesDir + 'Collated_DepthSummary.pdf')
-	
+	"""
 elif args.AnalysisType == 'Cluster':
 	from data_preparers.cluster_preparer import ClusterPreparer as CP
 	print('The following projectIDs will be analyzed for ' + args.AnalysisType + ': ' + ','.join(projectIDs))

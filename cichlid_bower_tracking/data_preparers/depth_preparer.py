@@ -95,6 +95,8 @@ class DepthPreparer:
 		
 		# Create arrays to store raw depth data and data in the daytime
 		rawDepthData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
+		rawStdData = np.empty(shape = (len(self.lp.frames), self.lp.height, self.lp.width))
+		
 		#daytimeData = np.empty(shape = (sum([x.lof for x in self.lp.frames]), self.lp.height, self.lp.width))
 
 		# Read in each frame and store it. Also keep track of the indeces that are in the daytime
@@ -105,12 +107,14 @@ class DepthPreparer:
 		for i, frame in enumerate(self.lp.frames):
 			try:
 				data = np.load(self.fileManager.localProjectDir + frame.npy_file)
-
+				data_std = np.load(self.fileManager.localProjectDir + frame.std_file)
 			except (FileNotFoundError,EOFError):
 				print('Bad frame: ' + str(i) + ', ' + frame.npy_file)
 				rawDepthData[i] = rawDepthData[i-1]
+				rawStdData[i] = rawStdData[i-1]
 			else:
 				rawDepthData[i] = data
+				rawStdData[i] = data_std
 
 		crop = eval('[' + open(self.fileManager.localDepthCropFile).read() + ']')
 		gy, gx = np.mgrid[0:self.lp.height, 0:self.lp.width]
@@ -179,7 +183,7 @@ class DepthPreparer:
 						pdb.set_trace()
 		# Smooth data with savgol_filter
 		np.save(self.fileManager.localSmoothDepthFile, smoothDepthData)
-		saveDailyEndpoints(self.fileManager, self.lp, rawDepthData, smoothDepthData)
+		saveDailyEndpoints(self.fileManager, self.lp, rawDepthData, smoothDepthData, rawStdData)
 
 	def createDepthFigures(self, hourlyDelta=2):
 
