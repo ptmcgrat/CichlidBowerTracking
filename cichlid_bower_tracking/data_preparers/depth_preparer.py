@@ -5,6 +5,7 @@ import numpy as np
 import pdb, os, sys, datetime, warnings, copy, subprocess, shutil, io
 import matplotlib.pyplot as plt
 from matplotlib import path as mpl_path
+from helper_modules.depth_masking import trialChurnMask
 
 import matplotlib
 from PIL import Image,ImageDraw
@@ -129,17 +130,20 @@ class DepthPreparer:
 		interpDepthData = rawDepthData.copy()
 
 		for trial in self.lp.trials:
-			# Loop through each day and interpolate missing data
-			for start_f,stop_f in trial.days:
-				dailyData = interpDepthData[start_f.index:stop_f.index+1] # Create view of numpy array just creating a single day during the daytime
-				median_height = np.nanmedian(dailyData)
+			for start_f, stop_f in trial.days:          # pass one: temporal
+				day = interpDepthData[start_f.index:stop_f.index + 1]
+				day[:] = interpolate_time(day, min_good=goodDataCutoff)
 
-				dailyData[(dailyData > median_height + 10) | (dailyData < median_height - 10)] = np.nan
-				
-				dailyData[:] = process_day(dailyData, usable=self.tray_mask, min_good=goodDataCutoff)
+			mask, stats = trialChurnMask(interpDepthData, self.lp, trial,
+										 tray_mask=self.tray_mask, k=5,
+										 std_mean=trial_std_mean)
+			if stats['applied']:
+				interpDepthData[trial_start:trial_stop][:, mask] = np.nan
 
-				#dailyData = scipy.signal.savgol_filter(dailyData, tunits, order, axis = 0, mode = 'mirror')
-
+			for start_f, stop_f in trial.days:          # pass two: spatial, fills the mask
+				day = interpDepthData[start_f.index:stop_f.index + 1]
+				day[:] = interpolate_space(day, usable=self.tray_mask)
+		
 		# Save interpolated data
 		np.save(self.fileManager.localSmoothDepthFile, interpDepthData)
 		# Smooth and filter out bad data 
