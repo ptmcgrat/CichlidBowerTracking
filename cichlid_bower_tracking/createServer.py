@@ -115,9 +115,13 @@ def depth_stats(arr, crop_mask):
 
 
 def filtered_change(first, last):
-    """Depth change with out-of-tray pixels removed, matching the filter that
-    PrepPreparer._cropDepth applies before showing the crop image."""
-    difference = last - first
+    """Height change between two depth frames, with out-of-tray pixels removed.
+
+    The stored arrays are distance from the sensor, so sand that has been built
+    up reads *smaller*. Subtracting later from earlier therefore gives height
+    gained: positive is a castle, negative is a pit. This matches
+    DepthAnalyzer.returnHeightChange."""
+    difference = first - last
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', category=RuntimeWarning)
         average = np.nanmean([last, first], axis=0)
@@ -273,7 +277,7 @@ def build_prep_payload(fm, lp, trial_status, pairs):
                 cv2.imread(sides['Last']['pi_jpg']), transM, (lp.width, lp.height))),
             'change': {'src': t_src, 'meta': t_meta,
                        'stats': depth_stats(t_change, crop_mask),
-                       'label': 'Trial ' + str(i) + ', last frame minus first'},
+                       'label': 'Trial ' + str(i) + ' — height change, positive is sand added'},
         }
 
         # The reset frame only exists in the original PrepFiles.
@@ -283,7 +287,7 @@ def build_prep_payload(fm, lp, trial_status, pairs):
             r_src, r_meta = encode_depth(r_change)
             panels['resetChange'] = {'src': r_src, 'meta': r_meta,
                                      'stats': depth_stats(r_change, crop_mask),
-                                     'label': 'Trial ' + str(i) + ', last frame minus reset'}
+                                     'label': 'Trial ' + str(i) + ' — change since the tank reset'}
         entry['panels'] = panels
         entry['gaps'] = {side: sides[side]['gapMinutes'] for side, _ in TRIAL_SIDES}
         trials.append(entry)
