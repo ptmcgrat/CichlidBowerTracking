@@ -1072,6 +1072,8 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
         idx = [i for i, d in enumerate(days) if d['trial'] == t]
         baseline_index[t] = idx[0]
 
+    extras = meta.get('_extras', {})
+
     # --- volumes, at full resolution ---------------------------------------
     day_stats = []
     for i, d in enumerate(days):
@@ -1097,6 +1099,53 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
             entry['overnight'] = None
         day_stats.append(entry)
 
+    def trial_travel(idx, total_net):
+        """Travel summed over a trial's days, per lights-on hour.
+
+        Travel from sensor noise grows linearly with frame count, so dividing by
+        hours gives a rate that is comparable across trials of different length.
+        Subtracting |net| removes the part of the movement that actually went
+        somewhere, so a pixel that genuinely built a lot cannot be flagged."""
+        travel = extras.get('travel')
+        if travel is None:
+            return None
+        total = np.nansum(np.stack([travel[i] for i in idx]), axis=0)
+        hours = 0.0
+        for i in idx:
+            t0 = datetime.datetime.fromisoformat(days[i]['first_time'])
+            t1 = datetime.datetime.fromisoformat(days[i]['last_time'])
+            hours += (t1 - t0).total_seconds() / 3600.0
+        if hours <= 0:
+            return None
+        rate = total / hours
+        excess = (total - np.abs(total_net)) / hours
+
+        v = excess[np.isfinite(excess) & (excess > 0)]
+        stats = {'hours': round(hours, 1), 'nDays': len(idx)}
+        if v.size:
+            lv = np.log(v)
+            lmed = float(np.median(lv))
+            lmad = float(np.median(np.abs(lv - lmed))) * 1.4826
+            stats.update({
+                'median': round(float(np.exp(lmed)), 4),
+                'madFactor': round(float(np.exp(lmad)), 3),
+                'p50': round(float(np.percentile(v, 50)), 4),
+                'p90': round(float(np.percentile(v, 90)), 4),
+                'p99': round(float(np.percentile(v, 99)), 4),
+                'max': round(float(v.max()), 3),
+            })
+            # what a cut at each k would remove, so the choice can be made by eye
+            stats['cuts'] = [{'k': k,
+                              'value': round(float(np.exp(lmed + k * lmad)), 4),
+                              'masked': round(100.0 * float(np.count_nonzero(v > np.exp(lmed + k * lmad))) / v.size, 2)}
+                             for k in (1, 1.5, 2, 2.5, 3, 4, 5, 6)]
+            counts, edges = np.histogram(lv, bins=48)
+            stats['hist'] = {'counts': counts.tolist(),
+                             'edges': [round(float(np.exp(e)), 4) for e in edges]}
+        return {'rate': dict(zip(('src', 'meta'), encode_depth(half(rate)))),
+                'excess': dict(zip(('src', 'meta'), encode_depth(half(excess)))),
+                'stats': stats}
+
     # --- per-trial totals and the threshold sweep ---------------------------
     trial_stats = []
     for t in trials:
@@ -1113,6 +1162,7 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
                             'meta': encode_depth(half(rc))[1],
                             'volumes': volume_summary(rc, TOTAL_THRESHOLD)}
         trial_stats.append({
+            'travel': trial_travel(idx, total),
             'trial': t, 'firstDay': b, 'lastDay': e, 'nDays': len(idx),
             'start': days[b]['first_time'], 'stop': days[e]['last_time'],
             'total': volume_summary(total, TOTAL_THRESHOLD),
@@ -1122,7 +1172,6 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
         })
 
     # --- half-resolution height maps for the browser ------------------------
-    extras = meta.get('_extras', {})
     depth_dir = fm.localProjectDir + 'DepthFiles/'
     # the interpolated array is range-filtered, so it defines what counts as sand
     s_finite = smooth[np.isfinite(smooth)]
@@ -1308,6 +1357,9 @@ function mapPanel(values, caption, opts) {
     lo = fin.length ? fin[Math.floor(fin.length*0.02)] : 0;
     hi = fin.length ? fin[Math.floor(fin.length*0.98)] : 1;
     label = ['%L cm', 'sensor distance', '%H cm'];
+  } else if (opts.log) {
+    lo = opts.log[0]; hi = opts.log[1];
+    label = ['%L cm/h', 'log scale', '%H cm/h'];
   } else if (opts.positive !== undefined) {
     lo = 0; hi = opts.positive;
     label = ['0', 'higher is worse', '%H cm'];
@@ -1326,14 +1378,17 @@ function mapPanel(values, caption, opts) {
   const canvas = fig.querySelector('canvas');
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(W, H);
-  const thr = (opts.absolute || opts.fixed || opts.positive !== undefined) ? 0 : (opts.threshold || 0);
+  const thr = (opts.absolute || opts.fixed || opts.log || opts.positive !== undefined) ? 0 : (opts.threshold || 0);
   for (let i = 0, p = 0; i < values.length; i++, p += 4) {
     const v = values[i];
     if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
     if (thr && Math.abs(v) < thr) {           // below threshold: grey, not coloured
       img.data[p]=img.data[p+1]=img.data[p+2]=44; img.data[p+3]=255; continue;
     }
-    const [r,g,b] = jet((v - lo) / (hi - lo));
+    const frac = opts.log
+      ? (Math.log(Math.max(v, 1e-6)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo))
+      : (v - lo) / (hi - lo);
+    const [r,g,b] = jet(frac);
     img.data[p]=r; img.data[p+1]=g; img.data[p+2]=b; img.data[p+3]=255;
   }
   ctx.putImageData(img, 0, 0);
@@ -1610,6 +1665,7 @@ function renderTrial(t) {
         ' cm total). The threshold slider changes only what is coloured in the maps.';
       tableSlot.appendChild(p);
       tableSlot.appendChild(sweepChart(t));
+      tableSlot.appendChild(travelSection(t));
     });
   }
 
@@ -1619,6 +1675,82 @@ function renderTrial(t) {
     draw();
   });
   draw();
+  return box;
+}
+
+function travelSection(t) {
+  const box = document.createElement('div');
+  if (!t.travel || !t.travel.stats.hist) return box;
+  const s = t.travel.stats;
+  const h = document.createElement('h2');
+  h.textContent = 'Travel rate over the whole trial';
+  box.appendChild(h);
+
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  const hi = Math.max(s.max, s.median * 4);
+  loadAll([t.travel.rate, t.travel.excess]).then(() => {
+    grid.appendChild(mapPanel(decode(t.travel.rate),
+      '<b>Travel rate</b> — total movement per lights-on hour, over ' + s.nDays +
+      ' days and ' + s.hours + ' h. Log scale.', { log: [s.median / 2, hi] }));
+    grid.appendChild(mapPanel(decode(t.travel.excess),
+      '<b>Excess travel rate</b> — the same with |net change| subtracted, so a ' +
+      'pixel that genuinely built a lot cannot look like churn. Log scale.',
+      { log: [s.median / 2, hi] }));
+  });
+  box.appendChild(grid);
+
+  const chart = document.createElement('div');
+  chart.className = 'chart';
+  chart.style.marginTop = '16px';
+  const c = s.hist.counts, e = s.hist.edges;
+  const w = 1000, hgt = 230, pad = 36;
+  const maxc = Math.max(...c);
+  const lx = v => pad + (Math.log(v) - Math.log(e[0])) /
+                  (Math.log(e[e.length-1]) - Math.log(e[0])) * (w - 2*pad);
+  let g = '';
+  c.forEach((n, i) => {
+    const x0 = lx(e[i]), x1 = lx(e[i+1]);
+    const bh = (n / maxc) * (hgt - 2*pad);
+    g += '<rect x="' + x0 + '" y="' + (hgt-pad-bh) + '" width="' + Math.max(1, x1-x0-1) +
+         '" height="' + bh + '" fill="var(--tray)" opacity="0.75"><title>' +
+         e[i].toFixed(3) + ' to ' + e[i+1].toFixed(3) + ' cm/h: ' + n + ' pixels</title></rect>';
+  });
+  s.cuts.forEach(cut => {
+    const x = lx(cut.value);
+    if (x < pad || x > w-pad) return;
+    g += '<line x1="' + x + '" y1="' + (pad-4) + '" x2="' + x + '" y2="' + (hgt-pad) +
+         '" stroke="#6fb2e8" stroke-width="1" stroke-dasharray="3 3"/>' +
+         '<text x="' + x + '" y="' + (pad-8) + '" fill="#6fb2e8" font-size="11" ' +
+         'text-anchor="middle">k=' + cut.k + '</text>';
+  });
+  g += '<line x1="' + pad + '" y1="' + (hgt-pad) + '" x2="' + (w-pad) + '" y2="' + (hgt-pad) +
+       '" stroke="#262d38"/>';
+  [e[0], s.median, s.p99, e[e.length-1]].forEach(v => {
+    const x = lx(v);
+    g += '<text x="' + x + '" y="' + (hgt-pad+15) + '" fill="#93a0b0" font-size="11" ' +
+         'text-anchor="middle">' + v.toFixed(2) + '</text>';
+  });
+  chart.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" preserveAspectRatio="none">' + g +
+    '</svg><p class="stat" style="margin:6px 0 0">Excess travel rate per pixel, cm/h, log axis. ' +
+    'Dashed lines are cuts at median &times; MAD<sup>k</sup>.</p>';
+  box.appendChild(chart);
+
+  const tbl = document.createElement('table');
+  tbl.className = 'vol';
+  tbl.style.marginTop = '14px';
+  tbl.innerHTML = '<tr><th>cut</th><th>rate cm/h</th><th>tray masked</th></tr>' +
+    s.cuts.map(cut => '<tr><td>k = ' + cut.k + '</td><td>' + cut.value + '</td><td>' +
+      cut.masked + ' %</td></tr>').join('');
+  box.appendChild(tbl);
+
+  const p = document.createElement('p');
+  p.className = 'stat';
+  p.style.marginTop = '8px';
+  p.innerHTML = 'median <b>' + s.median + '</b> cm/h &middot; MAD factor <b>&times;' +
+    s.madFactor + '</b> &middot; 90th <b>' + s.p90 + '</b> &middot; 99th <b>' + s.p99 +
+    '</b> &middot; max <b>' + s.max + '</b>';
+  box.appendChild(p);
   return box;
 }
 
