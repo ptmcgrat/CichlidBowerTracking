@@ -2,6 +2,7 @@ import argparse, base64, datetime, glob, json, os, re, shutil, subprocess, sys, 
 
 import cv2
 import numpy as np
+import pandas as pd
 from skimage import morphology
 
 from helper_modules.file_manager import FileManager as FM
@@ -788,6 +789,8 @@ function card(p) {
     flag = '<span class="flag warn">Needs PrepFiles2</span>';
   else if (p.status === 'needs_depthfiles')
     flag = '<span class="flag warn">Needs DepthFiles</span>';
+  else if (p.status === 'needs_clusters')
+    flag = '<span class="flag warn">Needs cluster file</span>';
   else if (p.status === 'failed') flag = '<span class="flag fail">Build failed</span>';
   else if (p.missing) flag = '<span class="flag warn">' + p.missing + ' incomplete</span>';
   el.innerHTML =
@@ -1764,6 +1767,543 @@ def write_depth(path, analysis_id, payload):
     return os.path.getsize(path)
 
 
+# ============================================================= cluster viewer
+
+class ClusterFileMissing(Exception):
+    """AllLabeledClusters.csv is what the Cluster page is built on."""
+    pass
+
+
+# the ten codes, their labels and colours, from DepthAnalyzer
+BID_LABELS = {'c': 'bower scoop', 'p': 'bower spit', 'b': 'bower multiple',
+              'f': 'feed scoop', 't': 'feed spit', 'm': 'feed multiple',
+              's': 'spawn', 'd': 'drop sand', 'o': 'fish other', 'x': 'no fish other'}
+BID_COLORS = {'c': '#4f7fe8', 'p': '#4f7fe8', 'b': '#4f7fe8',
+              'f': '#f2a33c', 't': '#f2a33c', 'm': '#f2a33c',
+              's': '#e884a8', 'd': '#5aa87a', 'o': '#5aa87a', 'x': '#8a9099'}
+BID_GROUPS = [('Building', ['c', 'p', 'b'], '#4f7fe8'),
+              ('Feeding', ['f', 't', 'm'], '#f2a33c'),
+              ('Spawning', ['s'], '#e884a8'),
+              ('Other', ['d', 'o'], '#5aa87a'),
+              ('No fish', ['x'], '#8a9099')]
+CONFIDENCE = 0.67
+
+
+def load_clusters(fm):
+    """Read AllLabeledClusters.csv. Raises if it is not there."""
+    path = fm.localAllLabeledClustersFile
+    if not os.path.exists(path):
+        raise ClusterFileMissing('no AllLabeledClusters.csv')
+    dt = pd.read_csv(path, index_col='TimeStamp', parse_dates=True)
+    for col in ('X', 'Y', 'Prediction'):
+        if col not in dt.columns:
+            raise ClusterFileMissing('column ' + col + ' is missing from the cluster file')
+    return dt.sort_index()
+
+
+def in_crop(dt, video_points, buffer_px=20):
+    """Which events fall inside the video crop.
+
+    Recomputed here rather than trusting the InFrame column, because the crop
+    can be redrawn after the cluster analysis ran and the point of this view is
+    to see what the *current* crop would discard. Note the coordinate order:
+    cluster X is the row index and Y the column, so the point is (Y, X).
+    """
+    from shapely.geometry import Point, Polygon
+    poly = Polygon(video_points).buffer(buffer_px, join_style=2)
+    return dt.apply(lambda r: poly.contains(Point(r['Y'], r['X'])), axis=1)
+
+
+def pack(arr, dtype):
+    """A numeric column as base64, so the browser gets a typed array."""
+    return base64.b64encode(np.ascontiguousarray(arr, dtype=dtype).tobytes()).decode('ascii')
+
+
+def build_cluster_payload(fm, lp, dt, video_points, depth_points, transM):
+    """Every event, packed, so the page can re-filter without a rebuild.
+
+    The confidence cut, the crop test and the category grouping all happen in the
+    browser. That keeps the slider live, lets the density map bin whatever is
+    currently selected, and means the spatial statistics are computed on exactly
+    the events on screen.
+    """
+    inside = in_crop(dt, video_points)
+    has_clip = (dt['ClipCreated'] == 'Yes') if 'ClipCreated' in dt.columns \
+        else pd.Series(True, index=dt.index)
+    prob = dt['Probability'] if 'Probability' in dt.columns \
+        else pd.Series(1.0, index=dt.index)
+
+    bids = list(BID_LABELS)
+    bid_index = dt['Prediction'].map({b: i for i, b in enumerate(bids)})
+    bid_index = bid_index.fillna(255).astype(np.uint8)      # 255: no prediction
+
+    # depth-space coordinates, so distances come out in cm. Cluster X is the row
+    # index and Y the column, so the transform takes (Y, X).
+    yy = dt['Y'].to_numpy(float)
+    xx = dt['X'].to_numpy(float)
+    w = transM[2][0] * yy + transM[2][1] * xx + transM[2][2]
+    xd = (transM[0][0] * yy + transM[0][1] * xx + transM[0][2]) / w
+    yd = (transM[1][0] * yy + transM[1][1] * xx + transM[1][2]) / w
+
+    times = dt.index
+    day0 = times.normalize().min()
+    day_index = (times.normalize() - day0).days.to_numpy()
+
+    trial_index = np.zeros(len(dt), np.uint8)
+    trials = []
+    for i, trial in enumerate(lp.trials, 1):
+        sel = (times >= trial.startTime) & (times <= trial.stopTime)
+        trial_index[sel] = i
+        trials.append({'number': i, 'start': str(trial.startTime),
+                       'stop': str(trial.stopTime), 'n': int(sel.sum())})
+
+    flags = (inside.to_numpy().astype(np.uint8) |
+             (has_clip.to_numpy().astype(np.uint8) << 1))
+
+    events = {
+        'n': int(len(dt)),
+        'y': pack(np.clip(yy, 0, 65535), np.uint16),
+        'x': pack(np.clip(xx, 0, 65535), np.uint16),
+        'xd': pack(np.clip(xd, -32000, 32000), np.int16),
+        'yd': pack(np.clip(yd, -32000, 32000), np.int16),
+        'bid': pack(bid_index, np.uint8),
+        'prob': pack(np.clip(prob.fillna(0) * 255, 0, 255), np.uint8),
+        'flags': pack(flags, np.uint8),
+        'trial': pack(trial_index, np.uint8),
+        'hour': pack(times.hour.to_numpy(), np.uint8),
+        'day': pack(np.clip(day_index, 0, 65535), np.uint16),
+    }
+
+    return {
+        'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
+        'piSize': [int(lp.width), int(lp.height)],
+        'videoPoints': video_points, 'depthPoints': depth_points,
+        'labels': BID_LABELS, 'colours': BID_COLORS, 'bids': bids,
+        'groups': [{'name': n, 'bids': b, 'colour': c} for n, b, c in BID_GROUPS],
+        'confidence': CONFIDENCE, 'pixelLength': PIXEL_LENGTH,
+        'nTotal': int(len(dt)),
+        'nDays': int(day_index.max()) + 1 if len(dt) else 0,
+        'trials': trials, 'events': events,
+        'built': str(datetime.datetime.now().replace(microsecond=0)),
+        'branch': fm.branch_name,
+    }
+
+
+CLUSTER_PAGE = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root { --ink:#e8ecf1; --ink-dim:#93a0b0; --bg:#0e1116; --panel:#171c24;
+          --line:#262d38; --tray:#f2a33c; --video:#6fb2e8; --warn:#e0693f; --ok:#5aa87a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
+  .wrap { max-width:1400px; margin:0 auto; padding:24px 22px 80px; }
+  h1 { font-size:24px; font-weight:600; margin:0 0 3px; }
+  h2 { font-size:15px; font-weight:600; margin:26px 0 12px; }
+  .sub { color:var(--ink-dim); margin:0 0 18px; }
+  a { color:var(--tray); text-decoration:none; } a:hover { text-decoration:underline; }
+  .back { display:inline-block; margin-bottom:12px; font-size:13px; color:var(--ink-dim); }
+  .meta { display:flex; flex-wrap:wrap; gap:10px 26px; padding:14px 0 18px;
+          border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .meta div { font-size:13px; color:var(--ink-dim); }
+  .meta b { display:block; color:var(--ink); font-weight:500; font-variant-numeric:tabular-nums; }
+  .tabs { display:flex; gap:4px; margin:18px 0; flex-wrap:wrap; }
+  .tabs button { background:none; border:1px solid var(--line); color:var(--ink-dim);
+                 padding:8px 17px; border-radius:999px; cursor:pointer; font:inherit; font-size:14px; }
+  .tabs button[aria-selected="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .bar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:12px 0;
+         border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin-bottom:16px; }
+  .bar label { font-size:13px; color:var(--ink-dim); }
+  .bar input[type=range] { width:170px; accent-color:var(--tray); }
+  .bar b { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .bar button { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+                padding:7px 13px; border-radius:6px; font:inherit; font-size:13px; cursor:pointer; }
+  .bar button[aria-pressed="true"] { background:var(--tray); color:#141414; border-color:var(--tray); }
+  .spacer { flex:1; }
+  .stat { font-size:13px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); font-weight:500; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:18px; }
+  figure { margin:0; background:var(--panel); border:1px solid var(--line);
+           border-radius:8px; overflow:hidden; }
+  figcaption { padding:10px 13px; font-size:13px; color:var(--ink-dim); border-top:1px solid var(--line); }
+  figcaption b { color:var(--ink); font-weight:500; }
+  .stage { position:relative; line-height:0; background:#0b0d11; }
+  .stage canvas { width:100%; display:block; }
+  .chart { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .chart svg { width:100%; height:220px; display:block; }
+  table.t { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  table.t th, table.t td { text-align:right; padding:5px 9px; border-bottom:1px solid var(--line); }
+  table.t th:first-child, table.t td:first-child { text-align:left; }
+  table.t th { color:var(--ink-dim); font-weight:500; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; }
+  .note { background:rgba(224,105,63,.1); border:1px solid rgba(224,105,63,.35);
+          color:#f0c3ae; padding:10px 13px; border-radius:7px; font-size:13px; margin:0 0 14px; }
+  .foot { margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
+          color:var(--ink-dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">All projects in __ANALYSIS__</a>
+  <h1 id="title"></h1>
+  <p class="sub" id="sub"></p>
+  <div class="meta" id="meta"></div>
+  <div class="tabs" id="tabs" role="tablist"></div>
+  <div id="body"></div>
+  <p class="foot" id="foot"></p>
+</div>
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>
+const D = JSON.parse(document.getElementById('payload').textContent);
+const PW = D.piSize[0], PH = D.piSize[1];
+const CW = 620, CH = Math.round(620 * PH / PW);
+
+function unpack(b64, Type) {
+  const bin = atob(b64);
+  const buf = new ArrayBuffer(bin.length);
+  const u8 = new Uint8Array(buf);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return new Type(buf);
+}
+const E = {
+  n: D.events.n,
+  y: unpack(D.events.y, Uint16Array), x: unpack(D.events.x, Uint16Array),
+  xd: unpack(D.events.xd, Int16Array), yd: unpack(D.events.yd, Int16Array),
+  bid: unpack(D.events.bid, Uint8Array), prob: unpack(D.events.prob, Uint8Array),
+  flags: unpack(D.events.flags, Uint8Array), trial: unpack(D.events.trial, Uint8Array),
+  hour: unpack(D.events.hour, Uint8Array), day: unpack(D.events.day, Uint16Array),
+};
+const BID_OF = {}; D.bids.forEach((b, i) => BID_OF[b] = i);
+const NO_PRED = 255;
+
+const state = { confidence: D.confidence, density: true, requireClip: true, requireCrop: true };
+
+function select(trial, bids) {
+  const want = bids ? new Set(bids.map(b => BID_OF[b])) : null;
+  const cut = Math.round(state.confidence * 255);
+  const idx = [];
+  for (let i = 0; i < E.n; i++) {
+    if (trial && E.trial[i] !== trial) continue;
+    if (E.bid[i] === NO_PRED) continue;
+    if (want && !want.has(E.bid[i])) continue;
+    if (E.prob[i] < cut) continue;
+    if (state.requireClip && !(E.flags[i] & 2)) continue;
+    if (state.requireCrop && !(E.flags[i] & 1)) continue;
+    idx.push(i);
+  }
+  return idx;
+}
+
+function excluded(trial, kind) {
+  const cut = Math.round(state.confidence * 255);
+  const idx = [];
+  for (let i = 0; i < E.n; i++) {
+    if (trial && E.trial[i] !== trial) continue;
+    if (kind === 'noClip') { if (!(E.flags[i] & 2)) idx.push(i); continue; }
+    if (kind === 'outside') { if (!(E.flags[i] & 1)) idx.push(i); continue; }
+    if (kind === 'lowConf') {
+      if (E.bid[i] !== NO_PRED && E.prob[i] < cut && (E.flags[i] & 3) === 3) idx.push(i);
+      continue;
+    }
+    if (kind === 'noPred') { if (E.bid[i] === NO_PRED) idx.push(i); continue; }
+  }
+  return idx;
+}
+
+// ------------------------------------------------------------ spatial spread
+function stats(idx) {
+  const n = idx.length;
+  if (n < 3) return { n: n };
+  const L = D.pixelLength;
+  let mx = 0, my = 0;
+  for (const i of idx) { mx += E.xd[i]; my += E.yd[i]; }
+  mx /= n; my /= n;
+  let sxx = 0, syy = 0, sxy = 0;
+  for (const i of idx) {
+    const dx = E.xd[i] - mx, dy = E.yd[i] - my;
+    sxx += dx*dx; syy += dy*dy; sxy += dx*dy;
+  }
+  sxx /= n; syy /= n; sxy /= n;
+  const sd = Math.sqrt(sxx + syy) * L;              // RMS distance from the centroid
+  const tr = sxx + syy, det = sxx*syy - sxy*sxy;    // dispersion ellipse
+  const root = Math.sqrt(Math.max(0, tr*tr/4 - det));
+  const major = Math.sqrt(Math.max(0, tr/2 + root)) * L;
+  const minor = Math.sqrt(Math.max(0, tr/2 - root)) * L;
+  const angle = 0.5 * Math.atan2(2*sxy, sxx - syy) * 180 / Math.PI;
+  return { n, cx: mx*L, cy: my*L, sd, major, minor, angle,
+           anisotropy: major > 0 ? minor/major : 0 };
+}
+
+function separation(a, b) {
+  if (!a.sd || !b.sd) return null;
+  const d = Math.hypot(a.cx - b.cx, a.cy - b.cy);
+  return { distance: d, index: d / ((a.sd + b.sd) / 2) };
+}
+
+// ------------------------------------------------------------------ drawing
+function panel(idx, caption, colour, opts) {
+  opts = opts || {};
+  const fig = document.createElement('figure');
+  fig.innerHTML = '<div class="stage"><canvas width="' + CW + '" height="' + CH +
+                  '"></canvas></div><figcaption>' + caption + '</figcaption>';
+  const canvas = fig.querySelector('canvas'), ctx = canvas.getContext('2d');
+  const sx = CW / PW, sy = CH / PH;
+
+  ctx.fillStyle = '#0b0d11'; ctx.fillRect(0, 0, CW, CH);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(111,178,232,.7)'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  D.videoPoints.forEach((p, i) =>
+    i ? ctx.lineTo(p[0]*sx, p[1]*sy) : ctx.moveTo(p[0]*sx, p[1]*sy));
+  ctx.closePath(); ctx.stroke(); ctx.restore();
+
+  if (state.density && idx.length) {
+    // binning keeps this constant-time however many events there are, which
+    // matters once a trial runs to hundreds of thousands
+    const BX = 124, BY = Math.max(1, Math.round(124 * PH / PW));
+    const bins = new Float32Array(BX * BY);
+    for (const i of idx) {
+      const bx = Math.min(BX-1, Math.floor(E.y[i] / PW * BX));
+      const by = Math.min(BY-1, Math.floor(E.x[i] / PH * BY));
+      if (bx >= 0 && by >= 0) bins[by*BX + bx]++;
+    }
+    const sm = new Float32Array(bins.length);
+    for (let by = 0; by < BY; by++) for (let bx = 0; bx < BX; bx++) {
+      let s = 0, c = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const ny = by+dy, nx = bx+dx;
+        if (ny < 0 || nx < 0 || ny >= BY || nx >= BX) continue;
+        s += bins[ny*BX + nx]; c++;
+      }
+      sm[by*BX + bx] = s / c;
+    }
+    let max = 0;
+    for (let i = 0; i < sm.length; i++) if (sm[i] > max) max = sm[i];
+    if (max > 0) {
+      const cw = CW/BX, ch = CH/BY;
+      ctx.fillStyle = colour;
+      for (let by = 0; by < BY; by++) for (let bx = 0; bx < BX; bx++) {
+        const v = sm[by*BX + bx];
+        if (v <= 0) continue;
+        // log scale: a bower core is orders of magnitude denser than its edge
+        ctx.globalAlpha = Math.min(1, 0.08 + 0.92 * Math.log1p(v) / Math.log1p(max));
+        ctx.fillRect(bx*cw, by*ch, cw + 0.6, ch + 0.6);
+      }
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    ctx.fillStyle = colour;
+    ctx.globalAlpha = idx.length > 20000 ? 0.15 : (idx.length > 4000 ? 0.3 : 0.55);
+    const r = idx.length > 20000 ? 0.9 : 1.6;
+    for (const i of idx) {
+      ctx.beginPath(); ctx.arc(E.y[i]*sx, E.x[i]*sy, r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  if (opts.ellipse && opts.ellipse.n >= 3 && idx.length) {
+    const st = opts.ellipse, L = D.pixelLength;
+    let mx = 0, my = 0;
+    for (const i of idx) { mx += E.y[i]; my += E.x[i]; }
+    mx /= idx.length; my /= idx.length;
+    ctx.save();
+    ctx.translate(mx*sx, my*sy);
+    ctx.rotate(-st.angle * Math.PI / 180);
+    ctx.strokeStyle = '#fff'; ctx.globalAlpha = 0.8; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, (st.major/L)*sx, (st.minor/L)*sy, 0, 0, 6.2832);
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(mx*sx, my*sy, 3, 0, 6.2832); ctx.fill();
+  }
+  return fig;
+}
+
+function statTable(rows) {
+  const t = document.createElement('table');
+  t.className = 't';
+  t.innerHTML = '<tr><th>set</th><th>events</th><th>spread cm</th><th>major cm</th>' +
+    '<th>minor cm</th><th>minor/major</th><th>angle</th></tr>' +
+    rows.map(([name, s]) => s.n >= 3
+      ? '<tr><td>' + name + '</td><td>' + s.n + '</td><td>' + s.sd.toFixed(2) + '</td><td>' +
+        s.major.toFixed(2) + '</td><td>' + s.minor.toFixed(2) + '</td><td>' +
+        s.anisotropy.toFixed(2) + '</td><td>' + s.angle.toFixed(0) + '\u00b0</td></tr>'
+      : '<tr><td>' + name + '</td><td>' + s.n +
+        '</td><td colspan="5" style="text-align:left;color:#93a0b0">too few events</td></tr>')
+      .join('');
+  return t;
+}
+
+function renderTrial(tnum) {
+  const box = document.createElement('div');
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.innerHTML =
+    '<label>Confidence \u2265 <b id="cv">' + state.confidence.toFixed(2) + '</b></label>' +
+    '<input type="range" id="conf" min="0" max="0.99" step="0.01" value="' +
+      state.confidence + '">' +
+    '<button id="mode" aria-pressed="' + state.density + '">Density</button>' +
+    '<button id="clip" aria-pressed="' + state.requireClip + '">Clip required</button>' +
+    '<button id="crop" aria-pressed="' + state.requireCrop + '">Inside crop</button>' +
+    '<span class="spacer"></span><span class="stat" id="kept"></span>';
+  box.appendChild(bar);
+
+  const grid = document.createElement('div'); grid.className = 'grid';
+  box.appendChild(grid);
+  const sHead = document.createElement('h2'); sHead.textContent = 'Spatial spread';
+  const statSlot = document.createElement('div');
+  box.appendChild(sHead); box.appendChild(statSlot);
+  const exHead = document.createElement('h2'); exHead.textContent = 'What was set aside';
+  const exGrid = document.createElement('div'); exGrid.className = 'grid';
+  box.appendChild(exHead); box.appendChild(exGrid);
+
+  function draw() {
+    grid.textContent = ''; statSlot.textContent = ''; exGrid.textContent = '';
+    let kept = 0;
+    D.groups.forEach(g => {
+      const idx = select(tnum, g.bids);
+      kept += idx.length;
+      grid.appendChild(panel(idx, '<b>' + g.name + '</b> \u2014 ' + idx.length + ' events<br>' +
+        g.bids.map(b => D.labels[b]).join(', '), g.colour));
+    });
+
+    const scoop = select(tnum, ['c']), spit = select(tnum, ['p']);
+    const sS = stats(scoop), sP = stats(spit);
+    grid.appendChild(panel(scoop, '<b>Bower scoops</b> \u2014 ' + scoop.length +
+      ' events, with the dispersion ellipse', '#4f7fe8', { ellipse: sS }));
+    grid.appendChild(panel(spit, '<b>Bower spits</b> \u2014 ' + spit.length +
+      ' events, with the dispersion ellipse', '#7fb2f0', { ellipse: sP }));
+
+    statSlot.appendChild(statTable([
+      ['bower scoop (c)', sS], ['bower spit (p)', sP],
+      ['bower, all (c p b)', stats(select(tnum, ['c','p','b']))],
+      ['feeding (f t m)', stats(select(tnum, ['f','t','m']))],
+      ['spawning (s)', stats(select(tnum, ['s']))],
+    ]));
+    const sep = separation(sS, sP);
+    const p = document.createElement('p');
+    p.className = 'stat'; p.style.marginTop = '8px';
+    p.innerHTML = sep
+      ? 'Scoops and spits sit <b>' + sep.distance.toFixed(2) + ' cm</b> apart at the centroid, ' +
+        '<b>' + sep.index.toFixed(2) + '</b> times their mean spread. Above about 1 they occupy ' +
+        'distinguishable places; near 0 they are intermixed. Spread is the RMS distance from the ' +
+        'centroid; major and minor are the axes of the dispersion ellipse, so minor/major near 1 ' +
+        'is a circular scatter and near 0 is a line. All distances are in tray centimetres.'
+      : 'Not enough scoops or spits at this confidence to compare.';
+    statSlot.appendChild(p);
+
+    [['noClip', 'No clip created', '#e0693f',
+      'at the frame border, so no clip could be cut and they were never classified'],
+     ['outside', 'Outside the video crop', '#e0693f',
+      'using the crop as it stands now, not as it stood when the clusters were made'],
+     ['lowConf', 'Below the confidence cut', '#c48ce0',
+      'classified, but under ' + state.confidence.toFixed(2)],
+     ['noPred', 'No prediction', '#8a9099', 'an empty Prediction column']
+    ].forEach(([kind, name, colour, why]) => {
+      const idx = excluded(tnum, kind);
+      exGrid.appendChild(panel(idx, '<b>' + name + '</b> \u2014 ' + idx.length + '<br>' + why,
+        colour));
+    });
+
+    const total = (D.trials.find(t => t.number === tnum) || { n: 0 }).n;
+    bar.querySelector('#kept').innerHTML = '<b>' + kept + '</b> of ' + total + ' used';
+  }
+
+  bar.querySelector('#conf').addEventListener('input', e => {
+    state.confidence = parseFloat(e.target.value);
+    bar.querySelector('#cv').textContent = state.confidence.toFixed(2);
+    draw();
+  });
+  const modeBtn = bar.querySelector('#mode');
+  modeBtn.addEventListener('click', () => {
+    state.density = !state.density;
+    modeBtn.textContent = state.density ? 'Density' : 'Scatter';
+    modeBtn.setAttribute('aria-pressed', String(state.density));
+    draw();
+  });
+  [['clip', 'requireClip'], ['crop', 'requireCrop']].forEach(([id, key]) => {
+    const b = bar.querySelector('#' + id);
+    b.addEventListener('click', () => {
+      state[key] = !state[key];
+      b.setAttribute('aria-pressed', String(state[key]));
+      draw();
+    });
+  });
+  draw();
+  return box;
+}
+
+function renderOverview() {
+  const box = document.createElement('div');
+  const t = document.createElement('table');
+  t.className = 't';
+  t.innerHTML = '<tr><th>trial</th><th>detected</th><th>used</th>' +
+    D.groups.map(g => '<th>' + g.name + '</th>').join('') + '</tr>' +
+    D.trials.map(tr => '<tr><td>Trial ' + tr.number + '</td><td>' + tr.n + '</td><td>' +
+      select(tr.number, null).length + '</td>' +
+      D.groups.map(g => '<td>' + select(tr.number, g.bids).length + '</td>').join('') +
+      '</tr>').join('');
+  box.appendChild(t);
+  const p = document.createElement('p');
+  p.className = 'sub'; p.style.marginTop = '14px';
+  p.textContent = 'Counts use the filters set on a trial tab, currently confidence \u2265 ' +
+    state.confidence.toFixed(2) + '.';
+  box.appendChild(p);
+  return box;
+}
+
+function build() {
+  document.getElementById('title').textContent = D.projectID + ' \u2014 clusters';
+  document.getElementById('sub').textContent =
+    'Sand manipulation events by category, with the ones the analysis sets aside shown ' +
+    'separately. Every event is in the page, so the filters re-apply live.';
+  document.getElementById('meta').innerHTML =
+    [['Tank', D.tankID], ['Analysis', D.analysisID], ['Clusters', D.nTotal],
+     ['Trials', D.trials.length], ['Days', D.nDays],
+     ['Pixel size', D.pixelLength.toFixed(4) + ' cm']]
+    .map(([k, v]) => '<div>' + k + '<b>' + v + '</b></div>').join('');
+
+  const views = [['Overview', renderOverview]].concat(
+    D.trials.map(tr => ['Trial ' + tr.number, () => renderTrial(tr.number)]));
+  const tabs = document.getElementById('tabs'), body = document.getElementById('body');
+  const buttons = views.map((v, i) => {
+    const b = document.createElement('button');
+    b.textContent = v[0]; b.setAttribute('role', 'tab');
+    b.addEventListener('click', () => show(i));
+    tabs.appendChild(b);
+    return b;
+  });
+  function show(i) {
+    buttons.forEach((b, j) => b.setAttribute('aria-selected', String(j === i)));
+    body.textContent = '';
+    body.appendChild(views[i][1]());     // rebuilt each time, so filter state is current
+  }
+  show(0);
+  document.getElementById('foot').textContent =
+    'Built ' + D.built + ' from branch ' + D.branch + '.';
+}
+build();
+</script>
+</body>
+</html>
+"""
+
+
+def write_cluster(path, analysis_id, payload):
+    html = CLUSTER_PAGE.replace('__TITLE__', payload['projectID'] + ' \u00b7 Clusters')
+    html = html.replace('__ANALYSIS__', analysis_id)
+    html = html.replace('__PAYLOAD__', json.dumps(payload).replace('</', '<\\/'))
+    with open(path, 'w') as f:
+        f.write(html)
+    return os.path.getsize(path)
+
+
 # ------------------------------------------------------------------------ main
 
 def fetch_optional(cloud_path, local_path, directory=False):
@@ -2347,6 +2887,61 @@ function save() {
     created: new Date().toISOString(),
   };
   const text = JSON.stringify(out, null, 1);
+  // Opened straight from disk there is nothing to post to, so fall back to the
+  // file the user then drops into the submissions folder.
+  if (location.protocol === 'file:') return saveAsFile(out, text);
+  postToServer(out, text);
+}
+
+function postToServer(out, text) {
+  const btn = document.getElementById('download');
+  btn.disabled = true;
+  flash('Saving\u2026', 'info');
+  fetch('api/register', { method: 'POST',
+                          headers: { 'Content-Type': 'application/json' }, body: text })
+    .then(r => r.json().then(j => ({ ok: r.ok, j })))
+    .then(({ ok, j }) => {
+      if (!ok) throw new Error(j.error || 'the server refused the change');
+      poll(j.job, j.queued_behind);
+    })
+    .catch(e => {
+      btn.disabled = false;
+      flash('Could not reach the server (' + e.message + '). Saving a file instead.', 'info');
+      saveAsFile(out, text);
+    });
+}
+
+function poll(jobId, behind) {
+  const started = Date.now();
+  const tick = () => {
+    fetch('api/job/' + jobId).then(r => r.json()).then(j => {
+      const secs = Math.round((Date.now() - started) / 1000);
+      if (j.status === 'done') {
+        let msg = 'Saved. ' + (j.record ? j.record.nPairs + ' pairs, ' + j.record.nInliers +
+                  ' inliers, fit ' + j.record.rms_px + ' px. ' : '');
+        if (j.stale && j.stale.length)
+          msg += j.stale.join(' and ') + ' were computed against the old transform and ' +
+                 'need rerunning. ';
+        msg += 'Reloading\u2026';
+        flash(msg, 'done');
+        setTimeout(() => location.reload(), 2500);
+        return;
+      }
+      if (j.status === 'failed') {
+        document.getElementById('download').disabled = false;
+        flash('The save failed: ' + (j.error || 'unknown') +
+              '. Nothing was changed; the previous files are still in place.', 'info');
+        return;
+      }
+      flash((j.step || j.status) + '\u2026 ' + secs + ' s' +
+            (behind ? ' (' + behind + ' ahead in the queue)' : ''), 'info');
+      setTimeout(tick, 1200);
+    }).catch(() => setTimeout(tick, 2500));
+  };
+  tick();
+}
+
+function saveAsFile(out, text) {
   const name = D.projectID + '__' + out.initials + '__registration.json';
   let ok = false;
   try {
@@ -2364,7 +2959,7 @@ function save() {
   m.className = 'msg done';
   m.innerHTML = (ok
       ? 'Saved <b>' + name + '</b> with ' + pairs.length + ' pairs at ' + rms.toFixed(2) + ' px. ' +
-        'It is in your Downloads folder &mdash; move it to WebServer/_submissions in Dropbox. '
+        'It is in your Downloads folder \u2014 move it to WebServer/_submissions in Dropbox. '
       : 'The browser blocked the download. ') +
     '<button id="copyJson" style="margin-left:8px">Copy the file contents instead</button>' +
     '<div id="copyNote" class="stat" style="margin-top:8px"></div>';
@@ -2376,6 +2971,7 @@ function save() {
     } else fallbackCopy(text, done);
   });
 }
+
 function fallbackCopy(text, done) {
   const ta = document.createElement('textarea');
   ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
@@ -2461,6 +3057,16 @@ function build() {
   });
   window.addEventListener('resize', () => { if (viewPair) preview(); });
   document.getElementById('download').addEventListener('click', save);
+
+  if (location.protocol !== 'file:') {
+    fetch('api/whoami').then(r => r.json()).then(j => {
+      if (!j.user || j.user === 'anonymous') return;
+      const el = document.getElementById('initials');
+      el.value = j.user.split('@')[0].slice(0, 4).toUpperCase();
+      el.title = 'signed in as ' + j.user;
+      fit();
+    }).catch(() => {});
+  }
 
   setPickPair(start.key);
   setViewPair(start.key);
@@ -2585,6 +3191,31 @@ def build_one(fm_obj, projectID, out_root, category='', delete=False, page_type=
     for f in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile, fm_obj.localTransMFile,
               fm_obj.localPrepLogfile]:
         fetch_optional(f.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir), f)
+
+    if page_type == 'Cluster':
+        for f in [fm_obj.localAllLabeledClustersFile]:
+            fetch_optional(f.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir), f)
+        try:
+            clusters = load_clusters(fm_obj)
+        except ClusterFileMissing as e:
+            entry['status'] = 'needs_clusters'
+            entry['error'] = str(e) + ' — run the Cluster stage of runAnalysis.py'
+            return entry
+        payload = build_cluster_payload(fm_obj, lp, clusters,
+                                        parse_points(fm_obj.localVideoCropFile),
+                                        parse_points(fm_obj.localDepthCropFile),
+                                        np.load(fm_obj.localTransMFile))
+        project_dir = out_root + projectID + '/'
+        fm_obj.createDirectory(project_dir)
+        entry['size'] = write_cluster(project_dir + 'Cluster.html', fm_obj.analysisID, payload)
+        entry['pages']['Cluster'] = 'Cluster.html'
+        entry['files'].append('Cluster.html')
+        entry['trials'] = len(payload['trials'])
+        first = load_npy(fm_obj.localFirstFrame)
+        last = load_npy(fm_obj.localLastFrame)
+        change, _ = filtered_change(first, last)
+        entry['thumb'] = thumbnail(change)
+        return entry
 
     if page_type == 'Depth':
         depth_dir = fm_obj.localProjectDir + 'DepthFiles/'
@@ -2817,7 +3448,7 @@ def main():
     if args.PageType == 'ApplyRegistration':
         return apply_registrations(args)
 
-    if args.PageType not in ('Prep', 'Depth'):
+    if args.PageType not in ('Prep', 'Depth', 'Cluster'):
         print(args.PageType + ' pages are not implemented yet.')
         return 1
 
@@ -2904,6 +3535,9 @@ def main():
     incomplete = [e['id'] for e in entries if e['status'] == 'ok' and e['missing']]
     needs = [e['id'] for e in entries if e['status'] == 'needs_prepfiles2']
     needs_depth = [e['id'] for e in entries if e['status'] == 'needs_depthfiles']
+    needs_cl = [e['id'] for e in entries if e['status'] == 'needs_clusters']
+    if needs_cl:
+        print('Missing cluster files (' + str(len(needs_cl)) + '): ' + ', '.join(needs_cl))
     if needs_depth:
         print('Missing DepthFiles (' + str(len(needs_depth)) + '): ' + ', '.join(needs_depth))
     print('Built ' + str(built) + ' of ' + str(len(entries)) + ' pages.')
