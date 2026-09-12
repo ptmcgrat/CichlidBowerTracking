@@ -1819,6 +1819,36 @@ def pack(arr, dtype):
     return base64.b64encode(np.ascontiguousarray(arr, dtype=dtype).tobytes()).decode('ascii')
 
 
+def day_photos(fm, lp, max_width=760):
+    """One Pi still per day, from the video that started that day.
+
+    The Pi camera only writes a still when a video starts, and videos are
+    roughly daily, so this is the natural per-day image. They live beside the
+    mp4s in Videos/, so they are fetched by name rather than by directory.
+    """
+    out = {}
+    for movie in getattr(lp, 'movies', []):
+        pic = getattr(movie, 'pic_file', None)
+        if not pic:
+            continue
+        local = fm.localProjectDir + pic
+        if not os.path.exists(local):
+            fetch_optional(local.replace(fm.localMasterDir, fm.cloudMasterDir), local)
+        if not os.path.exists(local):
+            continue
+        img = cv2.imread(local)
+        if img is None:
+            continue
+        day = str(movie.startTime.date())
+        if day in out:
+            continue                      # first video of the day wins
+        out[day] = {'src': encode_image(img, max_width=max_width),
+                    'time': str(movie.startTime),
+                    'size': [int(img.shape[1]), int(img.shape[0])],
+                    'file': pic.split('/')[-1]}
+    return out
+
+
 def build_cluster_payload(fm, lp, dt, video_points, depth_points, transM):
     """Every event, packed, so the page can re-filter without a rebuild.
 
@@ -1860,6 +1890,27 @@ def build_cluster_payload(fm, lp, dt, video_points, depth_points, transM):
     flags = (inside.to_numpy().astype(np.uint8) |
              (has_clip.to_numpy().astype(np.uint8) << 1))
 
+    photos = day_photos(fm, lp)
+
+    # Cluster coordinates are in Pi camera space, which is not the depth
+    # camera's lp.width/lp.height. Take the real frame size from a Pi still, and
+    # fall back to the data itself if none is available.
+    pi_size = None
+    for p in photos.values():
+        pi_size = p['size']
+        break
+    if pi_size is None:
+        pi_size = [int(max(1296, yy.max() + 1)), int(max(972, xx.max() + 1))]
+
+    days = []
+    for d in range(int(day_index.max()) + 1 if len(dt) else 0):
+        date = str((day0 + pd.Timedelta(days=d)).date())
+        days.append({'index': d, 'date': date,
+                     'n': int((day_index == d).sum()),
+                     'trial': int(trial_index[day_index == d][0])
+                              if (day_index == d).any() else 0,
+                     'photo': photos.get(date)})
+
     events = {
         'n': int(len(dt)),
         'y': pack(np.clip(yy, 0, 65535), np.uint16),
@@ -1876,8 +1927,9 @@ def build_cluster_payload(fm, lp, dt, video_points, depth_points, transM):
 
     return {
         'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
-        'piSize': [int(lp.width), int(lp.height)],
+        'piSize': pi_size, 'depthSize': [int(lp.width), int(lp.height)],
         'videoPoints': video_points, 'depthPoints': depth_points,
+        'days': days,
         'labels': BID_LABELS, 'colours': BID_COLORS, 'bids': bids,
         'groups': [{'name': n, 'bids': b, 'colour': c} for n, b, c in BID_GROUPS],
         'confidence': CONFIDENCE, 'pixelLength': PIXEL_LENGTH,
@@ -1940,6 +1992,13 @@ CLUSTER_PAGE = r"""<!DOCTYPE html>
   table.t th:first-child, table.t td:first-child { text-align:left; }
   table.t th { color:var(--ink-dim); font-weight:500; }
   .swatch { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:7px; }
+  .days { display:flex; gap:3px; flex-wrap:wrap; margin-bottom:14px; }
+  .days button { background:var(--panel); border:1px solid var(--line); color:var(--ink-dim);
+                 padding:5px 9px; border-radius:5px; font:inherit; font-size:12px; cursor:pointer;
+                 font-variant-numeric:tabular-nums; }
+  .days button[aria-pressed="true"] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .days button.partial { border-style:dashed; }
+  .stage img { width:100%; display:block; }
   .note { background:rgba(224,105,63,.1); border:1px solid rgba(224,105,63,.35);
           color:#f0c3ae; padding:10px 13px; border-radius:7px; font-size:13px; margin:0 0 14px; }
   .foot { margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
@@ -2054,6 +2113,17 @@ function panel(idx, caption, colour, opts) {
   const sx = CW / PW, sy = CH / PH;
 
   ctx.fillStyle = '#0b0d11'; ctx.fillRect(0, 0, CW, CH);
+  if (opts.background) {
+    const im = new Image();
+    im.onload = () => {
+      ctx.globalAlpha = 0.45;
+      ctx.drawImage(im, 0, 0, CW, CH);
+      ctx.globalAlpha = 1;
+      paintPoints();
+    };
+    im.src = opts.background;
+    var deferred = true;
+  }
   ctx.save();
   ctx.strokeStyle = 'rgba(111,178,232,.7)'; ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -2061,6 +2131,7 @@ function panel(idx, caption, colour, opts) {
     i ? ctx.lineTo(p[0]*sx, p[1]*sy) : ctx.moveTo(p[0]*sx, p[1]*sy));
   ctx.closePath(); ctx.stroke(); ctx.restore();
 
+  function paintPoints() {
   if (state.density && idx.length) {
     // binning keeps this constant-time however many events there are, which
     // matters once a trial runs to hundreds of thousands
@@ -2104,6 +2175,9 @@ function panel(idx, caption, colour, opts) {
     }
     ctx.globalAlpha = 1;
   }
+
+  }
+  if (!opts.background) paintPoints();
 
   if (opts.ellipse && opts.ellipse.n >= 3 && idx.length) {
     const st = opts.ellipse, L = D.pixelLength;
@@ -2239,6 +2313,97 @@ function renderTrial(tnum) {
   return box;
 }
 
+function renderDays() {
+  const box = document.createElement('div');
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.innerHTML =
+    '<label>Confidence \u2265 <b id="cv2">' + state.confidence.toFixed(2) + '</b></label>' +
+    '<input type="range" id="conf2" min="0" max="0.99" step="0.01" value="' +
+      state.confidence + '">' +
+    '<button id="mode2" aria-pressed="' + state.density + '">' +
+      (state.density ? 'Density' : 'Scatter') + '</button>' +
+    '<span class="spacer"></span><span class="stat" id="dayInfo"></span>';
+  box.appendChild(bar);
+
+  const strip = document.createElement('div');
+  strip.className = 'days';
+  box.appendChild(strip);
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  box.appendChild(grid);
+
+  let selected = (D.days.find(d => d.n > 0) || D.days[0] || {}).index || 0;
+
+  function selectDay(day, bids) {
+    const want = bids ? new Set(bids.map(b => BID_OF[b])) : null;
+    const cut = Math.round(state.confidence * 255);
+    const idx = [];
+    for (let i = 0; i < E.n; i++) {
+      if (E.day[i] !== day) continue;
+      if (E.bid[i] === NO_PRED) continue;
+      if (want && !want.has(E.bid[i])) continue;
+      if (E.prob[i] < cut) continue;
+      if (state.requireClip && !(E.flags[i] & 2)) continue;
+      if (state.requireCrop && !(E.flags[i] & 1)) continue;
+      idx.push(i);
+    }
+    return idx;
+  }
+
+  function draw() {
+    strip.textContent = '';
+    D.days.forEach(d => {
+      const b = document.createElement('button');
+      b.textContent = d.date.slice(5);
+      b.title = d.n + ' clusters, trial ' + d.trial + (d.photo ? '' : ', no still');
+      b.setAttribute('aria-pressed', String(d.index === selected));
+      if (!d.photo) b.className = 'partial';
+      b.addEventListener('click', () => { selected = d.index; draw(); });
+      strip.appendChild(b);
+    });
+
+    const d = D.days[selected] || {};
+    grid.textContent = '';
+    const all = selectDay(selected, null);
+    bar.querySelector('#dayInfo').innerHTML = d.date + ' \u00b7 trial ' + d.trial +
+      ' \u00b7 <b>' + all.length + '</b> events used of ' + d.n + ' detected';
+
+    if (d.photo) {
+      const fig = document.createElement('figure');
+      fig.innerHTML = '<div class="stage"><img src="' + d.photo.src + '" alt=""></div>' +
+        '<figcaption><b>Pi camera</b> \u2014 ' + d.photo.time.slice(11, 16) + ', ' +
+        d.photo.file + '</figcaption>';
+      grid.appendChild(fig);
+      grid.appendChild(panel(all, '<b>All events this day</b> \u2014 ' + all.length +
+        ', over the still', '#f2a33c', { background: d.photo.src }));
+    } else {
+      grid.appendChild(panel(all, '<b>All events this day</b> \u2014 ' + all.length +
+        '<br>No Pi still for this date.', '#f2a33c'));
+    }
+    D.groups.forEach(g => {
+      const idx = selectDay(selected, g.bids);
+      grid.appendChild(panel(idx, '<b>' + g.name + '</b> \u2014 ' + idx.length + ' events',
+        g.colour, d.photo ? { background: d.photo.src } : {}));
+    });
+  }
+
+  bar.querySelector('#conf2').addEventListener('input', e => {
+    state.confidence = parseFloat(e.target.value);
+    bar.querySelector('#cv2').textContent = state.confidence.toFixed(2);
+    draw();
+  });
+  const mb = bar.querySelector('#mode2');
+  mb.addEventListener('click', () => {
+    state.density = !state.density;
+    mb.textContent = state.density ? 'Density' : 'Scatter';
+    mb.setAttribute('aria-pressed', String(state.density));
+    draw();
+  });
+  draw();
+  return box;
+}
+
 function renderOverview() {
   const box = document.createElement('div');
   const t = document.createElement('table');
@@ -2269,7 +2434,7 @@ function build() {
      ['Pixel size', D.pixelLength.toFixed(4) + ' cm']]
     .map(([k, v]) => '<div>' + k + '<b>' + v + '</b></div>').join('');
 
-  const views = [['Overview', renderOverview]].concat(
+  const views = [['Overview', renderOverview], ['By day', renderDays]].concat(
     D.trials.map(tr => ['Trial ' + tr.number, () => renderTrial(tr.number)]));
   const tabs = document.getElementById('tabs'), body = document.getElementById('body');
   const buttons = views.map((v, i) => {
