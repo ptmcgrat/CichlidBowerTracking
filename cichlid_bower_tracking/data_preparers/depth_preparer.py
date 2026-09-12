@@ -6,7 +6,7 @@ import pdb, os, sys, datetime, warnings, copy, subprocess, shutil, io
 import matplotlib.pyplot as plt
 from matplotlib import path as mpl_path
 from helper_modules.depth_masking import trialChurnMask
-from helper_modules.depth_interpolation import interpolate_time, interpolate_space
+from helper_modules.depth_interpolation import interpolate_time, interpolate_space, analysisRegion
 import matplotlib
 from PIL import Image,ImageDraw
 from helper_modules.depth_analyzer import DepthAnalyzer as DA
