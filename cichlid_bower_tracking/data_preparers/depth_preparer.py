@@ -156,9 +156,9 @@ class DepthPreparer:
 		smoothDepthData = interpDepthData.copy()
 		
 		# Read in manual crop and mask out data outside of crop
-		with open(self.fileManager.localDepthCropFile) as f:
-			for line in f:
-				depth_crop_points = eval(line.rstrip())
+		#with open(self.fileManager.localDepthCropFile) as f:
+	#		for line in f:
+#				depth_crop_points = eval(line.rstrip())
 
 		#img = Image.new('L', (self.lp.width, self.lp.height), 0)
 		#ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
