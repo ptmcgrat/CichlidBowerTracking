@@ -2104,8 +2104,10 @@ function separation(a, b) {
 }
 
 // ------------------------------------------------------------------ drawing
-function panel(idx, caption, colour, opts) {
+function panel(sets, caption, opts) {
   opts = opts || {};
+  if (!Array.isArray(sets)) sets = [{ idx: sets, colour: opts.colour || '#f2a33c' }];
+  const idx = sets.length === 1 ? sets[0].idx : [].concat(...sets.map(s => s.idx));
   const fig = document.createElement('figure');
   fig.innerHTML = '<div class="stage"><canvas width="' + CW + '" height="' + CH +
                   '"></canvas></div><figcaption>' + caption + '</figcaption>';
@@ -2132,6 +2134,10 @@ function panel(idx, caption, colour, opts) {
   ctx.closePath(); ctx.stroke(); ctx.restore();
 
   function paintPoints() {
+  sets.forEach(set => paintSet(set.idx, set.colour));
+  }
+
+  function paintSet(idx, colour) {
   if (state.density && idx.length) {
     // binning keeps this constant-time however many events there are, which
     // matters once a trial runs to hundreds of thousands
@@ -2179,8 +2185,11 @@ function panel(idx, caption, colour, opts) {
   }
   if (!opts.background) paintPoints();
 
-  if (opts.ellipse && opts.ellipse.n >= 3 && idx.length) {
-    const st = opts.ellipse, L = D.pixelLength;
+  (opts.ellipses || []).forEach(e => drawEllipse(e.stats, e.idx));
+
+  function drawEllipse(st, idx) {
+    if (!st || st.n < 3 || !idx.length) return;
+    const L = D.pixelLength;
     let mx = 0, my = 0;
     for (const i of idx) { mx += E.y[i]; my += E.x[i]; }
     mx /= idx.length; my /= idx.length;
@@ -2197,6 +2206,11 @@ function panel(idx, caption, colour, opts) {
     ctx.beginPath(); ctx.arc(mx*sx, my*sy, 3, 0, 6.2832); ctx.fill();
   }
   return fig;
+}
+
+function legendOf(sets) {
+  return sets.map(s => '<span class="swatch" style="background:' + s.colour + '"></span>' +
+                       s.name + ' ' + s.idx.length).join(' &nbsp; ');
 }
 
 function statTable(rows) {
@@ -2222,40 +2236,63 @@ function renderTrial(tnum) {
     '<label>Confidence \u2265 <b id="cv">' + state.confidence.toFixed(2) + '</b></label>' +
     '<input type="range" id="conf" min="0" max="0.99" step="0.01" value="' +
       state.confidence + '">' +
-    '<button id="mode" aria-pressed="' + state.density + '">Density</button>' +
+    '<button id="mode" aria-pressed="' + state.density + '">' +
+      (state.density ? 'Density' : 'Scatter') + '</button>' +
     '<button id="clip" aria-pressed="' + state.requireClip + '">Clip required</button>' +
     '<button id="crop" aria-pressed="' + state.requireCrop + '">Inside crop</button>' +
     '<span class="spacer"></span><span class="stat" id="kept"></span>';
   box.appendChild(bar);
 
-  const grid = document.createElement('div'); grid.className = 'grid';
-  box.appendChild(grid);
-  const sHead = document.createElement('h2'); sHead.textContent = 'Spatial spread';
-  const statSlot = document.createElement('div');
-  box.appendChild(sHead); box.appendChild(statSlot);
-  const exHead = document.createElement('h2'); exHead.textContent = 'What was set aside';
-  const exGrid = document.createElement('div'); exGrid.className = 'grid';
-  box.appendChild(exHead); box.appendChild(exGrid);
+  const row1 = document.createElement('div'); row1.className = 'grid';
+  const h2 = document.createElement('h2'); h2.textContent = 'What was set aside';
+  const row2 = document.createElement('div'); row2.className = 'grid';
+  const h3 = document.createElement('h2'); h3.textContent = 'Spatial spread';
+  const tables = document.createElement('div');
+  box.appendChild(row1);
+  box.appendChild(h2); box.appendChild(row2);
+  box.appendChild(h3); box.appendChild(tables);
+
+  // spits blue, scoops orange, multiple green — the same three for feeding
+  const BLUE = '#6fb2e8', ORANGE = '#f2a33c', GREEN = '#5aa87a';
+  const RED = '#e0693f';
 
   function draw() {
-    grid.textContent = ''; statSlot.textContent = ''; exGrid.textContent = '';
-    let kept = 0;
-    D.groups.forEach(g => {
-      const idx = select(tnum, g.bids);
-      kept += idx.length;
-      grid.appendChild(panel(idx, '<b>' + g.name + '</b> \u2014 ' + idx.length + ' events<br>' +
-        g.bids.map(b => D.labels[b]).join(', '), g.colour));
+    row1.textContent = ''; row2.textContent = ''; tables.textContent = '';
+
+    const spit = select(tnum, ['p']), scoop = select(tnum, ['c']), multi = select(tnum, ['b']);
+    const sP = stats(spit), sS = stats(scoop);
+    const building = [{ name: 'spit', colour: BLUE, idx: spit },
+                      { name: 'scoop', colour: ORANGE, idx: scoop },
+                      { name: 'multiple', colour: GREEN, idx: multi }];
+    row1.appendChild(panel(building,
+      '<b>Building</b> \u2014 ' + (spit.length + scoop.length + multi.length) + ' events<br>' +
+      legendOf(building) + '<br>Ellipses mark the spread of spits and scoops.',
+      { ellipses: [{ stats: sP, idx: spit }, { stats: sS, idx: scoop }] }));
+
+    const feeding = [{ name: 'feed spit', colour: BLUE, idx: select(tnum, ['t']) },
+                     { name: 'feed scoop', colour: ORANGE, idx: select(tnum, ['f']) },
+                     { name: 'feed multiple', colour: GREEN, idx: select(tnum, ['m']) }];
+    row1.appendChild(panel(feeding,
+      '<b>Feeding</b> \u2014 ' + feeding.reduce((n, s) => n + s.idx.length, 0) +
+      ' events<br>' + legendOf(feeding)));
+
+    const other = [{ name: 'spawn', colour: RED, idx: select(tnum, ['s']) },
+                   { name: 'other', colour: BLUE, idx: select(tnum, ['d', 'o']) }];
+    row1.appendChild(panel(other,
+      '<b>Spawning and other</b> \u2014 ' + other.reduce((n, s) => n + s.idx.length, 0) +
+      ' events<br>' + legendOf(other)));
+
+    [['noClip', 'No clip created', 'at the frame border, so no clip could be cut'],
+     ['outside', 'Cropped out', 'outside the video crop as it stands now'],
+     ['lowConf', 'Low confidence', 'classified, but under ' + state.confidence.toFixed(2)]
+    ].forEach(([kind, name, why]) => {
+      const idx = excluded(tnum, kind);
+      row2.appendChild(panel([{ name: name, colour: RED, idx: idx }],
+        '<b>' + name + '</b> \u2014 ' + idx.length + '<br>' + why));
     });
 
-    const scoop = select(tnum, ['c']), spit = select(tnum, ['p']);
-    const sS = stats(scoop), sP = stats(spit);
-    grid.appendChild(panel(scoop, '<b>Bower scoops</b> \u2014 ' + scoop.length +
-      ' events, with the dispersion ellipse', '#4f7fe8', { ellipse: sS }));
-    grid.appendChild(panel(spit, '<b>Bower spits</b> \u2014 ' + spit.length +
-      ' events, with the dispersion ellipse', '#7fb2f0', { ellipse: sP }));
-
-    statSlot.appendChild(statTable([
-      ['bower scoop (c)', sS], ['bower spit (p)', sP],
+    tables.appendChild(statTable([
+      ['bower spit (p)', sP], ['bower scoop (c)', sS],
       ['bower, all (c p b)', stats(select(tnum, ['c','p','b']))],
       ['feeding (f t m)', stats(select(tnum, ['f','t','m']))],
       ['spawning (s)', stats(select(tnum, ['s']))],
@@ -2264,27 +2301,31 @@ function renderTrial(tnum) {
     const p = document.createElement('p');
     p.className = 'stat'; p.style.marginTop = '8px';
     p.innerHTML = sep
-      ? 'Scoops and spits sit <b>' + sep.distance.toFixed(2) + ' cm</b> apart at the centroid, ' +
+      ? 'Spits and scoops sit <b>' + sep.distance.toFixed(2) + ' cm</b> apart at the centroid, ' +
         '<b>' + sep.index.toFixed(2) + '</b> times their mean spread. Above about 1 they occupy ' +
         'distinguishable places; near 0 they are intermixed. Spread is the RMS distance from the ' +
         'centroid; major and minor are the axes of the dispersion ellipse, so minor/major near 1 ' +
-        'is a circular scatter and near 0 is a line. All distances are in tray centimetres.'
-      : 'Not enough scoops or spits at this confidence to compare.';
-    statSlot.appendChild(p);
+        'is a circular scatter and near 0 is a line. Distances are in tray centimetres.'
+      : 'Not enough spits or scoops at this confidence to compare.';
+    tables.appendChild(p);
 
-    [['noClip', 'No clip created', '#e0693f',
-      'at the frame border, so no clip could be cut and they were never classified'],
-     ['outside', 'Outside the video crop', '#e0693f',
-      'using the crop as it stands now, not as it stood when the clusters were made'],
-     ['lowConf', 'Below the confidence cut', '#c48ce0',
-      'classified, but under ' + state.confidence.toFixed(2)],
-     ['noPred', 'No prediction', '#8a9099', 'an empty Prediction column']
-    ].forEach(([kind, name, colour, why]) => {
-      const idx = excluded(tnum, kind);
-      exGrid.appendChild(panel(idx, '<b>' + name + '</b> \u2014 ' + idx.length + '<br>' + why,
-        colour));
-    });
+    const h4 = document.createElement('h2');
+    h4.textContent = 'Counts by behaviour';
+    tables.appendChild(h4);
+    const ct = document.createElement('table');
+    ct.className = 't';
+    ct.innerHTML = '<tr><th>behaviour</th><th>code</th><th>events used</th></tr>' +
+      D.bids.map(b => '<tr><td>' + D.labels[b] + '</td><td>' + b + '</td><td>' +
+        select(tnum, [b]).length + '</td></tr>').join('') +
+      '<tr><th>set aside</th><th></th><th></th></tr>' +
+      [['no clip created', 'noClip'], ['cropped out', 'outside'],
+       ['low confidence', 'lowConf'], ['no prediction', 'noPred']]
+      .map(([n, k]) => '<tr><td>' + n + '</td><td></td><td>' +
+        excluded(tnum, k).length + '</td></tr>').join('');
+    tables.appendChild(ct);
 
+    let kept = 0;
+    D.bids.forEach(b => { kept += select(tnum, [b]).length; });
     const total = (D.trials.find(t => t.number === tnum) || { n: 0 }).n;
     bar.querySelector('#kept').innerHTML = '<b>' + kept + '</b> of ' + total + ' used';
   }
@@ -2375,16 +2416,18 @@ function renderDays() {
         '<figcaption><b>Pi camera</b> \u2014 ' + d.photo.time.slice(11, 16) + ', ' +
         d.photo.file + '</figcaption>';
       grid.appendChild(fig);
-      grid.appendChild(panel(all, '<b>All events this day</b> \u2014 ' + all.length +
-        ', over the still', '#f2a33c', { background: d.photo.src }));
+      grid.appendChild(panel([{ name: 'all', colour: '#f2a33c', idx: all }],
+        '<b>All events this day</b> \u2014 ' + all.length + ', over the still',
+        { background: d.photo.src }));
     } else {
-      grid.appendChild(panel(all, '<b>All events this day</b> \u2014 ' + all.length +
-        '<br>No Pi still for this date.', '#f2a33c'));
+      grid.appendChild(panel([{ name: 'all', colour: '#f2a33c', idx: all }],
+        '<b>All events this day</b> \u2014 ' + all.length + '<br>No Pi still for this date.'));
     }
     D.groups.forEach(g => {
       const idx = selectDay(selected, g.bids);
-      grid.appendChild(panel(idx, '<b>' + g.name + '</b> \u2014 ' + idx.length + ' events',
-        g.colour, d.photo ? { background: d.photo.src } : {}));
+      grid.appendChild(panel([{ name: g.name, colour: g.colour, idx: idx }],
+        '<b>' + g.name + '</b> \u2014 ' + idx.length + ' events',
+        d.photo ? { background: d.photo.src } : {}));
     });
   }
 
