@@ -46,7 +46,7 @@ class DepthPreparer:
 		self.fileManager.downloadData(self.fileManager.localLogfile)
 		self.fileManager.downloadData(self.fileManager.localFrameDir, tarred = True)
 		#self.fileManager.downloadData(self.fileManager.localSmoothDepthFile)
-		self.fileManager.downloadData(self.fileManager.localDepthCropFile)
+		#self.fileManager.downloadData(self.fileManager.localDepthCropFile)
 		if self.picture:
 			self.fileManager.downloadData(self.fileManager.localBuildPhotosDir)
 
@@ -62,7 +62,7 @@ class DepthPreparer:
 		#print(bad_frames)
 		assert os.path.exists(self.fileManager.localTroubleshootingDir)
 		assert os.path.exists(self.fileManager.localAnalysisDir)
-		assert os.path.exists(self.fileManager.localDepthCropFile)
+		#assert os.path.exists(self.fileManager.localDepthCropFile)
 
 	def uploadProjectData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
@@ -72,8 +72,8 @@ class DepthPreparer:
 
 		#self.fileManager.uploadData(self.fileManager.localRGBDepthVideo)
 		self.fileManager.uploadData(self.fileManager.localDepthLogfile)
-		self.fileManager.uploadData(self.fileManager.localDailyDepthSummaryFigure)
-		self.fileManager.uploadData(self.fileManager.localDepthSummaryFile)
+		#self.fileManager.uploadData(self.fileManager.localDailyDepthSummaryFigure)
+		#self.fileManager.uploadData(self.fileManager.localDepthSummaryFile)
 		#self.fileManager.uploadData(self.fileManager.localHourlyDepthSummaryFigure)
 
 			#self.uploadData(self.localPaceDir)
@@ -117,10 +117,10 @@ class DepthPreparer:
 				rawDepthData[i] = data
 				rawStdData[i] = data_std
 
-		crop = eval('[' + open(self.fileManager.localDepthCropFile).read() + ']')
-		gy, gx = np.mgrid[0:self.lp.height, 0:self.lp.width]
-		pts = np.column_stack([gx.ravel(), gy.ravel()])
-		self.tray_mask = mpl_path.Path(crop).contains_points(pts).reshape(self.lp.height, self.lp.width)
+		#crop = eval('[' + open(self.fileManager.localDepthCropFile).read() + ']')
+		#gy, gx = np.mgrid[0:self.lp.height, 0:self.lp.width]
+		#pts = np.column_stack([gx.ravel(), gy.ravel()])
+		#self.tray_mask = mpl_path.Path(crop).contains_points(pts).reshape(self.lp.height, self.lp.width)
 
 		# Save raw data file
 		np.save(self.fileManager.localRawDepthFile, rawDepthData)
@@ -128,27 +128,28 @@ class DepthPreparer:
 		# Interpolate missing data
 		# Make copy of raw data
 		interpDepthData = rawDepthData.copy()
-
+		
 		for trial in self.lp.trials:
+			region = analysisRegion(rawDepthData, self.lp, trial)
+
 			for start_f, stop_f in trial.days:          # pass one: temporal
 				day = interpDepthData[start_f.index:stop_f.index + 1]
 				day[:] = interpolate_time(day, min_good=goodDataCutoff)
 
 			trial_std_mean = np.nanmean(np.stack(
     		[np.nanmean(rawStdData[a.index:b.index + 1], axis=0) for a, b in trial.days]), axis=0)
-			mask, stats = trialChurnMask(interpDepthData, self.lp, trial,
-										 tray_mask=self.tray_mask, k=5,
-										 std_mean=trial_std_mean)
 			
-			trial_start = trial.days[0][0].index
-			trial_stop = trial.days[-1][1].index
-			if stats['applied']:
-				interpDepthData[trial_start:trial_stop][:, mask] = np.nan
+			mask, stats = trialChurnMask(interpDepthData, self.lp, trial,
+                             tray_mask=region, k=5, std_mean=trial_std_mean)
 
-			for start_f, stop_f in trial.days:          # pass two: spatial, fills the mask
-				day = interpDepthData[start_f.index:stop_f.index + 1]
-				day[:] = interpolate_space(day, usable=self.tray_mask)
-		
+			
+			if stats['applied']:
+			    interpDepthData[trial.days[0][0].index:trial.days[-1][1].index + 1, mask] = np.nan
+
+			for start_f, stop_f in trial.days:                    # pass two
+			    day = interpDepthData[start_f.index:stop_f.index + 1]
+			    day[:] = interpolate_space(day, usable=region)	
+
 		# Save interpolated data
 		np.save(self.fileManager.localSmoothDepthFile, interpDepthData)
 		# Smooth and filter out bad data 
@@ -159,10 +160,10 @@ class DepthPreparer:
 			for line in f:
 				depth_crop_points = eval(line.rstrip())
 
-		img = Image.new('L', (self.lp.width, self.lp.height), 0)
-		ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
-		manual_crop_mask = np.array(img)
-		smoothDepthData[:,manual_crop_mask == 0] = np.nan
+		#img = Image.new('L', (self.lp.width, self.lp.height), 0)
+		#ImageDraw.Draw(img).polygon(depth_crop_points, outline=1, fill=1)
+		#manual_crop_mask = np.array(img)
+		#smoothDepthData[:,manual_crop_mask == 0] = np.nan
 
 		# Mask out data with too many nans
 		#non_nans = np.count_nonzero(~np.isnan(daytimeData), axis = 0)

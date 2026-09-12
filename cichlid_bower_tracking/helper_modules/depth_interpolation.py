@@ -175,6 +175,56 @@ def process_day(day, usable=None, min_good=0.7, max_hole=None):
     return interpolate_space(day, usable=usable, max_hole=max_hole, inplace=True)
 
 
+# ------------------------------------------------------------------ region
+
+def analysisRegion(data, lp, trial, min_valid=0.9, min_size=500, close=5):
+    """Where the sensor reliably sees something, over one trial.
+
+    This replaces the manual depth crop as the region used for interpolation and
+    for the churn statistics. The crop is a display and analysis choice that a
+    student may revise at any time; if the interpolated array depended on it,
+    every revision would mean rerunning the depth stage. This does not depend on
+    it — it is a property of what the camera can see — so it stays fixed while
+    the crop moves.
+
+    It is deliberately generous: it will include tank walls and anything else
+    with a steady return. That is fine. Its job is to stop the spatial fill
+    reaching across a boundary into physically different material and to give
+    the churn statistics a stable population, not to define the tray.
+
+    data       (frames, H, W) raw depth, NaN where there was no return
+    min_valid  fraction of the trial's lights-on frames a pixel must have
+    min_size   drop connected components smaller than this
+    close      morphological closing, to fill pinholes
+    """
+    counts = None
+    total = 0
+    for start_f, stop_f in trial.days:
+        idx = [f.index for f in lp.frames
+               if start_f.index <= f.index <= stop_f.index and f.lof]
+        if not idx:
+            continue
+        day = data[idx[0]:idx[-1] + 1]
+        good = np.isfinite(day).sum(axis=0)
+        counts = good if counts is None else counts + good
+        total += day.shape[0]
+    if counts is None or total == 0:
+        return np.ones(data.shape[1:], bool)
+
+    region = counts >= min_valid * total
+    if close:
+        region = ndimage.binary_closing(region, np.ones((close, close)))
+    region = ndimage.binary_fill_holes(region)
+    if min_size:
+        labels, n = ndimage.label(region)
+        if n:
+            sizes = np.bincount(labels.ravel(), minlength=n + 1)
+            keep = np.zeros(n + 1, bool)
+            keep[1:] = sizes[1:] >= min_size
+            region = keep[labels]
+    return region
+
+
 # ---------------------------------------------------------------- endpoints
 
 def daily_endpoints(depth, frames, days):
