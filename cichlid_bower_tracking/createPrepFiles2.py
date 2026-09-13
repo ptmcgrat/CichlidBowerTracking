@@ -38,6 +38,11 @@ MAX_PROBES = 10
 
 # ------------------------------------------------------------------ tar access
 
+class SeekFailed(Exception):
+    """The archive could not be navigated by seeking; fall back to downloading."""
+    pass
+
+
 class RangeReader:
     """Reads byte ranges out of a cloud object with rclone."""
 
@@ -147,12 +152,18 @@ class TarIndex:
             return o0
         return int(o0 + (target_n - n0) * (o1 - o0) / (n1 - n0))
 
-    def ordered(self, samples=4):
+    def ordered(self, samples=10):
         """Is the archive written in frame order?
 
         The pipeline tars with `tar -cvf`, which writes in readdir order — that
         is creation order on some filesystems and hash order on others, so this
-        has to be measured rather than assumed. Returns (verdict, samples)."""
+        has to be measured rather than assumed. Returns (verdict, samples).
+
+        The sample count matters more than it looks. On an unordered archive the
+        frame numbers come out effectively random, so n samples pass by chance
+        one time in n!. At four samples that is one in 24 — about one false pass
+        per thirty projects, which then fails later with a confusing
+        could-not-locate error. Ten samples makes it one in 3.6 million."""
         seen = []
         for i in range(samples):
             offset = int(self.total * i / samples)
@@ -220,7 +231,8 @@ class TarIndex:
                 cursor = last + BLOCK if last <= cursor else last
             if cursor >= self.total:
                 break
-        raise KeyError('could not locate ' + member + ' after ' + str(MAX_PROBES) + ' probes')
+        raise SeekFailed('could not locate ' + member + ' after ' + str(MAX_PROBES) +
+                         ' probes — the archive is probably not in frame order')
 
     def extract(self, member, dest):
         a = self.locate(member)
@@ -292,7 +304,36 @@ def stream_extract(cloud_path, members, dest_dir):
 
 # --------------------------------------------------------------- pair building
 
-def choose_pairs(lp, trial, index):
+def list_cloud(cloud_dir):
+    """Filenames in a cloud directory, or an empty list if it cannot be read."""
+    out = subprocess.run(['rclone', 'lsf', cloud_dir], capture_output=True, encoding='utf-8')
+    if out.returncode != 0:
+        return []
+    return [n.strip().rstrip('/') for n in out.stdout.splitlines() if n.strip()]
+
+
+def still_for_movie(movie, available):
+    """The Pi still for a video, allowing for the name varying between projects.
+
+    The log records Videos/NNNN_pic.jpg, but not every project has that file —
+    some have the still under a different suffix, and some are missing it
+    entirely. Rather than trusting the logged name, match on the four-digit
+    video index against what is actually in the directory.
+    """
+    logged = getattr(movie, 'pic_file', '') or ''
+    base = logged.split('/')[-1]
+    if base and base in available:
+        return 'Videos/' + base
+
+    stem = base.split('_')[0] if base else '%04d' % (movie.index + 1)
+    candidates = [n for n in available
+                  if n.startswith(stem) and n.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    # prefer a still over a frame grab, and a shorter name over a longer one
+    candidates.sort(key=lambda n: (0 if '_pic' in n else 1, len(n)))
+    return 'Videos/' + candidates[0] if candidates else None
+
+
+def choose_pairs(lp, trial, index, available=None):
     """Pick the first and last Pi still inside the trial, and the depth frame
     nearest each in time."""
     movies = [m for m in trial.movies if m.startTime >= trial.startTime]
@@ -305,11 +346,24 @@ def choose_pairs(lp, trial, index):
         raise ValueError('trial ' + str(index) + ' has no depth frames')
 
     out = {}
-    for label, movie in [('First', movies[0]), ('Last', movies[-1])]:
+    for label, ends in [('First', movies), ('Last', list(reversed(movies)))]:
+        # walk inward until a video with a usable still is found, rather than
+        # failing because the first or last one happens to be missing its jpg
+        movie = pi_file = None
+        for candidate in ends:
+            found = still_for_movie(candidate, available) if available is not None \
+                else getattr(candidate, 'pic_file', None)
+            if found:
+                movie, pi_file = candidate, found
+                break
+        if movie is None:
+            raise ValueError('trial ' + str(index) + ' has no video with a usable still '
+                             '(tried ' + str(len(movies)) + ')')
         nearest = min(frames, key=lambda f: abs((f.time - movie.startTime).total_seconds()))
         gap = abs((nearest.time - movie.startTime).total_seconds()) / 60.0
         out[label] = {
-            'piFile': movie.pic_file, 'piTime': str(movie.startTime), 'movieIndex': movie.index,
+            'piFile': pi_file, 'piTime': str(movie.startTime), 'movieIndex': movie.index,
+            'piFallback': pi_file != getattr(movie, 'pic_file', pi_file),
             'depthPic': nearest.pic_file, 'depthNpy': nearest.npy_file,
             'depthTime': str(nearest.time), 'frameIndex': nearest.index,
             'lightsOn': bool(nearest.lof), 'gapMinutes': round(gap, 2),
@@ -323,13 +377,21 @@ def build_project(fm_obj, projectID, args):
     out_dir = fm_obj.localProjectDir + 'PrepFiles2/'
     fm_obj.createDirectory(out_dir)
 
+    videos_cloud = (fm_obj.localProjectDir + 'Videos/').replace(
+        fm_obj.localMasterDir, fm_obj.cloudMasterDir)
+    available = list_cloud(videos_cloud)
+    if not available:
+        print('    could not list ' + videos_cloud + ', using the names from the log')
+
     plan = {}
     for i, trial in enumerate(lp.trials, 1):
-        plan[i] = choose_pairs(lp, trial, i)
+        plan[i] = choose_pairs(lp, trial, i, available=available or None)
 
     for i, sides in plan.items():
         for label, p in sides.items():
             flag = '' if p['gapMinutes'] <= 15 else '   <-- wide'
+            if p.get('piFallback'):
+                flag += '   <-- still found under a different name'
             print('    trial ' + str(i) + ' ' + label.lower() + ': ' +
                   p['piFile'].split('/')[-1] + ' + ' + p['depthPic'].split('/')[-1] +
                   ', ' + str(p['gapMinutes']) + ' min apart' + flag)
@@ -396,17 +458,23 @@ def build_project(fm_obj, projectID, args):
         is_ordered, samples = index.ordered()
         sample_text = ', '.join(['frame ' + str(n) + ' at ' + str(round(o / 1e9, 2)) + ' GB'
                                  for o, n in samples])
+        seek_failed = False
         if is_ordered:
             print('    archive is in frame order (' + sample_text + '), seeking')
             started = datetime.datetime.now()
-            for member, dest in wanted:
-                index.extract(member, dest)
-            with open(index_path, 'w') as f:
-                json.dump(index.cache(), f, indent=1)
-            print('    ' + str(len(wanted)) + ' members in ' + str(reader.requests) +
-                  ' requests, ' + str(round(reader.bytes / 1e6, 1)) + ' MB, ' +
-                  str(round((datetime.datetime.now() - started).total_seconds())) + 's')
-        else:
+            try:
+                for member, dest in wanted:
+                    index.extract(member, dest)
+                with open(index_path, 'w') as f:
+                    json.dump(index.cache(), f, indent=1)
+                print('    ' + str(len(wanted)) + ' members in ' + str(reader.requests) +
+                      ' requests, ' + str(round(reader.bytes / 1e6, 1)) + ' MB, ' +
+                      str(round((datetime.datetime.now() - started).total_seconds())) + 's')
+            except SeekFailed as e:
+                print('    ' + str(e))
+                print('    falling back to downloading the archive once')
+                seek_failed = True
+        if not is_ordered or seek_failed:
             # readdir order: nothing can be found without reading the whole archive,
             # so read it once, index it completely, and never pay this again.
             print('    archive is not in frame order (' + sample_text + ')')
