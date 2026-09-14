@@ -964,13 +964,21 @@ def volume_summary(change, threshold):
     }
 
 
-def half(frame):
-    """Downsample by 2 for display, ignoring NaN."""
+def half(frame, how='mean'):
+    """Downsample by 2 for display, ignoring NaN.
+
+    Use how='max' for one-sided diagnostic layers. Averaging a lone bad pixel
+    with three good neighbours divides it by four, so on a mean-downsampled map
+    the hover value understates exactly the isolated pixels a threshold is meant
+    to catch — and then disagrees with a histogram computed at full resolution.
+    """
     h, w = frame.shape
     h2, w2 = h // 2 * 2, w // 2 * 2
     blocks = frame[:h2, :w2].reshape(h2 // 2, 2, w2 // 2, 2)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', category=RuntimeWarning)
+        if how == 'max':
+            return np.nanmax(blocks, axis=(1, 3))
         return np.nanmean(blocks, axis=(1, 3))
 
 
@@ -1087,8 +1095,10 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
             counts, edges = np.histogram(lv, bins=48)
             stats['hist'] = {'counts': counts.tolist(),
                              'edges': [round(float(np.exp(e)), 4) for e in edges]}
-        return {'rate': dict(zip(('src', 'meta'), encode_depth(half(rate)))),
-                'excess': dict(zip(('src', 'meta'), encode_depth(half(excess)))),
+        # max, not mean: these maps exist to find isolated outliers, so the
+        # hover value has to mean the same thing as the histogram
+        return {'rate': dict(zip(('src', 'meta'), encode_depth(half(rate, 'max')))),
+                'excess': dict(zip(('src', 'meta'), encode_depth(half(excess, 'max')))),
                 'stats': stats}
 
     # --- per-trial totals and the threshold sweep ---------------------------
@@ -1133,7 +1143,7 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
                          ('stdMean', extras.get('stdMean')),
                          ('stdMax', extras.get('stdMax'))):
             if arr is not None:
-                s, m = encode_depth(half(arr[i]))
+                s, m = encode_depth(half(arr[i], 'max'))
                 entry[key] = {'src': s, 'meta': m}
         # the depth camera stills copied out by depth_endpoints
         for key, name in (('jpgFirst', days[i].get('first_jpg')),
@@ -1633,17 +1643,52 @@ function travelSection(t) {
 
   const grid = document.createElement('div');
   grid.className = 'grid';
+  box.appendChild(grid);
   const hi = Math.max(s.max, s.median * 4);
+  let k = 5;
+  const maskSlot = document.createElement('div');
+
   loadAll([t.travel.rate, t.travel.excess]).then(() => {
     grid.appendChild(mapPanel(decode(t.travel.rate),
       '<b>Travel rate</b> — total movement per lights-on hour, over ' + s.nDays +
-      ' days and ' + s.hours + ' h. Log scale.', { log: [s.median / 2, hi] }));
+      ' days and ' + s.hours + ' h. Downsampled by maximum, so the hover value is ' +
+      'comparable with the histogram below. Log scale.', { log: [s.median / 2, hi] }));
     grid.appendChild(mapPanel(decode(t.travel.excess),
-      '<b>Excess travel rate</b> — the same with |net change| subtracted, so a ' +
-      'pixel that genuinely built a lot cannot look like churn. Log scale.',
-      { log: [s.median / 2, hi] }));
+      '<b>Excess travel rate</b> — the same with |net change| subtracted, so a pixel that ' +
+      'genuinely built a lot cannot look like churn. This is what the threshold is applied ' +
+      'to. Log scale.', { log: [s.median / 2, hi] }));
+    grid.appendChild(maskSlot);
+    drawMask();
   });
-  box.appendChild(grid);
+
+  function drawMask() {
+    const cut = s.median * Math.pow(s.madFactor, k);
+    const vals = decode(t.travel.excess);
+    const flagged = new Float32Array(vals.length);
+    let n = 0, valid = 0;
+    for (let i = 0; i < vals.length; i++) {
+      if (Number.isNaN(vals[i])) { flagged[i] = NaN; continue; }
+      valid++;
+      if (vals[i] > cut) { flagged[i] = vals[i]; n++; } else flagged[i] = NaN;
+    }
+    maskSlot.textContent = '';
+    maskSlot.appendChild(mapPanel(flagged,
+      '<b>What a cut at k = ' + k + ' would mask</b> — ' + n + ' of ' + valid +
+      ' shown pixels (' + (100 * n / Math.max(1, valid)).toFixed(2) + '%), above <b>' +
+      cut.toFixed(3) + ' cm/h</b>. Everything below the cut is blank. Percentages here are ' +
+      'of the half-resolution map, so they run a little above the table, which is computed ' +
+      'at full resolution.', { log: [cut, hi] }));
+    const ctl = document.createElement('div');
+    ctl.className = 'bar';
+    ctl.style.margin = '0';
+    ctl.innerHTML = '<label>k = <b>' + k + '</b></label>' +
+      '<input type="range" min="1" max="8" step="0.5" value="' + k + '">';
+    ctl.querySelector('input').addEventListener('input', e => {
+      k = parseFloat(e.target.value);
+      drawMask();
+    });
+    maskSlot.appendChild(ctl);
+  }
 
   const chart = document.createElement('div');
   chart.className = 'chart';
