@@ -141,7 +141,7 @@ class DepthPreparer:
 			
 			mask, stats = trialChurnMask(interpDepthData, self.lp, trial,
                              tray_mask=region, k=5, std_mean=trial_std_mean)
-
+			pdb.set_trace()
 			
 			if stats['applied']:
 			    interpDepthData[trial.days[0][0].index:trial.days[-1][1].index + 1, mask] = np.nan
