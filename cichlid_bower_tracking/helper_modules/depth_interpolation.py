@@ -56,6 +56,13 @@ def interpolate_time(day, min_good=0.7, inplace=False):
         col = flat[:, p]
         good = valid[:, p]
         col[~good] = np.interp(rows[~good], rows[good], col[good])
+
+    # Below the threshold, blank the whole column rather than leaving partial
+    # data. Otherwise the day ends with a NaN pattern that differs frame to
+    # frame — a pixel might hold a reading in the morning and none by evening —
+    # and interpolate_space, which takes its hole mask from the first frame,
+    # would fill the morning and leave the evening untouched.
+    flat[:, n_valid < min_good * T] = np.nan
     return day
 
 
@@ -132,7 +139,15 @@ def interpolate_space(day, usable=None, max_hole=None, inplace=False):
     if usable is None:
         usable = np.isfinite(day).any(axis=0)
 
-    hole = ~np.isfinite(day[0]) & usable
+    # Enforce a consistent hole mask rather than assuming one: a pattern that
+    # varies frame to frame would be filled in some frames and not others.
+    missing_any = ~np.isfinite(day).all(axis=0)
+    missing_all = ~np.isfinite(day).any(axis=0)
+    inconsistent = missing_any & ~missing_all & usable
+    if inconsistent.any():
+        day[:, inconsistent] = np.nan
+
+    hole = missing_any & usable
     if not hole.any():
         return day
 
