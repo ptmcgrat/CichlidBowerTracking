@@ -66,6 +66,8 @@ class DepthPreparer:
 
 	def uploadProjectData(self, delete = True):
 		self.fileManager.uploadData(self.fileManager.localSmoothDepthFile)
+		self.fileManager.uploadData(self.fileManager.localInterpDepthFile)
+		
 		self.fileManager.uploadData(self.fileManager.localRawDepthFile)
 		self.fileManager.uploadData(self.fileManager.localProjectDir + 'DepthFiles')
 		#self.fileManager.uploadData(self.fileManager.localSmoothDepthDT)
@@ -140,8 +142,7 @@ class DepthPreparer:
     		[np.nanmean(rawStdData[a.index:b.index + 1], axis=0) for a, b in trial.days]), axis=0)
 			
 			mask, stats = trialChurnMask(interpDepthData, self.lp, trial,
-                             tray_mask=region, k=5, std_mean=trial_std_mean)
-			pdb.set_trace()
+                             tray_mask=region, k=3.5, std_mean=trial_std_mean)
 			
 			if stats['applied']:
 			    interpDepthData[trial.days[0][0].index:trial.days[-1][1].index + 1, mask] = np.nan
@@ -151,7 +152,7 @@ class DepthPreparer:
 			    day[:] = interpolate_space(day, usable=region)	
 
 		# Save interpolated data
-		np.save(self.fileManager.localSmoothDepthFile, interpDepthData)
+		np.save(self.fileManager.localInterpDepthFile, interpDepthData)
 		# Smooth and filter out bad data 
 		smoothDepthData = interpDepthData.copy()
 		
