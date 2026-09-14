@@ -1045,6 +1045,33 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
         b = baseline_index[d['trial']]
         cumulative = smooth[b, 0] - last_s
         entry['cumulative'] = volume_summary(cumulative, TOTAL_THRESHOLD)
+
+        # travel rate for this day alone, at full resolution. The trial-level
+        # threshold assumes one noise floor for the whole trial; if conditions
+        # change day to day that is either too loose or too tight, so the same
+        # statistic is computed per day and can be compared.
+        t0 = datetime.datetime.fromisoformat(d['first_time'])
+        t1 = datetime.datetime.fromisoformat(d['last_time'])
+        hours = max(0.01, (t1 - t0).total_seconds() / 3600.0)
+        entry['hours'] = round(hours, 2)
+        if 'travel' in extras:
+            ex = (extras['travel'][i] - np.abs(daily)) / hours
+            v = ex[np.isfinite(ex) & (ex > 0)]
+            if v.size > 100:
+                lv = np.log(v)
+                lmed = float(np.median(lv))
+                lmad = float(np.median(np.abs(lv - lmed))) * 1.4826
+                entry['travelStats'] = {
+                    'median': round(float(np.exp(lmed)), 4),
+                    'madFactor': round(float(np.exp(lmad)), 3),
+                    'p99': round(float(np.percentile(v, 99)), 4),
+                    'max': round(float(v.max()), 3),
+                    'cuts': [{'k': k,
+                              'value': round(float(np.exp(lmed + k * lmad)), 4),
+                              'masked': round(100.0 * float(np.count_nonzero(
+                                  v > np.exp(lmed + k * lmad))) / v.size, 2)}
+                             for k in (1, 2, 3, 4, 5, 6)],
+                }
         if d['overnightOK']:
             overnight = last_s - smooth[i + 1, 0]
             entry['overnight'] = volume_summary(overnight, DAILY_THRESHOLD)
@@ -1139,6 +1166,11 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
                          ('rawFirst', raw[i, 0]), ('rawLast', raw[i, 1])):
             s, m = encode_depth(half(arr), clip_range=height_window)
             entry[key] = {'src': s, 'meta': m}
+        if 'travel' in extras:
+            hrs = max(0.01, day_stats[i].get('hours', 1) if i < len(day_stats) else 1)
+            ex = (extras['travel'][i] - np.abs(smooth[i, 0] - smooth[i, 1])) / hrs
+            s, m = encode_depth(half(ex, 'max'))
+            entry['excess'] = {'src': s, 'meta': m}
         for key, arr in (('travel', extras.get('travel')),
                          ('stdMean', extras.get('stdMean')),
                          ('stdMax', extras.get('stdMax'))):
@@ -1620,6 +1652,7 @@ function renderTrial(t) {
         ' cm total). The threshold slider changes only what is coloured in the maps.';
       tableSlot.appendChild(p);
       tableSlot.appendChild(sweepChart(t));
+      tableSlot.appendChild(dayTravelSection(t, d, f));
       tableSlot.appendChild(travelSection(t));
     });
   }
@@ -1742,6 +1775,108 @@ function travelSection(t) {
     '</b> &middot; max <b>' + s.max + '</b>';
   box.appendChild(p);
   return box;
+}
+
+function dayTravelSection(t, d, f) {
+  const box = document.createElement('div');
+  const s = d.travelStats;
+  if (!s || !f.excess) return box;
+  const h = document.createElement('h2');
+  h.textContent = 'Travel rate for this day';
+  box.appendChild(h);
+
+  let k = 5;
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  box.appendChild(grid);
+
+  const info = document.createElement('p');
+  info.className = 'stat';
+  info.innerHTML = 'Over ' + d.hours + ' h. Median <b>' + s.median + '</b> cm/h &middot; ' +
+    'MAD factor <b>&times;' + s.madFactor + '</b> &middot; 99th <b>' + s.p99 + '</b> &middot; ' +
+    'max <b>' + s.max + '</b>. Thresholds here are from this day alone, not the trial.';
+  box.appendChild(info);
+
+  const tbl = document.createElement('table');
+  tbl.className = 'vol';
+  tbl.style.marginTop = '10px';
+  tbl.innerHTML = '<tr><th>cut</th><th>rate cm/h</th><th>masked this day</th>' +
+    '<th>trial-level rate</th></tr>' +
+    s.cuts.map(c => {
+      const tc = (t.travel && t.travel.stats.cuts || []).find(x => x.k === c.k);
+      return '<tr><td>k = ' + c.k + '</td><td>' + c.value + '</td><td>' + c.masked +
+             ' %</td><td>' + (tc ? tc.value : '\u2014') + '</td></tr>';
+    }).join('');
+  box.appendChild(tbl);
+
+  function drawMask() {
+    const cut = s.median * Math.pow(s.madFactor, k);
+    const vals = decode(f.excess);
+    const flagged = new Float32Array(vals.length);
+    let n = 0, valid = 0;
+    for (let i = 0; i < vals.length; i++) {
+      if (Number.isNaN(vals[i])) { flagged[i] = NaN; continue; }
+      valid++;
+      if (vals[i] > cut) { flagged[i] = vals[i]; n++; } else flagged[i] = NaN;
+    }
+    grid.textContent = '';
+    const hi = Math.max(s.max, s.median * 4);
+    grid.appendChild(mapPanel(vals,
+      '<b>Excess travel rate, this day</b> \u2014 movement per hour with |daily change| ' +
+      'subtracted. Log scale, downsampled by maximum.', { log: [s.median / 2, hi] }));
+    grid.appendChild(mapPanel(flagged,
+      '<b>Masked at k = ' + k + '</b> \u2014 ' + n + ' of ' + valid + ' shown pixels (' +
+      (100 * n / Math.max(1, valid)).toFixed(2) + '%), above <b>' + cut.toFixed(3) +
+      '</b> cm/h using this day\u2019s own median.', { log: [cut, hi] }));
+    const ctl = document.createElement('div');
+    ctl.className = 'bar';
+    ctl.style.margin = '0';
+    ctl.innerHTML = '<label>k = <b>' + k + '</b></label>' +
+      '<input type="range" min="1" max="8" step="0.5" value="' + k + '">';
+    ctl.querySelector('input').addEventListener('input', e => {
+      k = parseFloat(e.target.value); drawMask();
+    });
+    grid.appendChild(ctl);
+  }
+  loadAll([f.excess]).then(drawMask);
+
+  box.appendChild(perDayChart(t, k));
+  return box;
+}
+
+function perDayChart(t) {
+  const host = document.createElement('div');
+  host.className = 'chart';
+  host.style.marginTop = '16px';
+  const days = D.days.filter(x => x.trial === t.trial && x.travelStats);
+  if (!days.length) return host;
+  const w = 1000, hgt = 220, pad = 38;
+  const med = days.map(x => x.travelStats.median);
+  const p99 = days.map(x => x.travelStats.p99);
+  const max = Math.max(...p99, ...med) * 1.1;
+  const bw = (w - 2 * pad) / days.length;
+  let g = '';
+  days.forEach((x, i) => {
+    const px = pad + i * bw;
+    const hm = (x.travelStats.median / max) * (hgt - 2 * pad);
+    const hp = (x.travelStats.p99 / max) * (hgt - 2 * pad);
+    g += '<rect x="' + (px + 1) + '" y="' + (hgt - pad - hp) + '" width="' + (bw - 2) +
+         '" height="' + hp + '" fill="#6fb2e8" opacity="0.35"><title>' + x.date +
+         ' 99th ' + x.travelStats.p99 + ' cm/h</title></rect>' +
+         '<rect x="' + (px + 1) + '" y="' + (hgt - pad - hm) + '" width="' + (bw - 2) +
+         '" height="' + hm + '" fill="var(--tray)"><title>' + x.date + ' median ' +
+         x.travelStats.median + ' cm/h, MAD factor x' + x.travelStats.madFactor +
+         '</title></rect>';
+  });
+  g += '<line x1="' + pad + '" y1="' + (hgt - pad) + '" x2="' + (w - pad) + '" y2="' +
+       (hgt - pad) + '" stroke="#262d38"/>' +
+       '<text x="' + pad + '" y="' + (pad - 10) + '" fill="#93a0b0" font-size="12">' +
+       'Per-day excess travel rate across the trial \u2014 orange median, pale blue 99th ' +
+       'percentile (cm/h). A flat median means one trial-level threshold is fine; a ' +
+       'varying one means it is not.</text>';
+  host.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" preserveAspectRatio="none">' +
+                   g + '</svg>';
+  return host;
 }
 
 function sweepChart(t) {
