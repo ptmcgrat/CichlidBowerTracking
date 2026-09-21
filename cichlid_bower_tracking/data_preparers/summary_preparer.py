@@ -274,6 +274,7 @@ class SummaryPreparer:
 					axes[i,j].set_ylabel('Trial_'+str(i+1))
 		figHourly.tight_layout()
 		figHourly.savefig(self.fileManager.localSummarizedHourlyClusterFigure)
+		e_dt = cat_h_dt.groupby(['ProjectID','Trial#','Day','ManipulationID']).agg({'Number':'sum'}).reset_index()
 		e_dt.to_csv(self.fileManager.localSummarizedClustersEvents)
 		plt.close('all')
 
@@ -300,7 +301,6 @@ class SummaryPreparer:
 				axes[k,1].set_xticks([])
 			axes[k,1].yaxis.tick_right()
 
-		pdb.set_trace()
 		figHist.tight_layout()
 		#plt.show()
 		figHist.savefig(self.fileManager.localSummarizedHistogramFigure)
