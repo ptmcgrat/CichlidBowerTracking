@@ -255,7 +255,6 @@ class ClusterAnalyzer:
 		self.clusterData['InFrame'] = self.clusterData.apply(lambda row: buffered_polygon.contains(Point(row['Y'],row['X'])), axis = 1)
 
 		self.clusterData.to_csv(self.fileManager.localAllLabeledClustersFile)
-		pdb.set_trace()
 		
 	def _appendDepthCoordinates(self):
 		# adds columns containing X and Y in depth coordinates to all cluster csv

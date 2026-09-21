@@ -300,6 +300,7 @@ class SummaryPreparer:
 				axes[k,1].set_xticks([])
 			axes[k,1].yaxis.tick_right()
 
+		pdb.set_trace()
 		figHist.tight_layout()
 		#plt.show()
 		figHist.savefig(self.fileManager.localSummarizedHistogramFigure)
