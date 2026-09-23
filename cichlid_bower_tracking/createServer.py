@@ -127,6 +127,63 @@ def encode_depth(arr, scale=DEPTH_SCALE, clip_percentile=0.2, clip_range=None):
     return b64(buf.tobytes(), 'image/png'), meta
 
 
+def polygon_area(pts):
+    """Shoelace area of a simple polygon."""
+    if len(pts) < 3:
+        return 0.0
+    a = 0.0
+    for i in range(len(pts)):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % len(pts)]
+        a += x1 * y2 - x2 * y1
+    return abs(a) / 2.0
+
+
+def clip_polygon(subject, clip):
+    """Sutherland-Hodgman clip of one convex polygon by another.
+
+    Both crops are quadrilaterals, so this is enough and avoids a dependency on
+    shapely for what is a few lines of arithmetic.
+    """
+    def inside(p, a, b):
+        return (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) >= 0
+
+    def intersect(p, q, a, b):
+        x1, y1, x2, y2 = p[0], p[1], q[0], q[1]
+        x3, y3, x4, y4 = a[0], a[1], b[0], b[1]
+        den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+        if abs(den) < 1e-12:
+            return q
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
+        return (x1 + t * (x2 - x1), y1 + t * (y2 - y1))
+
+    # orient the clip polygon counter-clockwise so `inside` has a fixed sense
+    clip = list(clip)
+    a = 0.0
+    for i in range(len(clip)):
+        x1, y1 = clip[i]
+        x2, y2 = clip[(i + 1) % len(clip)]
+        a += x1 * y2 - x2 * y1
+    if a < 0:
+        clip = clip[::-1]
+
+    out = [tuple(p) for p in subject]
+    for i in range(len(clip)):
+        if not out:
+            return []
+        a_pt, b_pt = clip[i], clip[(i + 1) % len(clip)]
+        prev, out = out, []
+        for j, cur in enumerate(prev):
+            last = prev[j - 1]
+            if inside(cur, a_pt, b_pt):
+                if not inside(last, a_pt, b_pt):
+                    out.append(intersect(last, cur, a_pt, b_pt))
+                out.append(cur)
+            elif inside(last, a_pt, b_pt):
+                out.append(intersect(last, cur, a_pt, b_pt))
+    return out
+
+
 def polygon_mask(shape, points):
     mask = np.zeros(shape, np.uint8)
     cv2.fillPoly(mask, [np.array(points, np.int32)], 1)
@@ -319,16 +376,30 @@ def build_prep_payload(fm, lp, trial_status, pairs, neighbours=None):
                            'label': 'Trial ' + str(i) + ' \u2014 height change, positive is sand added'}
         trials.append(entry)
 
-    # the depth crop inverse-warped into Pi coordinates, so the video crop can be
-    # checked against what the depth camera can actually see
-    depth_in_video = None
+    # the depth crop inverse-warped into Pi coordinates, so how much of the
+    # camera's view the depth data actually covers can be seen and measured
+    depth_in_video, coverage = None, None
     try:
         inv = np.linalg.inv(transM)
         pts = cv2.perspectiveTransform(
             np.array(depth_points, np.float32).reshape(-1, 1, 2), inv).reshape(-1, 2)
         depth_in_video = [[int(round(x)), int(round(y))] for x, y in pts]
-    except np.linalg.LinAlgError:
-        pass
+
+        w, h = pi_size if pi_size else (1296, 972)
+        frame = [(0, 0), (w, 0), (w, h), (0, h)]
+        v_area = polygon_area(video_points)
+        f_area = polygon_area(frame)
+        if v_area > 0 and f_area > 0:
+            coverage = {
+                'ofVideoCrop': round(
+                    100.0 * polygon_area(clip_polygon(depth_in_video, video_points)) / v_area, 1),
+                'ofFrame': round(
+                    100.0 * polygon_area(clip_polygon(depth_in_video, frame)) / f_area, 1),
+                'videoOfFrame': round(
+                    100.0 * polygon_area(clip_polygon(video_points, frame)) / f_area, 1),
+            }
+    except Exception as e:
+        print('    could not compute depth coverage: ' + repr(e))
 
     prep_log = ''
     if os.path.exists(fm.localPrepLogfile):
@@ -342,7 +413,7 @@ def build_prep_payload(fm, lp, trial_status, pairs, neighbours=None):
         'masterStart': str(lp.master_start), 'masterStop': str(getattr(lp, 'master_stop', '')),
         'nFrames': len(lp.frames), 'nMovies': len(lp.movies),
         'depthPoints': depth_points, 'videoPoints': video_points,
-        'depthInVideo': depth_in_video,
+        'depthInVideo': depth_in_video, 'coverage': coverage,
         'frameSize': [lp.width, lp.height], 'piSize': pi_size or [1296, 972],
         'trials': trials,
         'logIssues': lp.malformed_file, 'prepLog': prep_log,
@@ -378,7 +449,7 @@ PAGE = r"""<!DOCTYPE html>
     margin: 0; background: var(--bg); color: var(--ink);
     font: 15px/1.55 "Inter", "Helvetica Neue", Arial, sans-serif;
   }
-  .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 24px 72px; }
+  .wrap { max-width: 1680px; margin: 0 auto; padding: 28px 24px 72px; }
   h1 { font-size: 25px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
   h2 { font-size: 16px; font-weight: 600; margin: 30px 0 12px; }
   .sub { color: var(--ink-dim); margin: 0 0 22px; }
@@ -394,7 +465,11 @@ PAGE = r"""<!DOCTYPE html>
   }
   .tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .tabs button:focus-visible { outline: 2px solid var(--tray); outline-offset: 2px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; }
+  /* the depth crop row is four views of one thing, so keep them side by side */
+  .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 1400px) { .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .grid.cols-4 { grid-template-columns: 1fr; } }
   figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
            overflow: hidden; }
   figcaption { padding: 10px 13px; font-size: 13px; color: var(--ink-dim);
@@ -405,7 +480,7 @@ PAGE = r"""<!DOCTYPE html>
   .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .stage polygon.video { stroke: var(--video); }
   .stage polygon { fill: none; stroke: var(--tray); stroke-width: 3; vector-effect: non-scaling-stroke; }
-  .stage polygon.derived { stroke: rgba(242,163,60,.45); stroke-width: 2; stroke-dasharray: 8 6; }
+  .stage polygon.derived { stroke-width: 2; stroke-dasharray: 8 6; opacity: .65; }
   .trial { margin-bottom: 26px; }
   .trial h2 { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
               border-bottom: 1px solid var(--line); padding-bottom: 8px; margin: 0 0 14px; }
@@ -590,10 +665,12 @@ function swipePanel(base, overSrc, caption) {
 }
 
 const DEPTH_POLY = [{ points: D.depthPoints }];
-const VIDEO_POLY = [{ points: D.videoPoints },
+const VIDEO_POLY = [{ points: D.videoPoints, cls: 'video' },
                     { points: D.depthInVideo, cls: 'derived' }];
+const REACH_POLY = [{ points: D.videoPoints, cls: 'video derived' },
+                    { points: D.depthInVideo }];
 
-function trialRow(t, build) {
+function trialRow(t, build, cls) {
   const sec = document.createElement('section');
   sec.className = 'trial';
   const gaps = t.gaps ? ' \u00b7 pairs matched to ' + t.gaps.first + ' and ' + t.gaps.last + ' min'
@@ -606,21 +683,35 @@ function trialRow(t, build) {
     return sec;
   }
   const grid = document.createElement('div');
-  grid.className = 'grid';
+  grid.className = 'grid' + (cls ? ' ' + cls : '');
   build(grid, t);
   sec.appendChild(grid);
   return sec;
 }
 
+function reachCaption() {
+  const c = D.coverage;
+  if (!c) return '<b>Depth reach</b> \u2014 the tray crop mapped onto the Pi camera. ' +
+                 'Coverage could not be computed.';
+  return '<b>Depth reach</b> \u2014 the tray crop (orange) mapped into Pi coordinates, ' +
+         'against the video crop (blue). Depth covers <b>' + c.ofVideoCrop +
+         '%</b> of the video crop and <b>' + c.ofFrame + '%</b> of the whole frame; the ' +
+         'video crop itself is ' + c.videoOfFrame + '% of the frame. The rest is video the ' +
+         'depth camera never sees.';
+}
+
 function viewDepthCrop() {
   const box = document.createElement('div');
   box.innerHTML = '<p class="sub">The polygon should follow the tray walls. Change that ' +
-    'reaches the boundary means the crop is clipping part of the bower.</p>';
+    'reaches the boundary means the crop is clipping part of the bower. The fourth panel ' +
+    'shows the same crop in Pi coordinates, so how much of the camera view carries depth ' +
+    'data is visible.</p>';
   D.trials.forEach(t => box.appendChild(trialRow(t, (grid, t) => {
     grid.appendChild(imagePanel(t.depthFirst, '<b>Start</b> \u2014 depth camera', DEPTH_POLY));
     grid.appendChild(imagePanel(t.depthLast, '<b>Stop</b> \u2014 depth camera', DEPTH_POLY));
     grid.appendChild(depthPanel(t.change, '<b>Total change over the trial</b>', DEPTH_POLY));
-  })));
+    grid.appendChild(imagePanel(t.piFirst, reachCaption(), REACH_POLY, D.piSize));
+  }, 'cols-4')));
   return box;
 }
 
@@ -3422,7 +3513,12 @@ function poll(jobId, behind) {
 }
 
 function saveAsFile(out, text) {
-  const name = D.projectID + '__' + out.initials + '__registration.json';
+  // A timestamp keeps every save a distinct file. Without it a second save of
+  // the same project lands as "… (1).json", which no longer matches the glob
+  // used to apply them — and since each save carries the crops as well as the
+  // points, the file that gets skipped is the more complete one.
+  const t = out.created.replace(/[-:]/g, '').replace('T', '_').slice(0, 15);
+  const name = D.projectID + '__' + out.initials + '__' + t + '__registration.json';
   let ok = false;
   try {
     const blob = new Blob([text], { type: 'application/json' });
@@ -3781,6 +3877,22 @@ def category_of(s_dt, projectID):
     return '' if raw is None or str(raw).strip().lower() in ('nan', '') else str(raw).strip()
 
 
+def remove_source(path, cloud_path=None):
+    """Drop a submission file once it has been applied.
+
+    Nothing is lost: apply_submission writes the whole submission, and what came
+    of it, into the project's Backups directory before this runs.
+    """
+    try:
+        os.remove(path)
+    except OSError:
+        return False
+    if cloud_path:
+        subprocess.run(['rclone', 'deletefile', cloud_path],
+                       capture_output=True, encoding='utf-8')
+    return True
+
+
 def apply_registrations(args):
     fm_obj = FM(args.AnalysisID)
     s_dt = fm_obj.s_dt
@@ -3842,7 +3954,37 @@ def apply_registrations(args):
         return 1
 
     print('Found ' + str(len(paths)) + ' registration file(s)')
+
+    # Several files can name the same project — a second pass over the crops, or
+    # a browser-renamed duplicate. Each save carries the whole state, so the
+    # newest one supersedes the rest rather than being merged with them.
+    loaded = []
+    for path in paths:
+        try:
+            with open(path) as f:
+                loaded.append((path, json.load(f)))
+        except Exception as e:
+            print(os.path.basename(path) + ': not readable (' + repr(e) + ')')
+    newest = {}
+    for path, sub in loaded:
+        pid = sub.get('projectID')
+        stamp = sub.get('created', '')
+        if pid not in newest or stamp > newest[pid][1].get('created', ''):
+            newest[pid] = (path, sub)
+    superseded_by = {}
+    for path, sub in loaded:
+        pid = sub.get('projectID')
+        winner = newest.get(pid, (None,))[0]
+        if winner != path:
+            superseded_by.setdefault(pid, []).append(path)
+    superseded = [os.path.basename(p) for ps in superseded_by.values() for p in ps]
+    if superseded:
+        print('Superseded by a newer save for the same project, skipping ' +
+              str(len(superseded)) + ': ' + ', '.join(superseded))
+    paths = [p for p, _ in sorted(newest.values(), key=lambda x: x[1].get('projectID', ''))]
+
     applied, skipped, stale_any = [], [], {}
+    applied_paths = {}
     for path in paths:
         name = os.path.basename(path)
         try:
@@ -3884,6 +4026,7 @@ def apply_registrations(args):
               str(record['nInliers']) + ' inliers, fit ' + str(record['rms_px']) + ' px' +
               (' — backup ' + record['backupStamp']))
         applied.append(projectID)
+        applied_paths[projectID] = [path] + superseded_by.get(projectID, [])
         ledger[os.path.basename(path)] = {
             'projectID': projectID, 'appliedAt': record['appliedAt'],
             'initials': who, 'rms_px': record['rms_px'], 'backupStamp': record['backupStamp']}
@@ -3927,6 +4070,20 @@ def apply_registrations(args):
             json.dump(ledger, f, indent=1)
         upload(fm_obj, ledger_path)
 
+    if applied and not args.Keep:
+        removed = 0
+        for projectID in dict.fromkeys(applied):
+            for path in applied_paths.get(projectID, []):
+                cloud = None
+                if not args.Files and os.path.dirname(path).rstrip('/') == sub_dir.rstrip('/'):
+                    cloud = (sub_dir + os.path.basename(path)).replace(
+                        fm_obj.localMasterDir, fm_obj.cloudMasterDir)
+                if remove_source(path, cloud):
+                    removed += 1
+        if removed:
+            print('Removed ' + str(removed) + ' processed submission file(s). The full '
+                  'submissions are kept in each project\'s Backups directory.')
+
     print('\nApplied ' + str(len(applied)) + ', skipped ' + str(len(skipped)) + '.')
     if stale_any:
         print('\nThese projects have Depth or Cluster results from before the change:')
@@ -3966,6 +4123,8 @@ def main():
                     help='Reapply submissions that have already been applied')
     ar.add_argument('--NoRebuild', action='store_true',
                     help='Apply the files without rebuilding the affected pages')
+    ar.add_argument('--Keep', action='store_true',
+                    help='Leave the submission files in place after applying them')
     args = parser.parse_args()
 
     if args.PageType == 'ApplyRegistration':
