@@ -178,6 +178,26 @@ class PrepFiles2Missing(Exception):
 TRIAL_SIDES = [('First', 'start'), ('Last', 'end')]
 
 
+def project_order(s_dt):
+    """The projects a sweep covers, in the order the pages link them."""
+    return s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True)].index.sort_values().to_list()
+
+
+def registration_info_path(fm):
+    return fm.localAnalysisDir + 'RegistrationInfo.json'
+
+
+def read_registration_info(fm):
+    path = registration_info_path(fm)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 def load_prepfiles2(fm, lp):
     """Read the corrected image pairs. Raises if they have not been built.
 
@@ -245,7 +265,7 @@ def check_prep_files(fm, lp):
     return problems, trial_status
 
 
-def build_prep_payload(fm, lp, trial_status, pairs):
+def build_prep_payload(fm, lp, trial_status, pairs, neighbours=None):
     """Three views of the same thing: the depth crop, the video crop, and the
     registration between them, each with one row per trial."""
     depth_points = parse_points(fm.localDepthCropFile)
@@ -326,6 +346,8 @@ def build_prep_payload(fm, lp, trial_status, pairs):
         'frameSize': [lp.width, lp.height], 'piSize': pi_size or [1296, 972],
         'trials': trials,
         'logIssues': lp.malformed_file, 'prepLog': prep_log,
+        'registration': read_registration_info(fm),
+        'neighbours': neighbours or {},
         'built': str(datetime.datetime.now().replace(microsecond=0)),
         'branch': fm.branch_name,
     }
@@ -342,6 +364,7 @@ PAGE = r"""<!DOCTYPE html>
 <style>
   :root {
     --video: #6fb2e8;
+    --ok: #5aa87a;
     --ink: #e8ecf1;
     --ink-dim: #93a0b0;
     --bg: #0e1116;
@@ -421,6 +444,8 @@ PAGE = r"""<!DOCTYPE html>
   .btn { margin-left: auto; border: 1px solid var(--line); color: var(--ink);
          padding: 7px 14px; border-radius: 6px; font-size: 14px; }
   .btn:hover { border-color: var(--tray); text-decoration: none; }
+  .btn.off { opacity: .35; pointer-events: none; }
+  .fresh { color: var(--ok); }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -430,8 +455,13 @@ PAGE = r"""<!DOCTYPE html>
   <h1 id="title"></h1>
   <p class="sub" id="subtitle"></p>
   <div class="meta" id="meta"></div>
-  <div class="bar"><span class="stat">Crops and registration are reviewed per trial.</span>
-    <a class="btn" id="fixLink" href="Register.html">Fix registration or crops</a></div>
+  <div class="bar">
+    <a class="btn" id="prevLink" style="margin-left:0">&larr; Previous</a>
+    <a class="btn" id="nextLink" style="margin-left:0">Next &rarr;</a>
+    <span class="stat" id="position"></span>
+    <span class="stat" id="regInfo"></span>
+    <a class="btn" id="fixLink" href="Register.html">Fix registration or crops</a>
+  </div>
   <div class="tabs" id="tabs" role="tablist"></div>
   <div id="body"></div>
   <p class="foot" id="foot"></p>
@@ -631,6 +661,27 @@ function build() {
   const firstKey = (D.trials.find(t => t.pairKeys) || {}).pairKeys;
   document.getElementById('fixLink').href =
     'Register.html' + (firstKey ? '?pair=' + encodeURIComponent(firstKey.first) : '');
+
+  // step between projects without going back to the index
+  const nb = D.neighbours || {};
+  const prev = document.getElementById('prevLink'), next = document.getElementById('nextLink');
+  if (nb.prev) prev.href = '../' + nb.prev + '/Prep.html'; else prev.className = 'btn off';
+  if (nb.next) next.href = '../' + nb.next + '/Prep.html'; else next.className = 'btn off';
+  if (nb.position && nb.total)
+    document.getElementById('position').textContent =
+      nb.position + ' of ' + nb.total + ' in this analysis';
+
+  const reg = D.registration;
+  const el = document.getElementById('regInfo');
+  if (reg) {
+    const who = (reg.who || reg.initials || 'unknown').split('@')[0];
+    el.innerHTML = 'Registration updated <b>' + reg.appliedAt.slice(0, 16) + '</b> by <b>' +
+      who + '</b> \u00b7 ' + reg.nPairs + ' pairs, ' + reg.rms_px + ' px' +
+      (reg.note ? ' \u00b7 ' + reg.note : '');
+    el.className = 'stat fresh';
+  } else {
+    el.textContent = 'Registration has not been revised since the pipeline set it.';
+  }
 
   if (D.logIssues && D.logIssues.length) {
     const n = document.createElement('div');
@@ -873,6 +924,46 @@ render();
 </body>
 </html>
 """
+
+
+INDEX_CACHE = '_index.json'
+
+
+def load_index_entries(out_root):
+    """Entries from the last sweep, so one project can be refreshed alone."""
+    path = out_root + INDEX_CACHE
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_index_entries(out_root, entries):
+    with open(out_root + INDEX_CACHE, 'w') as f:
+        json.dump(entries, f)
+
+
+def refresh_index(fm_obj, out_root, entry, branch):
+    """Replace one project's entry and rewrite index.html.
+
+    Keeps the landing page current as projects are fixed one at a time, without
+    rebuilding every project to do it.
+    """
+    entries = load_index_entries(out_root)
+    replaced = False
+    for i, e in enumerate(entries):
+        if e.get('id') == entry.get('id'):
+            entries[i] = entry
+            replaced = True
+            break
+    if not replaced:
+        entries.append(entry)
+    entries.sort(key=lambda e: e.get('id', ''))
+    save_index_entries(out_root, entries)
+    return write_index(out_root + 'index.html', fm_obj.analysisID, entries, branch)
 
 
 def write_index(path, analysis_id, projects, branch):
@@ -3307,12 +3398,13 @@ function poll(jobId, behind) {
       if (j.status === 'done') {
         let msg = 'Saved. ' + (j.record ? j.record.nPairs + ' pairs, ' + j.record.nInliers +
                   ' inliers, fit ' + j.record.rms_px + ' px. ' : '');
-        if (j.stale && j.stale.length)
-          msg += j.stale.join(' and ') + ' were computed against the old transform and ' +
-                 'need rerunning. ';
-        msg += 'Reloading\u2026';
-        flash(msg, 'done');
-        setTimeout(() => location.reload(), 2500);
+        const m = document.getElementById('msg');
+        m.className = 'msg done';
+        m.innerHTML = msg +
+          '<a href="Prep.html" style="margin-left:8px">See it on the Prep page</a>' +
+          (j.next ? ' &nbsp;<a href="../' + j.next + '/Prep.html">Next project &rarr;</a>' : '') +
+          '<div class="stat" style="margin-top:6px">Reloading this page in a moment\u2026</div>';
+        setTimeout(() => location.reload(), 4000);
         return;
       }
       if (j.status === 'failed') {
@@ -3482,7 +3574,7 @@ def format_points(points):
     return ','.join([str((int(p[0]), int(p[1]))) for p in points])
 
 
-def apply_submission(fm_obj, sub, s_dt):
+def apply_submission(fm_obj, sub, s_dt, who=None):
     """Recompute the transform with OpenCV and write the three prep files."""
     projectID = sub['projectID']
     pts = sub['points']
@@ -3529,12 +3621,20 @@ def apply_submission(fm_obj, sub, s_dt):
     record = {'appliedAt': str(datetime.datetime.now().replace(microsecond=0)),
               'nPairs': len(pts), 'nInliers': n_in, 'rms_px': round(rms, 3),
               'initials': sub.get('initials', ''), 'note': sub.get('note', ''),
-              'pairKey': sub.get('pairKey', ''), 'backupStamp': stamp,
+              'who': who or sub.get('initials', '') or 'unknown',
+              'pairKey': sub.get('pickPair', sub.get('pairKey', '')),
+              'backupStamp': stamp,
               'depthPoints': depth_points, 'videoPoints': video_points}
+
+    # a single current-state file beside the crops, so the Prep page can say who
+    # last changed the registration without trawling the backups
+    with open(registration_info_path(fm_obj), 'w') as f:
+        json.dump(record, f, indent=1)
     with open(fm_obj.localBackupDir + stamp + '_registration.json', 'w') as f:
         json.dump({'submission': sub, 'applied': record}, f, indent=1)
 
-    for path in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile, fm_obj.localTransMFile]:
+    for path in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile,
+                 fm_obj.localTransMFile, registration_info_path(fm_obj)]:
         upload(fm_obj, path)
     upload(fm_obj, fm_obj.localBackupDir + stamp + '_registration.json')
 
@@ -3548,7 +3648,8 @@ def apply_submission(fm_obj, sub, s_dt):
     return record
 
 
-def build_one(fm_obj, projectID, out_root, category='', delete=False, page_type='Prep'):
+def build_one(fm_obj, projectID, out_root, category='', delete=False,
+              page_type='Prep', neighbours=None):
     """Build the Prep and Register pages for a single project.
 
     Never raises: a project that cannot be built is recorded so the sweep
@@ -3647,7 +3748,7 @@ def build_one(fm_obj, projectID, out_root, category='', delete=False, page_type=
         return entry
     entry['missing'] = len(lp.trials) * 2 - len(pairs)
 
-    payload = build_prep_payload(fm_obj, lp, trial_status, pairs)
+    payload = build_prep_payload(fm_obj, lp, trial_status, pairs, neighbours=neighbours)
 
     project_dir = out_root + projectID + '/'
     fm_obj.createDirectory(project_dir)
@@ -3671,6 +3772,13 @@ def build_one(fm_obj, projectID, out_root, category='', delete=False, page_type=
         shutil.rmtree(fm_obj.localPrepDir, ignore_errors=True)
 
     return entry
+
+
+def category_of(s_dt, projectID):
+    if 'Category' not in s_dt.columns or projectID not in s_dt.index:
+        return ''
+    raw = s_dt.loc[projectID, 'Category']
+    return '' if raw is None or str(raw).strip().lower() in ('nan', '') else str(raw).strip()
 
 
 def apply_registrations(args):
@@ -3766,7 +3874,7 @@ def apply_registrations(args):
                   ', browser fit ' + str(round(sub.get('browserRMS') or 0, 2)) + ' px (dry run)')
             continue
         try:
-            record = apply_submission(fm_obj, sub, s_dt)
+            record = apply_submission(fm_obj, sub, s_dt, who=sub.get('initials'))
         except Exception as e:
             print(projectID + ': failed (' + repr(e) + ')')
             skipped.append(name)
@@ -3785,6 +3893,34 @@ def apply_registrations(args):
     if args.DryRun:
         return 0
 
+    # rebuild the pages for whatever changed, so the loop is one command
+    out_root = fm_obj.localAnalysisStatesDir + 'WebServer/'
+    if applied and not args.NoRebuild and os.path.exists(out_root):
+        order = project_order(s_dt)
+        print('')
+        for projectID in dict.fromkeys(applied):
+            pos = order.index(projectID) if projectID in order else None
+            nb = {} if pos is None else {
+                'prev': order[pos - 1] if pos > 0 else None,
+                'next': order[pos + 1] if pos + 1 < len(order) else None,
+                'position': pos + 1, 'total': len(order)}
+            print('Rebuilding ' + projectID)
+            try:
+                entry = build_one(fm_obj, projectID, out_root,
+                                  category=category_of(s_dt, projectID),
+                                  page_type='Prep', neighbours=nb)
+            except Exception as e:
+                print('  rebuild failed: ' + repr(e))
+                continue
+            if entry['status'] != 'ok':
+                print('  ' + entry['status'] + ': ' + entry.get('error', ''))
+                continue
+            for fname in entry.get('files', []):
+                upload(fm_obj, out_root + projectID + '/' + fname)
+            refresh_index(fm_obj, out_root, entry, fm_obj.branch_name)
+        upload(fm_obj, out_root + 'index.html')
+        upload(fm_obj, out_root + INDEX_CACHE, quiet=True)
+
     if applied and not args.Files:
         fm_obj.createDirectory(sub_dir)
         with open(ledger_path, 'w') as f:
@@ -3793,16 +3929,13 @@ def apply_registrations(args):
 
     print('\nApplied ' + str(len(applied)) + ', skipped ' + str(len(skipped)) + '.')
     if stale_any:
-        print('\nThese projects now have results computed against the old transform:')
+        print('\nThese projects have Depth or Cluster results from before the change:')
         for projectID, what in stale_any.items():
             print('  ' + projectID + ': ' + ', '.join(what))
-        print('Rerun those stages, then rebuild the pages with:')
+    if args.NoRebuild and applied:
+        print('\nPages not rebuilt. To update them:')
         print('  python createServer.py Prep ' + args.AnalysisID +
-              ' --ProjectIDs ' + ' '.join(stale_any.keys()))
-    elif applied:
-        print('Rebuild the pages with:')
-        print('  python createServer.py Prep ' + args.AnalysisID +
-              ' --ProjectIDs ' + ' '.join(applied))
+              ' --ProjectIDs ' + ' '.join(dict.fromkeys(applied)))
     return 0
 
 
@@ -3831,6 +3964,8 @@ def main():
                     help='Report what would change without writing or uploading anything')
     ar.add_argument('--Force', action='store_true',
                     help='Reapply submissions that have already been applied')
+    ar.add_argument('--NoRebuild', action='store_true',
+                    help='Apply the files without rebuilding the affected pages')
     args = parser.parse_args()
 
     if args.PageType == 'ApplyRegistration':
@@ -3843,7 +3978,8 @@ def main():
     fm_obj = FM(args.AnalysisID)
     s_dt = fm_obj.s_dt
 
-    projectIDs = s_dt[(s_dt.Prep == True) & (s_dt.RunAnalysis == True)].index.sort_values().to_list()
+    projectIDs = project_order(s_dt)
+    full_order = list(projectIDs)
     if args.ProjectIDs is not None:
         unknown = [p for p in args.ProjectIDs if p not in s_dt.index]
         if unknown:
@@ -3892,8 +4028,13 @@ def main():
             raw = s_dt.loc[projectID, 'Category']
             category = '' if raw is None or str(raw).strip().lower() in ('nan', '') else str(raw).strip()
         try:
+            pos = full_order.index(projectID) if projectID in full_order else None
+            nb = {} if pos is None else {
+                'prev': full_order[pos - 1] if pos > 0 else None,
+                'next': full_order[pos + 1] if pos + 1 < len(full_order) else None,
+                'position': pos + 1, 'total': len(full_order)}
             entry = build_one(fm_obj, projectID, out_root, category=category,
-                              delete=args.Delete, page_type=args.PageType)
+                              delete=args.Delete, page_type=args.PageType, neighbours=nb)
         except Exception as e:
             entry = {'id': projectID, 'tank': '', 'category': category, 'trials': 0, 'start': '',
                      'thumb': None, 'missing': 0, 'status': 'failed', 'pages': {}, 'files': [],
@@ -3916,7 +4057,15 @@ def main():
         for name in ('Prep', 'Depth', 'Cluster', 'IntegratedData'):
             if name not in e['pages'] and os.path.exists(d + name + '.html'):
                 e['pages'][name] = name + '.html'
-    index_size = write_index(out_root + 'index.html', args.AnalysisID, entries, fm_obj.branch_name)
+    # merge into whatever the last sweep left, so a partial run does not drop
+    # projects from the index
+    merged = {e['id']: e for e in load_index_entries(out_root)}
+    for e in entries:
+        merged[e['id']] = e
+    ordered = [merged[k] for k in sorted(merged)]
+    save_index_entries(out_root, ordered)
+    index_size = write_index(out_root + 'index.html', args.AnalysisID, ordered,
+                             fm_obj.branch_name)
     print('Wrote ' + out_root + 'index.html (' + str(round(index_size / 1e6, 2)) + ' MB)')
 
     built = len([e for e in entries if e['status'] == 'ok'])
@@ -3943,6 +4092,7 @@ def main():
         return 0
 
     upload(fm_obj, out_root + 'index.html')
+    upload(fm_obj, out_root + INDEX_CACHE, quiet=True)
     print('Open ' + out_root.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir) + 'index.html')
     return 0
 
