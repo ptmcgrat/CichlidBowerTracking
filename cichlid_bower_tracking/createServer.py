@@ -322,6 +322,68 @@ def check_prep_files(fm, lp):
     return problems, trial_status
 
 
+def build_quality_payload(fm, lp, raw, smooth, meta):
+    """Just what the pixel-quality tab needs, so the Prep page can carry it.
+
+    Deliberately smaller than the Depth payload: the endpoint raw frames, the
+    residual map and the day still, at half resolution.
+    """
+    days_meta = meta['days']
+    extras = meta.get('_extras', {})
+    depth_dir = fm.localProjectDir + 'DepthFiles/'
+
+    s_finite = smooth[np.isfinite(smooth)]
+    s_med = float(np.median(s_finite)) if s_finite.size else 60.0
+    window = (s_med - 30.0, s_med + 30.0)
+
+    trials = sorted({d['trial'] for d in days_meta})
+    baselines = {}
+    for t in trials:
+        idx = [i for i, d in enumerate(days_meta) if d['trial'] == t]
+        if idx:
+            baselines[str(t)] = idx[0]
+
+    spans = [d['n_frames'] for d in days_meta]
+    typical = float(np.median(spans)) if spans else 0
+
+    days, frames = [], []
+    for i, d in enumerate(days_meta):
+        entry = {'day': i, 'trial': d['trial'], 'date': d['first_time'][:10],
+                 'firstTime': d['first_time'][11:16], 'lastTime': d['last_time'][11:16],
+                 'nFrames': d['n_frames'],
+                 'partial': bool(d['n_frames'] < 0.75 * typical)}
+        res = extras.get('residual')
+        if res is not None:
+            q = res[i]
+            qv = q[np.isfinite(q) & (q > 0)]
+            if qv.size > 100:
+                lq = np.log(qv)
+                lm = float(np.median(lq))
+                la = float(np.median(np.abs(lq - lm))) * 1.4826
+                entry['quality'] = {'residual': {
+                    'median': round(float(np.exp(lm)), 4),
+                    'madFactor': round(float(np.exp(la)), 4),
+                    'p99': round(float(np.percentile(qv, 99)), 4),
+                    'max': round(float(qv.max()), 3)}}
+        days.append(entry)
+
+        f = {}
+        for key, arr in (('rawFirst', raw[i, 0]), ('rawLast', raw[i, 1])):
+            s, m = encode_depth(half(arr), clip_range=window)
+            f[key] = {'src': s, 'meta': m}
+        if res is not None:
+            s, m = encode_depth(half(res[i], 'max'))
+            f['residual'] = {'src': s, 'meta': m}
+        name = d.get('first_jpg') or d.get('last_jpg')
+        if name and os.path.exists(depth_dir + name):
+            f['jpg'] = encode_image(cv2.imread(depth_dir + name), max_width=lp.width // 2)
+        frames.append(f)
+
+    return {'frameSize': [lp.width // 2, lp.height // 2],
+            'days': days, 'frames': frames, 'baselines': baselines,
+            'trials': [{'trial': t} for t in trials]}
+
+
 def build_prep_payload(fm, lp, trial_status, pairs, neighbours=None):
     """Three views of the same thing: the depth crop, the video crop, and the
     registration between them, each with one row per trial."""
@@ -407,6 +469,17 @@ def build_prep_payload(fm, lp, trial_status, pairs, neighbours=None):
             prep_log = ''.join([line for line in f if 'DateAnalyzed' in line
                                 or 'Username' in line or 'Nodename' in line]).strip()
 
+    # the pixel-quality tab, if the depth bundle is there. Optional: a project
+    # that has not run the Depth stage still gets the rest of the page.
+    quality = None
+    try:
+        q_raw, q_smooth, q_meta = load_depth_endpoints(fm)
+        quality = build_quality_payload(fm, lp, q_raw, q_smooth, q_meta)
+    except DepthFilesMissing:
+        pass
+    except Exception as e:
+        print('    pixel-quality tab skipped: ' + repr(e))
+
     return {
         'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
         'device': getattr(lp, 'device', 'unknown'),
@@ -417,6 +490,7 @@ def build_prep_payload(fm, lp, trial_status, pairs, neighbours=None):
         'frameSize': [lp.width, lp.height], 'piSize': pi_size or [1296, 972],
         'trials': trials,
         'logIssues': lp.malformed_file, 'prepLog': prep_log,
+        'quality': quality,
         'registration': read_registration_info(fm),
         'neighbours': neighbours or {},
         'built': str(datetime.datetime.now().replace(microsecond=0)),
@@ -481,6 +555,18 @@ PAGE = r"""<!DOCTYPE html>
   .stage polygon.video { stroke: var(--video); }
   .stage polygon { fill: none; stroke: var(--tray); stroke-width: 3; vector-effect: non-scaling-stroke; }
   .stage polygon.derived { stroke-width: 2; stroke-dasharray: 8 6; opacity: .65; }
+  .grid.cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 1600px) { .grid.cols-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 900px) { .grid.cols-6 { grid-template-columns: 1fr; } }
+  .scalebar { height: 9px; border-radius: 2px; margin: 0 13px 4px; }
+  .scalelab { display: flex; justify-content: space-between; padding: 0 13px 10px;
+              font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .readout { position: absolute; left: 8px; bottom: 8px; background: rgba(6,9,13,.82);
+             padding: 3px 8px; border-radius: 4px; font-size: 12px; color: var(--ink);
+             font-variant-numeric: tabular-nums; pointer-events: none; opacity: 0;
+             transition: opacity .12s; }
+  .stage:hover .readout { opacity: 1; }
+  .stage canvas { width: 100%; display: block; }
   .trial { margin-bottom: 26px; }
   .trial h2 { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
               border-bottom: 1px solid var(--line); padding-bottom: 8px; margin: 0 0 14px; }
@@ -739,6 +825,276 @@ function viewRegistration() {
   return box;
 }
 
+// ------------------------------------------------------------ pixel quality
+const QCACHE = {};
+function qDecode(layer) {
+  if (QCACHE[layer.src]) return QCACHE[layer.src];
+  const m = layer.meta;
+  const c = document.createElement('canvas');
+  c.width = m.width; c.height = m.height;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(layer.img, 0, 0);
+  const px = ctx.getImageData(0, 0, m.width, m.height).data;
+  const out = new Float32Array(m.width * m.height);
+  for (let i = 0, p = 0; i < out.length; i++, p += 4)
+    out[i] = px[p+2] === 0 ? NaN : ((px[p] << 8) | px[p+1]) * m.scale + m.offset;
+  QCACHE[layer.src] = out;
+  return out;
+}
+
+function qLoad(layers) {
+  return Promise.all(layers.filter(Boolean).map(l => new Promise(res => {
+    if (l.img) return res();
+    const im = new Image();
+    im.onload = () => { l.img = im; res(); };
+    im.onerror = () => res();
+    im.src = l.src;
+  })));
+}
+
+function qDiff(a, b) {
+  const o = new Float32Array(a.length);
+  for (let i = 0; i < a.length; i++) o[i] = a[i] - b[i];
+  return o;
+}
+
+function qMap(values, caption, opts) {
+  opts = opts || {};
+  const Q = D.quality, QW = Q.frameSize[0], QH = Q.frameSize[1];
+  const range = opts.range === undefined ? 2 : opts.range;
+  const mark = opts.mark, mc = opts.markColour || [255, 0, 200];
+  const fig = document.createElement('figure');
+  fig.innerHTML = '<div class="stage"><canvas width="' + QW + '" height="' + QH +
+    '"></canvas><span class="readout">\u2014</span></div>' +
+    '<div class="scalebar"></div>' +
+    '<div class="scalelab"><span>-' + range + ' cm</span><span>pit \u2190 0 \u2192 castle</span>' +
+    '<span>+' + range + ' cm</span></div>' +
+    '<figcaption>' + caption + '</figcaption>';
+  const canvas = fig.querySelector('canvas'), ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(QW, QH);
+  for (let i = 0, p = 0; i < values.length; i++, p += 4) {
+    if (mark && mark[i]) {
+      img.data[p] = mc[0]; img.data[p+1] = mc[1]; img.data[p+2] = mc[2]; img.data[p+3] = 255;
+      continue;
+    }
+    const v = values[i];
+    if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
+    const c = jet((v + range) / (2 * range));
+    img.data[p]=c[0]; img.data[p+1]=c[1]; img.data[p+2]=c[2]; img.data[p+3]=255;
+  }
+  ctx.putImageData(img, 0, 0);
+  let stops = [];
+  for (let i = 0; i <= 10; i++) { const c = jet(i/10); stops.push('rgb('+[c[0]|0,c[1]|0,c[2]|0]+') '+(i*10)+'%'); }
+  fig.querySelector('.scalebar').style.background = 'linear-gradient(to right,' + stops.join(',') + ')';
+  const ro = fig.querySelector('.readout');
+  fig.querySelector('.stage').addEventListener('mousemove', ev => {
+    const r = canvas.getBoundingClientRect();
+    const x = Math.floor((ev.clientX - r.left) / r.width * QW);
+    const y = Math.floor((ev.clientY - r.top) / r.height * QH);
+    if (x < 0 || y < 0 || x >= QW || y >= QH) return;
+    const v = values[y * QW + x];
+    ro.textContent = (Number.isNaN(v) ? 'no data' : (v >= 0 ? '+' : '') + v.toFixed(2) + ' cm') +
+                     '  \u00b7  ' + x + ', ' + y;
+  });
+  return fig;
+}
+
+function qPhoto(src, caption) {
+  const fig = document.createElement('figure');
+  fig.innerHTML = (src ? '<div class="stage"><img src="' + src + '" alt=""></div>'
+                       : '<div class="stage" style="aspect-ratio:4/3"></div>') +
+                  '<figcaption>' + caption + (src ? '' : ' \u2014 not available') + '</figcaption>';
+  return fig;
+}
+
+let QCROP;
+function qOutsideCrop() {
+  // the crop is in full-resolution depth coordinates; these maps are half
+  if (QCROP !== undefined) return QCROP;
+  const pts = D.depthPoints, Q = D.quality;
+  if (!pts || pts.length < 3 || !Q) { QCROP = null; return QCROP; }
+  const QW = Q.frameSize[0], QH = Q.frameSize[1];
+  const m = new Uint8Array(QW * QH);
+  for (let y = 0; y < QH; y++) {
+    const py = y * 2 + 0.5;
+    for (let x = 0; x < QW; x++) {
+      const px = x * 2 + 0.5;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1];
+        if ((yi > py) !== (yj > py) &&
+            px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      if (!inside) m[y * QW + x] = 1;
+    }
+  }
+  QCROP = m;
+  return QCROP;
+}
+
+function viewQuality() {
+  const box = document.createElement('div');
+  const Q = D.quality;
+  if (!Q) {
+    box.innerHTML = '<div class="note">No DepthFiles bundle for this project, so there is ' +
+      'nothing to assess. Run the Depth stage, then rebuild this page.</div>';
+    return box;
+  }
+
+  let trial = Q.trials.length ? Q.trials[0].trial : 1;
+  let k = 4;
+
+  const sub = document.createElement('div');
+  sub.className = 'tabs';
+  box.appendChild(sub);
+
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.innerHTML =
+    '<label>Residual k = <b id="qk">' + k + '</b></label>' +
+    '<input type="range" id="qks" min="1" max="8" step="0.5" value="' + k + '">' +
+    '<span class="stat" id="qinfo"></span>';
+  box.appendChild(bar);
+
+  const note = document.createElement('p');
+  note.className = 'sub';
+  note.innerHTML = 'Each row is one day. Residual is the RMS departure from a straight line ' +
+    'fitted through that day: a steadily building pixel scores near zero because the fit ' +
+    'absorbs the build, and it does not grow with the length of the day, so partial days stay ' +
+    'comparable. The cut is that day\u2019s own median times its MAD factor to the power k, ' +
+    'and the filtered columns are drawn on total change from the trial start. Use this to ' +
+    'judge whether the tray crop is excluding the right pixels.';
+  box.appendChild(note);
+
+  const body = document.createElement('div');
+  box.appendChild(body);
+
+  function cutAt(st) { return st ? st.median * Math.pow(st.madFactor, k) : Infinity; }
+
+  function dayRow(d, baseline) {
+    const sec = document.createElement('section');
+    sec.className = 'trial';
+    const st = (d.quality || {}).residual;
+    sec.innerHTML = '<h2>' + d.date + '<span>' + d.firstTime + ' to ' + d.lastTime + ' \u00b7 ' +
+      d.nFrames + ' frames' + (d.partial ? ' \u00b7 partial day' : '') +
+      (st ? ' \u00b7 residual median ' + st.median : '') + '</span></h2>';
+    const grid = document.createElement('div');
+    grid.className = 'grid cols-6';
+    sec.appendChild(grid);
+
+    const f = Q.frames[d.day];
+    qLoad([f.rawFirst, f.rawLast, f.residual, baseline.rawFirst]).then(() => {
+      const rF = qDecode(f.rawFirst), rL = qDecode(f.rawLast);
+      const daily = qDiff(rF, rL);
+      const total = qDiff(qDecode(baseline.rawFirst), rL);
+      // the filter columns are always shown on total change
+      const basis = total;
+      const bOpts = { range: 4 };
+
+      grid.textContent = '';
+      grid.appendChild(qMap(total, '<b>Total change, raw</b> \u2014 trial start to the end ' +
+        'of this day', { range: 4 }));
+      grid.appendChild(qMap(daily, '<b>Daily change, raw</b>', {}));
+
+      let resid = null, nres = 0, nval = 0;
+      if (f.residual && st) {
+        const thr = cutAt(st), m = qDecode(f.residual);
+        resid = new Uint8Array(m.length);
+        for (let i = 0; i < m.length; i++) {
+          if (Number.isNaN(m[i])) continue;
+          nval++;
+          if (m[i] > thr) { resid[i] = 1; nres++; }
+        }
+        grid.appendChild(qMap(basis, '<b>Residual on total change</b> \u2014 k = ' + k +
+          ', cut at ' + thr.toFixed(3) + ' cm. <span style="color:#ff00c8">Magenta</span> is ' +
+          'what it removes: ' + nres + ' pixels, ' +
+          (100 * nres / Math.max(1, nval)).toFixed(2) + '%.',
+          Object.assign({ mark: resid }, bOpts)));
+      } else {
+        grid.appendChild(qPhoto(null, '<b>Residual</b>'));
+      }
+
+      const oc = qOutsideCrop();
+      let nout = 0, nvalid = 0;
+      for (let i = 0; i < basis.length; i++) {
+        if (Number.isNaN(basis[i])) continue;
+        nvalid++;
+        if (oc && oc[i]) nout++;
+      }
+      grid.appendChild(qMap(basis, '<b>Crop on total change</b> \u2014 ' +
+        (oc ? '<span style="color:#ff00c8">Magenta</span> is what the four-point crop ' +
+              'excludes: ' + nout + ' pixels, ' +
+              (100 * nout / Math.max(1, nvalid)).toFixed(2) + '%.'
+            : 'No DepthCrop.txt was available.'),
+        Object.assign({ mark: oc }, bOpts)));
+
+      const union = new Uint8Array(basis.length);
+      let nunion = 0, nboth = 0;
+      for (let i = 0; i < union.length; i++) {
+        const a = resid ? resid[i] : 0, b = oc ? oc[i] : 0;
+        if (a || b) { union[i] = 1; if (!Number.isNaN(basis[i])) nunion++; }
+        if (a && b && !Number.isNaN(basis[i])) nboth++;
+      }
+      grid.appendChild(qMap(basis, '<b>Both filters on total change</b> \u2014 together they ' +
+        'remove ' + nunion + ' pixels, ' + (100 * nunion / Math.max(1, nvalid)).toFixed(2) +
+        '%. ' + nboth + ' of those the crop already excluded, so residual adds ' +
+        (nunion - nout) + ' beyond it. Removed pixels are blacked out, so what remains in ' +
+        'colour is what the analysis would use.',
+        Object.assign({ mark: union, markColour: [0, 0, 0] }, bOpts)));
+
+      grid.appendChild(qPhoto(f.jpg, '<b>Depth camera</b> \u2014 ' + d.firstTime));
+    });
+    return sec;
+  }
+
+  function draw() {
+    Array.from(sub.children).forEach(b =>
+      b.setAttribute('aria-selected', String(+b.dataset.trial === trial)));
+    const days = Q.days.filter(d => d.trial === trial);
+    const baseline = Q.frames[+Q.baselines[trial]];
+    bar.querySelector('#qinfo').innerHTML = '<b>' + days.length + '</b> days in trial ' + trial;
+    body.textContent = '';
+    if (!baseline) return;
+
+    // rows are built as they scroll in: a long trial is a great many canvases
+    const io = typeof IntersectionObserver !== 'undefined'
+      ? new IntersectionObserver(entries => {
+          entries.forEach(e => {
+            if (!e.isIntersecting) return;
+            io.unobserve(e.target);
+            e.target.replaceWith(dayRow(days[+e.target.dataset.i], baseline));
+          });
+        }, { rootMargin: '400px' })
+      : null;
+
+    days.forEach((d, i) => {
+      if (!io) { body.appendChild(dayRow(d, baseline)); return; }
+      const ph = document.createElement('section');
+      ph.className = 'trial';
+      ph.dataset.i = i;
+      ph.innerHTML = '<h2>' + d.date + '<span>loading\u2026</span></h2>';
+      body.appendChild(ph);
+      io.observe(ph);
+    });
+  }
+
+  Q.trials.forEach(t => {
+    const b = document.createElement('button');
+    b.textContent = 'Trial ' + t.trial;
+    b.dataset.trial = t.trial;
+    b.setAttribute('role', 'tab');
+    b.addEventListener('click', () => { trial = t.trial; draw(); });
+    sub.appendChild(b);
+  });
+  bar.querySelector('#qks').addEventListener('input', e => {
+    k = parseFloat(e.target.value);
+    bar.querySelector('#qk').textContent = k;
+    draw();
+  });
+  draw();
+  return box;
+}
+
 function build() {
   document.getElementById('title').textContent = D.projectID;
   document.getElementById('subtitle').textContent =
@@ -783,7 +1139,7 @@ function build() {
   }
 
   const views = [['Depth Crop', viewDepthCrop], ['Video Crop', viewVideoCrop],
-                 ['Registration', viewRegistration]];
+                 ['Registration', viewRegistration], ['Pixel Quality', viewQuality]];
   const tabs = document.getElementById('tabs'), body = document.getElementById('body');
   const cache = [];
   const buttons = views.map((v, i) => {
@@ -1236,6 +1592,29 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
         t1 = datetime.datetime.fromisoformat(d['last_time'])
         hours = max(0.01, (t1 - t0).total_seconds() / 3600.0)
         entry['hours'] = round(hours, 2)
+        # log-median and MAD for each metric on its own, so a threshold can be
+        # set per day per metric rather than inherited from the trial
+        quality = {}
+        for name in ('travel', 'residual'):
+            arr = extras.get(name)
+            if arr is None:
+                continue
+            q = arr[i]
+            qv = q[np.isfinite(q) & (q > 0)]
+            if qv.size < 100:
+                continue
+            lq = np.log(qv)
+            lm = float(np.median(lq))
+            la = float(np.median(np.abs(lq - lm))) * 1.4826
+            quality[name] = {
+                'median': round(float(np.exp(lm)), 4),
+                'madFactor': round(float(np.exp(la)), 4),
+                'p99': round(float(np.percentile(qv, 99)), 4),
+                'max': round(float(qv.max()), 3),
+            }
+        if quality:
+            entry['quality'] = quality
+
         if 'travel' in extras:
             ex = (extras['travel'][i] - np.abs(daily)) / hours
             v = ex[np.isfinite(ex) & (ex > 0)]
@@ -1354,6 +1733,7 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
             s, m = encode_depth(half(ex, 'max'))
             entry['excess'] = {'src': s, 'meta': m}
         for key, arr in (('travel', extras.get('travel')),
+                         ('residual', extras.get('residual')),
                          ('stdMean', extras.get('stdMean')),
                          ('stdMax', extras.get('stdMax'))):
             if arr is not None:
@@ -1366,9 +1746,17 @@ def build_depth_payload(fm, lp, raw, smooth, meta):
                 entry[key] = encode_image(cv2.imread(depth_dir + name), max_width=lp.width // 2)
         frames.append(entry)
 
+    depth_points = None
+    if os.path.exists(fm.localDepthCropFile):
+        try:
+            depth_points = parse_points(fm.localDepthCropFile)
+        except Exception:
+            depth_points = None
+
     return {
         'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
         'frameSize': [lp.width // 2, lp.height // 2],
+        'depthPoints': depth_points,
         'pixelLength': PIXEL_LENGTH,
         'defaultThreshold': TOTAL_THRESHOLD,
         'dailyThreshold': DAILY_THRESHOLD,
@@ -1393,7 +1781,7 @@ DEPTH_PAGE = r"""<!DOCTYPE html>
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
-  .wrap { max-width:1400px; margin:0 auto; padding:24px 22px 80px; }
+  .wrap { max-width:1760px; margin:0 auto; padding:24px 22px 80px; }
   h1 { font-size:24px; font-weight:600; margin:0 0 3px; }
   h2 { font-size:15px; font-weight:600; margin:26px 0 10px; }
   .sub { color:var(--ink-dim); margin:0 0 18px; }
@@ -1414,6 +1802,14 @@ DEPTH_PAGE = r"""<!DOCTYPE html>
   .stat { font-size:13px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
   .stat b { color:var(--ink); font-weight:500; }
   .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px; }
+  .grid.cols-6 { grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
+  @media (max-width:1600px) { .grid.cols-6 { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:900px) { .grid.cols-6 { grid-template-columns:1fr; } }
+  .trial { margin-bottom:26px; }
+  .trial h2 { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap;
+              border-bottom:1px solid var(--line); padding-bottom:8px; margin:0 0 12px; }
+  .trial h2 span { font-weight:400; font-size:13px; color:var(--ink-dim);
+                   font-variant-numeric:tabular-nums; }
   figure { margin:0; background:var(--panel); border:1px solid var(--line);
            border-radius:8px; overflow:hidden; }
   figcaption { padding:10px 13px; font-size:13px; color:var(--ink-dim); border-top:1px solid var(--line); }
@@ -1548,7 +1944,11 @@ function mapPanel(values, caption, opts) {
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(W, H);
   const thr = (opts.absolute || opts.fixed || opts.log || opts.positive !== undefined) ? 0 : (opts.threshold || 0);
+  const mark = opts.mark;
+  const mc = opts.markColour || [255, 0, 200];
   for (let i = 0, p = 0; i < values.length; i++, p += 4) {
+    // pixels a filter removed: magenta, so a 0.5% mask is still visible
+    if (mark && mark[i]) { img.data[p]=mc[0]; img.data[p+1]=mc[1]; img.data[p+2]=mc[2]; img.data[p+3]=255; continue; }
     const v = values[i];
     if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
     if (thr && Math.abs(v) < thr) {           // below threshold: grey, not coloured
@@ -2315,7 +2715,7 @@ CLUSTER_PAGE = r"""<!DOCTYPE html>
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
-  .wrap { max-width:1400px; margin:0 auto; padding:24px 22px 80px; }
+  .wrap { max-width:1760px; margin:0 auto; padding:24px 22px 80px; }
   h1 { font-size:24px; font-weight:600; margin:0 0 3px; }
   h2 { font-size:15px; font-weight:600; margin:26px 0 12px; }
   .sub { color:var(--ink-dim); margin:0 0 18px; }
@@ -2947,7 +3347,7 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
-  .wrap { max-width:1400px; margin:0 auto; padding:24px 22px 80px; }
+  .wrap { max-width:1760px; margin:0 auto; padding:24px 22px 80px; }
   h1 { font-size:24px; font-weight:600; margin:0 0 3px; }
   h2 { font-size:15px; font-weight:600; margin:26px 0 10px; }
   .sub { color:var(--ink-dim); margin:0 0 16px; }
@@ -3827,6 +4227,11 @@ def build_one(fm_obj, projectID, out_root, category='', delete=False,
         if delete:
             shutil.rmtree(fm_obj.localPrepDir, ignore_errors=True)
         return entry
+
+    depth_dir = fm_obj.localProjectDir + 'DepthFiles/'
+    fm_obj.createDirectory(depth_dir)
+    fetch_optional(depth_dir.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir),
+                   depth_dir, directory=True)
 
     problems, trial_status = check_prep_files(fm_obj, lp)
     blocking = [p for p in problems if p.startswith('missing ')]
