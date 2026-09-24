@@ -2233,9 +2233,12 @@ function renderTrial(t) {
   ];
 
   function buildBlock(chunk, host) {
+    // always eight columns, so a short final block keeps the same day width
+    const COLS = 8;
+    const pad = COLS - chunk.length;
     const grid = document.createElement('div');
     grid.className = 'matrix';
-    grid.style.gridTemplateColumns = '132px repeat(' + chunk.length + ', minmax(0, 1fr))';
+    grid.style.gridTemplateColumns = '132px repeat(' + COLS + ', minmax(0, 1fr))';
     host.textContent = '';
     host.appendChild(grid);
 
@@ -2247,6 +2250,7 @@ function renderTrial(t) {
         (d.partial ? ', partial' : '') + '</span>';
       grid.appendChild(h);
     });
+    for (let i = 0; i < pad; i++) grid.appendChild(blankCell());
 
     const cells = {};
     ROWS.forEach(([name, sub, key]) => {
@@ -2257,6 +2261,7 @@ function renderTrial(t) {
         grid.appendChild(slot);
         cells[key + ':' + d.day] = slot;
       });
+      for (let i = 0; i < pad; i++) grid.appendChild(blankCell());
     });
 
     const need = [];
