@@ -51,8 +51,108 @@ before the spatial one:
             day[:] = interpolate_space(day, usable=self.tray_mask)
 """
 
+import warnings
+
 import numpy as np
 from scipy import ndimage
+
+
+def cropMask(points, shape):
+    """Boolean mask of the interior of a polygon, by ray casting."""
+    h, w = shape
+    ys, xs = np.mgrid[0:h, 0:w]
+    inside = np.zeros(shape, bool)
+    n = len(points)
+    for i in range(n):
+        x1, y1 = points[i]
+        x2, y2 = points[(i + 1) % n]
+        if y1 == y2:
+            continue
+        crosses = ((y1 > ys) != (y2 > ys))
+        with np.errstate(divide='ignore', invalid='ignore'):
+            xint = (x2 - x1) * (ys - y1) / (y2 - y1) + x1
+        inside ^= crosses & (xs < xint)
+    return inside
+
+
+def dailyResidual(day, min_valid=0.5):
+    """RMS departure from a straight line fitted through the day, per pixel.
+
+    NaN-aware, so it can be run on raw frames before any interpolation. Pixels
+    with fewer than min_valid of the day's frames are returned as NaN: a trend
+    cannot be fitted through them and they should be masked on that basis alone.
+    """
+    T = day.shape[0]
+    t = np.arange(T, dtype=np.float64)[:, None, None]
+    valid = np.isfinite(day)
+    n = valid.sum(axis=0).astype(np.float64)
+
+    tv = np.where(valid, t, np.nan)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=RuntimeWarning)
+        Sx = np.nansum(tv, axis=0)
+        Sy = np.nansum(day, axis=0)
+        Stt = np.nansum(tv * tv, axis=0)
+        Sty = np.nansum(tv * day, axis=0)
+        den = n * Stt - Sx * Sx
+        slope = np.where(den != 0, (n * Sty - Sx * Sy) / np.where(den == 0, 1, den), 0.0)
+        intercept = (Sy - slope * Sx) / np.where(n == 0, 1, n)
+        fit = intercept[None] + slope[None] * t
+        resid = np.sqrt(np.nanmean((day - fit) ** 2, axis=0))
+
+    resid[n < min_valid * T] = np.nan
+    return resid
+
+
+def dailyMask(day, crop, k=4.0, min_valid=0.5, close=3, open_=3, dilate=3,
+              max_fraction=0.5):
+    """Pixels to drop for a day: outside the crop, or too far from their trend.
+
+    The threshold is taken from the residuals inside the crop only, so junk
+    beyond the tray cannot shift it. Returns (mask, stats); mask is True for
+    pixels to set to NaN before interpolating.
+    """
+    resid = dailyResidual(day, min_valid=min_valid)
+    stats = {'k': k}
+
+    inside = crop if crop is not None else np.ones(resid.shape, bool)
+    v = resid[inside & np.isfinite(resid) & (resid > 0)]
+    bad = np.zeros(resid.shape, bool)
+    if v.size >= 100:
+        lv = np.log(v)
+        lmed = float(np.median(lv))
+        lmad = float(np.median(np.abs(lv - lmed))) * 1.4826
+        thr = float(np.exp(lmed + k * lmad))
+        stats.update({'median': float(np.exp(lmed)), 'mad_factor': float(np.exp(lmad)),
+                      'threshold': thr})
+        if lmad > 0:
+            bad = inside & np.isfinite(resid) & (resid > thr)
+            if close:
+                bad = ndimage.binary_closing(bad, np.ones((close, close)))
+            if open_:
+                bad = ndimage.binary_opening(bad, np.ones((open_, open_)))
+            if dilate:
+                bad = ndimage.binary_dilation(bad, np.ones((dilate, dilate)))
+            bad &= inside
+    else:
+        stats['reason'] = 'too few pixels with a fitted trend'
+
+    # a pixel with no usable trend is dropped too: it had too little data
+    untrended = inside & ~np.isfinite(resid)
+    bad |= untrended
+
+    frac = float(bad.sum()) / max(1, int(inside.sum()))
+    stats['residual_fraction'] = frac
+    if frac > max_fraction:
+        stats['reason'] = ('residual would drop %.1f%% inside the crop, above the %.0f%% '
+                           'limit — keeping the crop only' % (100 * frac, 100 * max_fraction))
+        bad = np.zeros(resid.shape, bool)
+        stats['residual_fraction'] = 0.0
+
+    mask = ~inside | bad
+    stats['masked_fraction'] = float(mask.sum()) / mask.size
+    stats['untrended'] = int(untrended.sum())
+    return mask, stats
 
 
 def trialTravelRate(data, lp, trial):
