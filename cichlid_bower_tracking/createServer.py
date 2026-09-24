@@ -1824,6 +1824,20 @@ DEPTH_PAGE = r"""<!DOCTYPE html>
   .scalelab { display:flex; justify-content:space-between; padding:0 13px 10px;
               font-size:11px; color:var(--ink-dim); font-variant-numeric:tabular-nums; }
   .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+  .block { margin-bottom:26px; }
+  .matrix { display:grid; gap:6px; align-items:start; }
+  .matrix .colhead { font-size:12px; color:var(--ink-dim); padding:0 0 4px;
+                     font-variant-numeric:tabular-nums; }
+  .matrix .colhead b { display:block; color:var(--ink); font-weight:600; font-size:13px; }
+  .rowlab { font-size:12px; color:var(--ink); padding:4px 8px 0 0; }
+  .rowlab b { display:block; font-weight:600; }
+  .rowlab span { color:var(--ink-dim); font-size:11px; }
+  .cell { background:var(--panel); border:1px solid var(--line); border-radius:5px;
+          overflow:hidden; }
+  .cellnote { padding:14px 8px; font-size:11px; color:var(--ink-dim); text-align:center; }
+  .cellfoot { padding:3px 6px; font-size:10px; color:var(--ink-dim);
+              border-top:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .blank { }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden;
           cursor:pointer; }
   .card:hover { border-color:var(--tray); }
@@ -2091,374 +2105,279 @@ function dailyChart() {
 }
 
 // -------------------------------------------------------------- trial view
+function labelCell(text, sub) {
+  const d = document.createElement('div');
+  d.className = 'rowlab';
+  d.innerHTML = '<b>' + text + '</b>' + (sub ? '<span>' + sub + '</span>' : '');
+  return d;
+}
+
+function blankCell() {
+  const d = document.createElement('div');
+  d.className = 'blank';
+  return d;
+}
+
+// connected components over the thresholded change, castle and pit separately,
+// dropping anything smaller than minPixels. Mirrors returnBowerLocations.
+function bowerRegions(values, W, H, thr, minPixels, scale) {
+  const sign = new Int8Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (Number.isNaN(v)) continue;
+    if (v >= thr) sign[i] = 1;
+    else if (v <= -thr) sign[i] = -1;
+  }
+  const keep = new Uint8Array(values.length);
+  const seen = new Uint8Array(values.length);
+  const stack = new Int32Array(values.length);
+  for (let start = 0; start < sign.length; start++) {
+    if (!sign[start] || seen[start]) continue;
+    const s = sign[start];
+    let top = 0, n = 0;
+    const members = [];
+    stack[top++] = start;
+    seen[start] = 1;
+    while (top > 0) {
+      const p = stack[--top];
+      members.push(p);
+      n++;
+      const x = p % W, y = (p / W) | 0;
+      if (x > 0 && sign[p-1] === s && !seen[p-1]) { seen[p-1] = 1; stack[top++] = p-1; }
+      if (x < W-1 && sign[p+1] === s && !seen[p+1]) { seen[p+1] = 1; stack[top++] = p+1; }
+      if (y > 0 && sign[p-W] === s && !seen[p-W]) { seen[p-W] = 1; stack[top++] = p-W; }
+      if (y < H-1 && sign[p+W] === s && !seen[p+W]) { seen[p+W] = 1; stack[top++] = p+W; }
+    }
+    // the maps are half resolution, so a component covers 4x this many pixels
+    if (n * scale >= minPixels) for (const p of members) keep[p] = 1;
+  }
+  const notBower = new Uint8Array(values.length);
+  let area = 0, vol = 0;
+  for (let i = 0; i < keep.length; i++) {
+    if (keep[i]) { area++; vol += Math.abs(values[i]); }
+    else notBower[i] = 1;
+  }
+  return { notBower, area: area * scale, volume: vol * scale };
+}
+
 function renderTrial(t) {
   const box = document.createElement('div');
   const days = D.days.filter(d => d.trial === t.trial);
-  let selected = days[0].day;
-  let threshold = D.defaultThreshold;
+  let thr = D.defaultThreshold, minPx = 100;
 
   const bar = document.createElement('div');
   bar.className = 'bar';
-  bar.innerHTML = '<label>Threshold <b id="thv">' + threshold.toFixed(2) + '</b> cm</label>' +
-    '<input type="range" id="thr" min="0" max="3" step="0.05" value="' + threshold + '">' +
-    '<span class="spacer"></span><span class="stat" id="dayInfo"></span>';
+  bar.innerHTML =
+    '<label>Bower height \u2265 <b id="bh">' + thr.toFixed(2) + '</b> cm</label>' +
+    '<input type="range" id="bhs" min="0.1" max="3" step="0.05" value="' + thr + '">' +
+    '<label>Minimum region <b id="bp">' + minPx + '</b> px</label>' +
+    '<input type="range" id="bps" min="0" max="2000" step="25" value="' + minPx + '">' +
+    '<span class="spacer"></span><span class="stat" id="tinfo"></span>';
   box.appendChild(bar);
 
-  const strip = document.createElement('div');
-  strip.className = 'days';
-  days.forEach(d => {
-    const b = document.createElement('button');
-    b.textContent = d.date.slice(5);
-    if (d.partial) b.className = 'partial';
-    b.title = d.nFrames + ' frames, ' + d.firstTime + ' to ' + d.lastTime +
-              (d.partial ? ' (partial day)' : '');
-    b.addEventListener('click', () => { selected = d.day; draw(); });
-    b.dataset.day = d.day;
-    strip.appendChild(b);
-  });
-  box.appendChild(strip);
+  const note = document.createElement('p');
+  note.className = 'sub';
+  note.innerHTML = 'One column per day, eight to a block. All six rows come from the ' +
+    'interpolated array. Daylight change is that day\u2019s first lights-on frame to its ' +
+    'last; night is that evening to the next morning; 24 hours is the two together. The ' +
+    'bower rows keep only regions that clear the height threshold and are large enough ' +
+    'once connected, with everything else greyed.';
+  box.appendChild(note);
 
-  const noteSlot = document.createElement('div');
-  box.appendChild(noteSlot);
-  const rowA = document.createElement('div'); rowA.className = 'grid';
-  const hB = document.createElement('h2'); hB.textContent = 'Change, and how variable the sensor was';
-  const rowB = document.createElement('div'); rowB.className = 'grid';
-  const hC = document.createElement('h2'); hC.textContent = 'Raw against interpolated, on a shared scale';
-  const rowC = document.createElement('div'); rowC.className = 'grid';
-  const hD = document.createElement('h2'); hD.textContent = 'Further diagnostics';
-  const rowD = document.createElement('div'); rowD.className = 'grid';
-  box.appendChild(rowA); box.appendChild(hB); box.appendChild(rowB);
-  box.appendChild(hC); box.appendChild(rowC);
-  box.appendChild(hD); box.appendChild(rowD);
-  const tableSlot = document.createElement('div');
-  box.appendChild(tableSlot);
+  const body = document.createElement('div');
+  box.appendChild(body);
 
-  function draw() {
-    const d = D.days[selected];
-    Array.from(strip.children).forEach(b =>
-      b.setAttribute('aria-pressed', String(+b.dataset.day === selected)));
-    bar.querySelector('#dayInfo').innerHTML =
-      'Day ' + (d.day - t.firstDay + 1) + ' of ' + t.nDays + ' · <b>' + d.nFrames +
-      '</b> frames · raw valid <b>' + (d.rawValid[0]*100).toFixed(1) + '%</b>';
+  const ROWS = [
+    ['Total change', 'trial start to end of day', 'total', 4],
+    ['24 hour change', 'morning to next morning', 'full', 2],
+    ['Daylight change', 'morning to evening', 'daylight', 2],
+    ['Night change', 'evening to next morning', 'night', 2],
+    ['Bower, total', 'regions in total change', 'bowerTotal', 4],
+    ['Bower, daylight', 'regions in daylight change', 'bowerDaily', 2],
+  ];
 
-    noteSlot.innerHTML = '';
-    const notes = [];
-    if (d.partial) notes.push('This day is only ' + d.nFrames +
-      ' frames (' + d.firstTime + ' to ' + d.lastTime + '), so its daily total is not comparable to a full day.');
-    if (d.overnightNote) notes.push('No overnight value after this day: ' + d.overnightNote + '.');
-    if (notes.length) noteSlot.innerHTML = '<div class="note">' + notes.join(' ') + '</div>';
+  function buildBlock(chunk, host) {
+    const grid = document.createElement('div');
+    grid.className = 'matrix';
+    grid.style.gridTemplateColumns = '132px repeat(' + chunk.length + ', minmax(0, 1fr))';
+    host.textContent = '';
+    host.appendChild(grid);
 
-    const f = D.frames[selected];
-    const need = [f.smoothFirst, f.smoothLast, f.rawFirst, f.rawLast];
-    ['stdMean', 'stdMax', 'travel'].forEach(k => { if (f[k]) need.push(f[k]); });
-    const baseline = D.frames[+D.baselines[t.trial]];
-    need.push(baseline.smoothFirst);
-    const nextF = d.overnightOK ? D.frames[selected + 1] : null;
-    if (nextF) need.push(nextF.smoothFirst);
+    grid.appendChild(blankCell());
+    chunk.forEach(d => {
+      const h = document.createElement('div');
+      h.className = 'colhead';
+      h.innerHTML = '<b>' + d.date.slice(5) + '</b><span>' + d.nFrames + ' frames' +
+        (d.partial ? ', partial' : '') + '</span>';
+      grid.appendChild(h);
+    });
+
+    const cells = {};
+    ROWS.forEach(([name, sub, key]) => {
+      grid.appendChild(labelCell(name, sub));
+      chunk.forEach(d => {
+        const slot = document.createElement('div');
+        slot.className = 'cell';
+        grid.appendChild(slot);
+        cells[key + ':' + d.day] = slot;
+      });
+    });
+
+    const need = [];
+    chunk.forEach(d => {
+      const f = D.frames[d.day];
+      need.push(f.smoothFirst, f.smoothLast);
+      const nxt = D.frames[d.day + 1];
+      if (nxt && D.days[d.day + 1] && D.days[d.day + 1].trial === t.trial)
+        need.push(nxt.smoothFirst);
+    });
+    need.push(D.frames[+D.baselines[t.trial]].smoothFirst);
 
     loadAll(need).then(() => {
-      const sFirst = decode(f.smoothFirst), sLast = decode(f.smoothLast);
-      const rFirst = decode(f.rawFirst), rLast = decode(f.rawLast);
+      const base = decode(D.frames[+D.baselines[t.trial]].smoothFirst);
+      const scale = 4;                       // half-resolution pixels to full
+      chunk.forEach(d => {
+        const f = D.frames[d.day];
+        const mF = decode(f.smoothFirst), mL = decode(f.smoothLast);
+        const nextDay = D.days[d.day + 1];
+        const sameTrial = nextDay && nextDay.trial === t.trial;
+        const nF = sameTrial ? decode(D.frames[d.day + 1].smoothFirst) : null;
 
-      // row one: what the depth camera saw
-      rowA.textContent = '';
-      rowA.appendChild(photoPanel(f.jpgFirst, '<b>Depth camera</b> — morning, ' + d.firstTime));
-      rowA.appendChild(photoPanel(f.jpgLast, '<b>Depth camera</b> — evening, ' + d.lastTime));
+        const total = diff(base, mL);
+        const daylight = diff(mF, mL);
+        const night = nF ? diff(mL, nF) : null;
+        const full = nF ? diff(mF, nF) : null;
+        const W = D.frameSize[0], H = D.frameSize[1];
 
-      // row two: change, always from the interpolated array
-      rowB.textContent = '';
-      rowB.appendChild(mapPanel(diff(decode(baseline.smoothFirst), sLast),
-        '<b>Cumulative</b> — trial start to the end of this day',
-        { threshold: threshold, range: 4 }));
-      rowB.appendChild(mapPanel(diff(sFirst, sLast),
-        '<b>Daily change</b> — ' + d.firstTime + ' to ' + d.lastTime,
-        { threshold: threshold }));
-      if (nextF) {
-        rowB.appendChild(mapPanel(diff(sLast, decode(nextF.smoothFirst)),
-          '<b>Overnight</b> — ' + d.lastTime + ' to ' + D.days[selected+1].firstTime,
-          { threshold: threshold }));
-      } else {
-        rowB.appendChild(photoPanel(null, '<b>Overnight</b> — ' +
-          (d.overnightNote || 'no following day')));
-      }
-      if (f.stdMean) {
-        rowB.appendChild(mapPanel(decode(f.stdMean),
-          '<b>Capture variability</b> — mean standard deviation across the ~30 captures ' +
-          'behind each frame, averaged over the day', { positive: 1.0 }));
-      } else {
-        rowB.appendChild(photoPanel(null, '<b>Capture variability</b>'));
-      }
+        const put = (key, values, range, extra) => {
+          const slot = cells[key + ':' + d.day];
+          if (!slot) return;
+          slot.textContent = '';
+          if (!values) {
+            slot.appendChild(qNote(key === 'night' || key === 'full'
+              ? 'no following day in this trial' : 'not available'));
+            return;
+          }
+          slot.appendChild(cellMap(values, range, extra));
+        };
 
-      // row three: raw against interpolated, all four on one scale so the
-      // difference between them is the only thing that changes
-      const fin = [];
-      for (let i = 0; i < sFirst.length; i++) {
-        if (!Number.isNaN(sFirst[i])) fin.push(sFirst[i]);
-        if (!Number.isNaN(sLast[i])) fin.push(sLast[i]);
-      }
-      fin.sort((a,b) => a-b);
-      const shared = fin.length
-        ? [fin[Math.floor(fin.length*0.02)], fin[Math.floor(fin.length*0.98)]]
-        : [0, 1];
-      rowC.textContent = '';
-      rowC.appendChild(mapPanel(rFirst, '<b>Raw</b> — morning frame', { fixed: shared }));
-      rowC.appendChild(mapPanel(sFirst, '<b>Interpolated</b> — morning frame', { fixed: shared }));
-      rowC.appendChild(mapPanel(rLast, '<b>Raw</b> — evening frame', { fixed: shared }));
-      rowC.appendChild(mapPanel(sLast, '<b>Interpolated</b> — evening frame', { fixed: shared }));
+        put('total', total, 4);
+        put('full', full, 2);
+        put('daylight', daylight, 2);
+        put('night', night, 2);
 
-      // row four: the rest
-      rowD.textContent = '';
-      if (f.stdMax) rowD.appendChild(mapPanel(decode(f.stdMax),
-        '<b>Worst capture variability</b> — the highest any frame reached today',
-        { positive: 2.0 }));
-      if (f.travel) rowD.appendChild(mapPanel(decode(f.travel),
-        '<b>Total travel</b> — how far each pixel moved over the day, summed. ' +
-        'Steady building gives a small number; churn gives a large one.',
-        { positive: 6.0 }));
-      hD.style.display = rowD.children.length ? '' : 'none';
+        const bT = bowerRegions(total, W, H, thr, minPx, scale);
+        put('bowerTotal', total, 4, { mark: bT.notBower, markColour: [30, 34, 40] });
+        cells['bowerTotal:' + d.day].appendChild(
+          qFoot(bT.area.toLocaleString() + ' px \u00b7 ' + bT.volume.toFixed(0) + ' cm'));
 
-      tableSlot.textContent = '';
-      const h = document.createElement('h2'); h.textContent = 'Volumes';
-      tableSlot.appendChild(h);
-      tableSlot.appendChild(volTable([
-        ['This day', d.daily],
-        ['Overnight after', d.overnight],
-        ['Cumulative to date', d.cumulative],
-        ['Whole trial', t.total],
-      ]));
-      const p = document.createElement('p');
-      p.className = 'stat';
-      p.style.marginTop = '8px';
-      p.textContent = 'Volumes are computed at full resolution on the server, at the ' +
-        'pipeline thresholds (' + D.dailyThreshold + ' cm daily, ' + D.defaultThreshold +
-        ' cm total). The threshold slider changes only what is coloured in the maps.';
-      tableSlot.appendChild(p);
-      tableSlot.appendChild(sweepChart(t));
-      tableSlot.appendChild(dayTravelSection(t, d, f));
-      tableSlot.appendChild(travelSection(t));
+        const bD = bowerRegions(daylight, W, H, thr, minPx, scale);
+        put('bowerDaily', daylight, 2, { mark: bD.notBower, markColour: [30, 34, 40] });
+        cells['bowerDaily:' + d.day].appendChild(
+          qFoot(bD.area.toLocaleString() + ' px \u00b7 ' + bD.volume.toFixed(0) + ' cm'));
+      });
     });
   }
 
-  bar.querySelector('#thr').addEventListener('input', e => {
-    threshold = parseFloat(e.target.value);
-    bar.querySelector('#thv').textContent = threshold.toFixed(2);
+  function qNote(text) {
+    const d = document.createElement('div');
+    d.className = 'cellnote';
+    d.textContent = text;
+    return d;
+  }
+
+  function qFoot(text) {
+    const d = document.createElement('div');
+    d.className = 'cellfoot';
+    d.textContent = text;
+    return d;
+  }
+
+  // a bare canvas: at eight columns there is no room for captions
+  function cellMap(values, range, opts) {
+    opts = opts || {};
+    const W = D.frameSize[0], H = D.frameSize[1];
+    const wrap = document.createElement('div');
+    wrap.className = 'stage';
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    wrap.appendChild(canvas);
+    const ro = document.createElement('span');
+    ro.className = 'readout';
+    ro.textContent = '\u2014';
+    wrap.appendChild(ro);
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(W, H);
+    const mark = opts.mark, mc = opts.markColour || [255, 0, 200];
+    for (let i = 0, p = 0; i < values.length; i++, p += 4) {
+      if (mark && mark[i]) {
+        img.data[p]=mc[0]; img.data[p+1]=mc[1]; img.data[p+2]=mc[2]; img.data[p+3]=255;
+        continue;
+      }
+      const v = values[i];
+      if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
+      const c = jet((v + range) / (2 * range));
+      img.data[p]=c[0]; img.data[p+1]=c[1]; img.data[p+2]=c[2]; img.data[p+3]=255;
+    }
+    ctx.putImageData(img, 0, 0);
+    wrap.addEventListener('mousemove', ev => {
+      const r = canvas.getBoundingClientRect();
+      const x = Math.floor((ev.clientX - r.left) / r.width * W);
+      const y = Math.floor((ev.clientY - r.top) / r.height * H);
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
+      const v = values[y * W + x];
+      ro.textContent = Number.isNaN(v) ? 'no data' : (v >= 0 ? '+' : '') + v.toFixed(2) + ' cm';
+    });
+    return wrap;
+  }
+
+  function draw() {
+    body.textContent = '';
+    bar.querySelector('#tinfo').innerHTML = '<b>' + days.length + '</b> days \u00b7 ' +
+      t.start.slice(0, 10) + ' to ' + t.stop.slice(0, 10);
+    const blocks = [];
+    for (let i = 0; i < days.length; i += 8) blocks.push(days.slice(i, i + 8));
+
+    const io = typeof IntersectionObserver !== 'undefined'
+      ? new IntersectionObserver(entries => {
+          entries.forEach(e => {
+            if (!e.isIntersecting) return;
+            io.unobserve(e.target);
+            buildBlock(blocks[+e.target.dataset.b], e.target);
+          });
+        }, { rootMargin: '300px' })
+      : null;
+
+    blocks.forEach((chunk, i) => {
+      const host = document.createElement('div');
+      host.className = 'block';
+      host.dataset.b = i;
+      host.innerHTML = '<p class="stat">' + chunk[0].date + ' to ' +
+        chunk[chunk.length - 1].date + '\u2026</p>';
+      body.appendChild(host);
+      if (io) io.observe(host); else buildBlock(chunk, host);
+    });
+  }
+
+  bar.querySelector('#bhs').addEventListener('input', e => {
+    thr = parseFloat(e.target.value);
+    bar.querySelector('#bh').textContent = thr.toFixed(2);
+    draw();
+  });
+  bar.querySelector('#bps').addEventListener('input', e => {
+    minPx = parseInt(e.target.value, 10);
+    bar.querySelector('#bp').textContent = minPx;
     draw();
   });
   draw();
-  return box;
-}
 
-function travelSection(t) {
-  const box = document.createElement('div');
-  if (!t.travel || !t.travel.stats.hist) return box;
-  const s = t.travel.stats;
   const h = document.createElement('h2');
-  h.textContent = 'Travel rate over the whole trial';
+  h.textContent = 'Volumes';
   box.appendChild(h);
-
-  const grid = document.createElement('div');
-  grid.className = 'grid';
-  box.appendChild(grid);
-  const hi = Math.max(s.max, s.median * 4);
-  let k = 5;
-  const maskSlot = document.createElement('div');
-
-  loadAll([t.travel.rate, t.travel.excess]).then(() => {
-    grid.appendChild(mapPanel(decode(t.travel.rate),
-      '<b>Travel rate</b> — total movement per lights-on hour, over ' + s.nDays +
-      ' days and ' + s.hours + ' h. Downsampled by maximum, so the hover value is ' +
-      'comparable with the histogram below. Log scale.', { log: [s.median / 2, hi] }));
-    grid.appendChild(mapPanel(decode(t.travel.excess),
-      '<b>Excess travel rate</b> — the same with |net change| subtracted, so a pixel that ' +
-      'genuinely built a lot cannot look like churn. This is what the threshold is applied ' +
-      'to. Log scale.', { log: [s.median / 2, hi] }));
-    grid.appendChild(maskSlot);
-    drawMask();
-  });
-
-  function drawMask() {
-    const cut = s.median * Math.pow(s.madFactor, k);
-    const vals = decode(t.travel.excess);
-    const flagged = new Float32Array(vals.length);
-    let n = 0, valid = 0;
-    for (let i = 0; i < vals.length; i++) {
-      if (Number.isNaN(vals[i])) { flagged[i] = NaN; continue; }
-      valid++;
-      if (vals[i] > cut) { flagged[i] = vals[i]; n++; } else flagged[i] = NaN;
-    }
-    maskSlot.textContent = '';
-    maskSlot.appendChild(mapPanel(flagged,
-      '<b>What a cut at k = ' + k + ' would mask</b> — ' + n + ' of ' + valid +
-      ' shown pixels (' + (100 * n / Math.max(1, valid)).toFixed(2) + '%), above <b>' +
-      cut.toFixed(3) + ' cm/h</b>. Everything below the cut is blank. Percentages here are ' +
-      'of the half-resolution map, so they run a little above the table, which is computed ' +
-      'at full resolution.', { log: [cut, hi] }));
-    const ctl = document.createElement('div');
-    ctl.className = 'bar';
-    ctl.style.margin = '0';
-    ctl.innerHTML = '<label>k = <b>' + k + '</b></label>' +
-      '<input type="range" min="1" max="8" step="0.5" value="' + k + '">';
-    ctl.querySelector('input').addEventListener('input', e => {
-      k = parseFloat(e.target.value);
-      drawMask();
-    });
-    maskSlot.appendChild(ctl);
-  }
-
-  const chart = document.createElement('div');
-  chart.className = 'chart';
-  chart.style.marginTop = '16px';
-  const c = s.hist.counts, e = s.hist.edges;
-  const w = 1000, hgt = 230, pad = 36;
-  const maxc = Math.max(...c);
-  const lx = v => pad + (Math.log(v) - Math.log(e[0])) /
-                  (Math.log(e[e.length-1]) - Math.log(e[0])) * (w - 2*pad);
-  let g = '';
-  c.forEach((n, i) => {
-    const x0 = lx(e[i]), x1 = lx(e[i+1]);
-    const bh = (n / maxc) * (hgt - 2*pad);
-    g += '<rect x="' + x0 + '" y="' + (hgt-pad-bh) + '" width="' + Math.max(1, x1-x0-1) +
-         '" height="' + bh + '" fill="var(--tray)" opacity="0.75"><title>' +
-         e[i].toFixed(3) + ' to ' + e[i+1].toFixed(3) + ' cm/h: ' + n + ' pixels</title></rect>';
-  });
-  s.cuts.forEach(cut => {
-    const x = lx(cut.value);
-    if (x < pad || x > w-pad) return;
-    g += '<line x1="' + x + '" y1="' + (pad-4) + '" x2="' + x + '" y2="' + (hgt-pad) +
-         '" stroke="#6fb2e8" stroke-width="1" stroke-dasharray="3 3"/>' +
-         '<text x="' + x + '" y="' + (pad-8) + '" fill="#6fb2e8" font-size="11" ' +
-         'text-anchor="middle">k=' + cut.k + '</text>';
-  });
-  g += '<line x1="' + pad + '" y1="' + (hgt-pad) + '" x2="' + (w-pad) + '" y2="' + (hgt-pad) +
-       '" stroke="#262d38"/>';
-  [e[0], s.median, s.p99, e[e.length-1]].forEach(v => {
-    const x = lx(v);
-    g += '<text x="' + x + '" y="' + (hgt-pad+15) + '" fill="#93a0b0" font-size="11" ' +
-         'text-anchor="middle">' + v.toFixed(2) + '</text>';
-  });
-  chart.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" preserveAspectRatio="none">' + g +
-    '</svg><p class="stat" style="margin:6px 0 0">Excess travel rate per pixel, cm/h, log axis. ' +
-    'Dashed lines are cuts at median &times; MAD<sup>k</sup>.</p>';
-  box.appendChild(chart);
-
-  const tbl = document.createElement('table');
-  tbl.className = 'vol';
-  tbl.style.marginTop = '14px';
-  tbl.innerHTML = '<tr><th>cut</th><th>rate cm/h</th><th>tray masked</th></tr>' +
-    s.cuts.map(cut => '<tr><td>k = ' + cut.k + '</td><td>' + cut.value + '</td><td>' +
-      cut.masked + ' %</td></tr>').join('');
-  box.appendChild(tbl);
-
-  const p = document.createElement('p');
-  p.className = 'stat';
-  p.style.marginTop = '8px';
-  p.innerHTML = 'median <b>' + s.median + '</b> cm/h &middot; MAD factor <b>&times;' +
-    s.madFactor + '</b> &middot; 90th <b>' + s.p90 + '</b> &middot; 99th <b>' + s.p99 +
-    '</b> &middot; max <b>' + s.max + '</b>';
-  box.appendChild(p);
+  box.appendChild(volTable([['Whole trial', t.total]]));
+  box.appendChild(sweepChart(t));
+  box.appendChild(travelSection(t));
   return box;
-}
-
-function dayTravelSection(t, d, f) {
-  const box = document.createElement('div');
-  const s = d.travelStats;
-  if (!s || !f.excess) return box;
-  const h = document.createElement('h2');
-  h.textContent = 'Travel rate for this day';
-  box.appendChild(h);
-
-  let k = 5;
-  const grid = document.createElement('div');
-  grid.className = 'grid';
-  box.appendChild(grid);
-
-  const info = document.createElement('p');
-  info.className = 'stat';
-  info.innerHTML = 'Over ' + d.hours + ' h. Median <b>' + s.median + '</b> cm/h &middot; ' +
-    'MAD factor <b>&times;' + s.madFactor + '</b> &middot; 99th <b>' + s.p99 + '</b> &middot; ' +
-    'max <b>' + s.max + '</b>. Thresholds here are from this day alone, not the trial.';
-  box.appendChild(info);
-
-  const tbl = document.createElement('table');
-  tbl.className = 'vol';
-  tbl.style.marginTop = '10px';
-  tbl.innerHTML = '<tr><th>cut</th><th>rate cm/h</th><th>masked this day</th>' +
-    '<th>trial-level rate</th></tr>' +
-    s.cuts.map(c => {
-      const tc = (t.travel && t.travel.stats.cuts || []).find(x => x.k === c.k);
-      return '<tr><td>k = ' + c.k + '</td><td>' + c.value + '</td><td>' + c.masked +
-             ' %</td><td>' + (tc ? tc.value : '\u2014') + '</td></tr>';
-    }).join('');
-  box.appendChild(tbl);
-
-  function drawMask() {
-    const cut = s.median * Math.pow(s.madFactor, k);
-    const vals = decode(f.excess);
-    const flagged = new Float32Array(vals.length);
-    let n = 0, valid = 0;
-    for (let i = 0; i < vals.length; i++) {
-      if (Number.isNaN(vals[i])) { flagged[i] = NaN; continue; }
-      valid++;
-      if (vals[i] > cut) { flagged[i] = vals[i]; n++; } else flagged[i] = NaN;
-    }
-    grid.textContent = '';
-    const hi = Math.max(s.max, s.median * 4);
-    grid.appendChild(mapPanel(vals,
-      '<b>Excess travel rate, this day</b> \u2014 movement per hour with |daily change| ' +
-      'subtracted. Log scale, downsampled by maximum.', { log: [s.median / 2, hi] }));
-    grid.appendChild(mapPanel(flagged,
-      '<b>Masked at k = ' + k + '</b> \u2014 ' + n + ' of ' + valid + ' shown pixels (' +
-      (100 * n / Math.max(1, valid)).toFixed(2) + '%), above <b>' + cut.toFixed(3) +
-      '</b> cm/h using this day\u2019s own median.', { log: [cut, hi] }));
-    const ctl = document.createElement('div');
-    ctl.className = 'bar';
-    ctl.style.margin = '0';
-    ctl.innerHTML = '<label>k = <b>' + k + '</b></label>' +
-      '<input type="range" min="1" max="8" step="0.5" value="' + k + '">';
-    ctl.querySelector('input').addEventListener('input', e => {
-      k = parseFloat(e.target.value); drawMask();
-    });
-    grid.appendChild(ctl);
-  }
-  loadAll([f.excess]).then(drawMask);
-
-  box.appendChild(perDayChart(t, k));
-  return box;
-}
-
-function perDayChart(t) {
-  const host = document.createElement('div');
-  host.className = 'chart';
-  host.style.marginTop = '16px';
-  const days = D.days.filter(x => x.trial === t.trial && x.travelStats);
-  if (!days.length) return host;
-  const w = 1000, hgt = 220, pad = 38;
-  const med = days.map(x => x.travelStats.median);
-  const p99 = days.map(x => x.travelStats.p99);
-  const max = Math.max(...p99, ...med) * 1.1;
-  const bw = (w - 2 * pad) / days.length;
-  let g = '';
-  days.forEach((x, i) => {
-    const px = pad + i * bw;
-    const hm = (x.travelStats.median / max) * (hgt - 2 * pad);
-    const hp = (x.travelStats.p99 / max) * (hgt - 2 * pad);
-    g += '<rect x="' + (px + 1) + '" y="' + (hgt - pad - hp) + '" width="' + (bw - 2) +
-         '" height="' + hp + '" fill="#6fb2e8" opacity="0.35"><title>' + x.date +
-         ' 99th ' + x.travelStats.p99 + ' cm/h</title></rect>' +
-         '<rect x="' + (px + 1) + '" y="' + (hgt - pad - hm) + '" width="' + (bw - 2) +
-         '" height="' + hm + '" fill="var(--tray)"><title>' + x.date + ' median ' +
-         x.travelStats.median + ' cm/h, MAD factor x' + x.travelStats.madFactor +
-         '</title></rect>';
-  });
-  g += '<line x1="' + pad + '" y1="' + (hgt - pad) + '" x2="' + (w - pad) + '" y2="' +
-       (hgt - pad) + '" stroke="#262d38"/>' +
-       '<text x="' + pad + '" y="' + (pad - 10) + '" fill="#93a0b0" font-size="12">' +
-       'Per-day excess travel rate across the trial \u2014 orange median, pale blue 99th ' +
-       'percentile (cm/h). A flat median means one trial-level threshold is fine; a ' +
-       'varying one means it is not.</text>';
-  host.innerHTML = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" preserveAspectRatio="none">' +
-                   g + '</svg>';
-  return host;
 }
 
 function sweepChart(t) {
