@@ -2105,6 +2105,41 @@ function dailyChart() {
 }
 
 // -------------------------------------------------------------- trial view
+let DEPTH_CROP;
+function cropOutside() {
+  // the crop is in full-resolution coordinates; these maps are half
+  if (DEPTH_CROP !== undefined) return DEPTH_CROP;
+  const pts = D.depthPoints;
+  if (!pts || pts.length < 3) { DEPTH_CROP = null; return DEPTH_CROP; }
+  const W = D.frameSize[0], H = D.frameSize[1];
+  const m = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const py = y * 2 + 0.5;
+    for (let x = 0; x < W; x++) {
+      const px = x * 2 + 0.5;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1];
+        if ((yi > py) !== (yj > py) &&
+            px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      if (!inside) m[y * W + x] = 1;
+    }
+  }
+  DEPTH_CROP = m;
+  return DEPTH_CROP;
+}
+
+// everything outside the tray is dropped before it is drawn or measured, so it
+// cannot join a bower region or contribute to an area
+function cropped(values) {
+  const oc = cropOutside();
+  if (!oc) return values;
+  const out = new Float32Array(values.length);
+  for (let i = 0; i < values.length; i++) out[i] = oc[i] ? NaN : values[i];
+  return out;
+}
+
 function labelCell(text, sub) {
   const d = document.createElement('div');
   d.className = 'rowlab';
@@ -2178,7 +2213,8 @@ function renderTrial(t) {
   const note = document.createElement('p');
   note.className = 'sub';
   note.innerHTML = 'One column per day, eight to a block. All six rows come from the ' +
-    'interpolated array. Daylight change is that day\u2019s first lights-on frame to its ' +
+    'interpolated array, with everything outside the tray crop removed. Daylight change is ' +
+    'that day\u2019s first lights-on frame to its ' +
     'last; night is that evening to the next morning; 24 hours is the two together. The ' +
     'bower rows keep only regions that clear the height threshold and are large enough ' +
     'once connected, with everything else greyed.';
@@ -2243,10 +2279,10 @@ function renderTrial(t) {
         const sameTrial = nextDay && nextDay.trial === t.trial;
         const nF = sameTrial ? decode(D.frames[d.day + 1].smoothFirst) : null;
 
-        const total = diff(base, mL);
-        const daylight = diff(mF, mL);
-        const night = nF ? diff(mL, nF) : null;
-        const full = nF ? diff(mF, nF) : null;
+        const total = cropped(diff(base, mL));
+        const daylight = cropped(diff(mF, mL));
+        const night = nF ? cropped(diff(mL, nF)) : null;
+        const full = nF ? cropped(diff(mF, nF)) : null;
         const W = D.frameSize[0], H = D.frameSize[1];
 
         const put = (key, values, range, extra) => {
@@ -2370,12 +2406,6 @@ function renderTrial(t) {
     draw();
   });
   draw();
-
-  const h = document.createElement('h2');
-  h.textContent = 'Volumes';
-  box.appendChild(h);
-  box.appendChild(volTable([['Whole trial', t.total]]));
-  box.appendChild(sweepChart(t));
   return box;
 }
 
