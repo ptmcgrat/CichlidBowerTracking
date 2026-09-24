@@ -2376,7 +2376,6 @@ function renderTrial(t) {
   box.appendChild(h);
   box.appendChild(volTable([['Whole trial', t.total]]));
   box.appendChild(sweepChart(t));
-  box.appendChild(travelSection(t));
   return box;
 }
 
