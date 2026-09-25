@@ -858,6 +858,22 @@ function qDiff(a, b) {
   return o;
 }
 
+// filtered_change, in the browser: drop any pixel whose mean height sits more
+// than 4 cm above or 8 cm below the tray median. This is what the Depth Crop
+// panel applies, and without it the tank walls are drawn alongside the tray.
+function qFilteredDiff(first, last) {
+  const fin = [];
+  for (let i = 0; i < first.length; i++) if (!Number.isNaN(first[i])) fin.push(first[i]);
+  fin.sort((a, b) => a - b);
+  const med = fin.length ? fin[fin.length >> 1] : 0;
+  const o = new Float32Array(first.length);
+  for (let i = 0; i < first.length; i++) {
+    const avg = (first[i] + last[i]) / 2;
+    o[i] = (avg > med + 4 || avg < med - 8) ? NaN : first[i] - last[i];
+  }
+  return o;
+}
+
 function qMap(values, caption, opts) {
   opts = opts || {};
   const Q = D.quality, QW = Q.frameSize[0], QH = Q.frameSize[1];
@@ -943,6 +959,7 @@ function viewQuality() {
 
   let trial = Q.trials.length ? Q.trials[0].trial : 1;
   let k = 4;
+  let range = 2;
 
   const sub = document.createElement('div');
   sub.className = 'tabs';
@@ -953,6 +970,8 @@ function viewQuality() {
   bar.innerHTML =
     '<label>Residual k = <b id="qk">' + k + '</b></label>' +
     '<input type="range" id="qks" min="1" max="8" step="0.5" value="' + k + '">' +
+    '<label>Range \u00b1<b id="qr">' + range.toFixed(1) + '</b> cm</label>' +
+    '<input type="range" id="qrs" min="0.5" max="10" step="0.5" value="' + range + '">' +
     '<span class="stat" id="qinfo"></span>';
   box.appendChild(bar);
 
@@ -963,7 +982,9 @@ function viewQuality() {
     'absorbs the build, and it does not grow with the length of the day, so partial days stay ' +
     'comparable. The cut is that day\u2019s own median times its MAD factor to the power k, ' +
     'and the filtered columns are drawn on total change from the trial start. Use this to ' +
-    'judge whether the tray crop is excluding the right pixels.';
+    'judge whether the tray crop is excluding the right pixels. Change maps use the same ' +
+    'out-of-tray filter and the same default \u00b12 cm scale as the Depth Crop tab, so the ' +
+    'two are directly comparable.';
   box.appendChild(note);
 
   const body = document.createElement('div');
@@ -985,16 +1006,16 @@ function viewQuality() {
     const f = Q.frames[d.day];
     qLoad([f.rawFirst, f.rawLast, f.residual, baseline.rawFirst]).then(() => {
       const rF = qDecode(f.rawFirst), rL = qDecode(f.rawLast);
-      const daily = qDiff(rF, rL);
-      const total = qDiff(qDecode(baseline.rawFirst), rL);
+      const daily = qFilteredDiff(rF, rL);
+      const total = qFilteredDiff(qDecode(baseline.rawFirst), rL);
       // the filter columns are always shown on total change
       const basis = total;
-      const bOpts = { range: 4 };
+      const bOpts = { range: range };
 
       grid.textContent = '';
       grid.appendChild(qMap(total, '<b>Total change, raw</b> \u2014 trial start to the end ' +
-        'of this day', { range: 4 }));
-      grid.appendChild(qMap(daily, '<b>Daily change, raw</b>', {}));
+        'of this day', { range: range }));
+      grid.appendChild(qMap(daily, '<b>Daily change, raw</b>', { range: range }));
 
       let resid = null, nres = 0, nval = 0;
       if (f.residual && st) {
@@ -1085,6 +1106,11 @@ function viewQuality() {
     b.setAttribute('role', 'tab');
     b.addEventListener('click', () => { trial = t.trial; draw(); });
     sub.appendChild(b);
+  });
+  bar.querySelector('#qrs').addEventListener('input', e => {
+    range = parseFloat(e.target.value);
+    bar.querySelector('#qr').textContent = range.toFixed(1);
+    draw();
   });
   bar.querySelector('#qks').addEventListener('input', e => {
     k = parseFloat(e.target.value);
