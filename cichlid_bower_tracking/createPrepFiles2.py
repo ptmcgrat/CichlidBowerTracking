@@ -31,6 +31,8 @@ Outputs, in PrepFiles2/ and uploaded to the cloud:
     frames_index.json        discovered tar offsets, so reruns skip the search
 """
 
+OFFSET_MINUTES = (0, 5, 10, 15, 20)
+
 BLOCK = 512
 CHUNK = 6 * 1024 * 1024        # covers >2 frames, so a probe always finds headers
 MAX_PROBES = 10
@@ -333,6 +335,54 @@ def still_for_movie(movie, available):
     return 'Videos/' + candidates[0] if candidates else None
 
 
+def frame_near(frames, when, forward=True, lights_on=True):
+    """The first lights-on frame at or after `when`, or at or before it."""
+    pool = [f for f in frames if (f.lof or not lights_on)]
+    if forward:
+        later = [f for f in pool if f.time >= when]
+        return later[0] if later else None
+    earlier = [f for f in pool if f.time <= when]
+    return earlier[-1] if earlier else None
+
+
+def boundary_candidates(lp, trial, number, is_last, offsets=OFFSET_MINUTES):
+    """Frames to choose a trial start and stop from.
+
+    Students do not always wait for the sand to settle after a reset, so the
+    logged boundary can be the wrong frame to measure from. These give a few
+    minutes of slack either way: later frames for the start, earlier ones for
+    the stop. Every total-build number for a trial is measured from its start
+    frame, so this matters most there.
+    """
+    out = []
+    for m in offsets:
+        f = frame_near(lp.frames, trial.startTime + datetime.timedelta(minutes=m), True)
+        if f is not None:
+            out.append({'kind': 'start', 'trial': number, 'offset': m,
+                        'label': 'start +%d min' % m, 'index': f.index, 'time': str(f.time),
+                        'jpg': f.pic_file, 'npy': f.npy_file,
+                        'stem': 'Bound_T%d_start_p%02d' % (number, m)})
+    for m in offsets:
+        f = frame_near(lp.frames, trial.stopTime - datetime.timedelta(minutes=m), False)
+        if f is not None:
+            out.append({'kind': 'stop', 'trial': number, 'offset': m,
+                        'label': 'stop -%d min' % m, 'index': f.index, 'time': str(f.time),
+                        'jpg': f.pic_file, 'npy': f.npy_file,
+                        'stem': 'Bound_T%d_stop_m%02d' % (number, m)})
+
+    # the reset after a trial is the next trial's start, so it only needs its
+    # own control on the last trial, where no trial follows it
+    if is_last and getattr(trial, 'resetTime', None) is not None:
+        for m in offsets:
+            f = frame_near(lp.frames, trial.resetTime + datetime.timedelta(minutes=m), True)
+            if f is not None:
+                out.append({'kind': 'reset', 'trial': number, 'offset': m,
+                            'label': 'reset +%d min' % m, 'index': f.index,
+                            'time': str(f.time), 'jpg': f.pic_file, 'npy': f.npy_file,
+                            'stem': 'Bound_T%d_reset_p%02d' % (number, m)})
+    return out
+
+
 def choose_pairs(lp, trial, index, available=None):
     """Pick the first and last Pi still inside the trial, and the depth frame
     nearest each in time."""
@@ -384,9 +434,14 @@ def build_project(fm_obj, projectID, args):
         print('    could not list ' + videos_cloud + ', using the names from the log')
 
     plan = {}
+    bounds = []
     for i, trial in enumerate(lp.trials, 1):
         plan[i] = choose_pairs(lp, trial, i, available=available or None)
+        bounds.extend(boundary_candidates(lp, trial, i, is_last=(i == len(lp.trials))))
 
+    for b in bounds:
+        print('    trial %d %-14s frame %d at %s' % (b['trial'], b['label'], b['index'],
+                                                     b['time'][11:19]))
     for i, sides in plan.items():
         for label, p in sides.items():
             flag = '' if p['gapMinutes'] <= 15 else '   <-- wide'
@@ -415,6 +470,11 @@ def build_project(fm_obj, projectID, args):
         for label, p in sides.items():
             wanted.append((p['depthPic'], out_dir + 'Trial_' + str(i) + label + 'Depth.jpg'))
             wanted.append((p['depthNpy'], out_dir + 'Trial_' + str(i) + label + 'Depth.npy'))
+    # everything is rebuilt from the archive, so nothing depends on what an
+    # earlier run happened to leave in the folder
+    for b in bounds:
+        wanted.append((b['jpg'], out_dir + b['stem'] + '.jpg'))
+        wanted.append((b['npy'], out_dir + b['stem'] + '.npy'))
 
     cloud_tar = fm_obj.localFrameTarredDir.replace(fm_obj.localMasterDir, fm_obj.cloudMasterDir)
     index_path = out_dir + 'frames_index.json'
@@ -494,12 +554,23 @@ def build_project(fm_obj, projectID, args):
             if not args.KeepTar:
                 os.remove(tar_path)
 
+    by_trial = {}
+    for b in bounds:
+        by_trial.setdefault(str(b['trial']), {}).setdefault(b['kind'], []).append(
+            {k: b[k] for k in ('offset', 'label', 'index', 'time', 'stem')})
+
     manifest = {
-        'schema': 'cichlid-prepfiles2/1',
+        'schema': 'cichlid-prepfiles2/2',
         'projectID': projectID, 'analysisID': fm_obj.analysisID, 'tankID': lp.tankID,
         'built': str(datetime.datetime.now().replace(microsecond=0)),
         'branch': fm_obj.branch_name,
+        'offsets': list(OFFSET_MINUTES),
+        'trialTimes': {str(i + 1): {'start': str(t.startTime), 'stop': str(t.stopTime),
+                                    'reset': str(t.resetTime) if getattr(t, 'resetTime', None)
+                                             else None}
+                       for i, t in enumerate(lp.trials)},
         'trials': {str(i): sides for i, sides in plan.items()},
+        'boundaries': by_trial,
     }
     with open(out_dir + 'pairs.json', 'w') as f:
         json.dump(manifest, f, indent=1)
