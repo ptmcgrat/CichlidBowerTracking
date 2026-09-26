@@ -3276,6 +3276,64 @@ def upload(fm_obj, path, quiet=False):
         print('    uploaded -> ' + cloud)
 
 
+def trial_settings_path(fm):
+    return fm.localAnalysisDir + 'TrialSettings.json'
+
+
+def read_trial_settings(fm):
+    path = trial_settings_path(fm)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def build_boundary_payload(fm, lp):
+    """The start, stop and reset candidates createPrepFiles2 wrote.
+
+    Each carries its still and its depth frame at half resolution, so the page
+    can difference them and show how far the sand moved over those minutes.
+    """
+    d = fm.localProjectDir + 'PrepFiles2/'
+    manifest_path = d + 'pairs.json'
+    if not os.path.exists(manifest_path):
+        return None
+    try:
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+    except Exception:
+        return None
+    bounds = manifest.get('boundaries')
+    if not bounds:
+        return None
+
+    out = {'offsets': manifest.get('offsets', [0, 5, 10, 15, 20]),
+           'trialTimes': manifest.get('trialTimes', {}), 'trials': {}}
+    for trial, kinds in bounds.items():
+        entry = {}
+        for kind, cands in kinds.items():
+            items = []
+            for c in sorted(cands, key=lambda x: x['offset']):
+                stem = d + c['stem']
+                if not (os.path.exists(stem + '.jpg') and os.path.exists(stem + '.npy')):
+                    continue
+                arr = load_npy(stem + '.npy')
+                src_png, meta = encode_depth(half(arr))
+                items.append({'offset': c['offset'], 'label': c['label'],
+                              'index': c['index'], 'time': c['time'],
+                              'jpg': encode_image(cv2.imread(stem + '.jpg'),
+                                                  max_width=lp.width),
+                              'depth': {'src': src_png, 'meta': meta}})
+            if items:
+                entry[kind] = items
+        if entry:
+            out['trials'][trial] = entry
+    return out if out['trials'] else None
+
+
 def build_register_payload(fm, lp, pairs):
     """Full-resolution stills for every corrected pair, plus the current crops."""
     out_pairs = []
@@ -3305,11 +3363,23 @@ def build_register_payload(fm, lp, pairs):
     if os.path.exists(fm.localVideoCropFile):
         current['videoPoints'] = parse_points(fm.localVideoCropFile)
 
+    quality = None
+    try:
+        q_raw, q_smooth, q_meta = load_depth_endpoints(fm)
+        quality = build_quality_payload(fm, lp, q_raw, q_smooth, q_meta)
+    except DepthFilesMissing:
+        pass
+    except Exception as e:
+        print('    register pixel-quality tab skipped: ' + repr(e))
+
     return {
-        'schema': 'cichlid-registration/1',
+        'schema': 'cichlid-registration/2',
         'projectID': lp.projectID, 'tankID': lp.tankID, 'analysisID': fm.analysisID,
         'frameSize': [lp.width, lp.height],
         'pairs': out_pairs, 'current': current,
+        'boundaries': build_boundary_payload(fm, lp),
+        'settings': read_trial_settings(fm),
+        'quality': quality,
         'built': str(datetime.datetime.now().replace(microsecond=0)),
     }
 
@@ -3394,6 +3464,27 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
   circle.corner { fill:var(--tray); stroke:#141414; stroke-width:1.5; cursor:grab; }
   circle.corner.video { fill:var(--video); }
   @media (max-width:920px) { .panes { grid-template-columns:1fr; } }
+  .grid { display:grid; gap:14px; }
+  .grid.cols-5 { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  @media (max-width:1300px) { .grid.cols-5 { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:800px) { .grid.cols-5 { grid-template-columns:1fr; } }
+  .trial { margin-bottom:28px; }
+  .trial h2 { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; font-size:15px;
+              border-bottom:1px solid var(--line); padding-bottom:8px; margin:0 0 10px; }
+  .trial h2 span { font-weight:400; font-size:13px; color:var(--ink-dim);
+                   font-variant-numeric:tabular-nums; }
+  .cand { margin:0; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+          overflow:hidden; display:flex; flex-direction:column; }
+  .cand.picked { border-color:var(--ok); box-shadow:0 0 0 1px var(--ok) inset; }
+  .cand .candhead { padding:8px 11px; font-size:12px; color:var(--ink-dim);
+                    font-variant-numeric:tabular-nums; }
+  .cand .candhead b { color:var(--ink); font-weight:600; display:block; font-size:13px; }
+  .cand .stage img, .cand .stage canvas { width:100%; display:block; }
+  .cand figcaption { padding:8px 11px; font-size:11px; color:var(--ink-dim); flex:1; }
+  .cand .pick { margin:0; border:none; border-top:1px solid var(--line); background:none;
+                color:var(--ink); padding:8px; font:inherit; font-size:13px; cursor:pointer; }
+  .cand .pick:hover { background:var(--ink); color:var(--bg); }
+  .cand.picked .pick { color:var(--ok); }
 </style>
 </head>
 <body>
@@ -3403,12 +3494,16 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
   <p class="sub" id="sub"></p>
 
   <div class="mtabs" role="tablist">
-    <button id="tabPoints" role="tab" aria-selected="true">Match points</button>
-    <button id="tabCrop" role="tab" aria-selected="false">Adjust tray crop</button>
+    <button id="tabBounds" role="tab" aria-selected="true">Trial times</button>
+    <button id="tabPoints" role="tab" aria-selected="false">Match points</button>
+    <button id="tabCrop" role="tab" aria-selected="false">Adjust crops</button>
+    <button id="tabQuality" role="tab" aria-selected="false">Pixel quality</button>
   </div>
 
+  <section id="viewBounds"></section>
+
   <!-- ------------------------------------------------------------ points -->
-  <section id="viewPoints">
+  <section id="viewPoints" hidden>
     <div class="bar">
       <label for="pickPair">Pick points on</label>
       <select id="pickPair"></select>
@@ -3506,6 +3601,8 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
     </div>
   </section>
 
+  <section id="viewQuality" hidden></section>
+
   <div class="save">
     <input id="initials" maxlength="4" placeholder="Initials" aria-label="Your initials">
     <input id="note" placeholder="Optional note (what was wrong with the old registration?)">
@@ -3519,6 +3616,16 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
 const D = JSON.parse(document.getElementById('payload').textContent);
 const COLORS = ['#f2a33c','#5aa87a','#6fb2e8','#e0693f','#c48ce0','#e8d45a',
                 '#57c9c1','#e884a8','#9ad45a','#b0916a','#7f8ce0','#d9d9d9'];
+
+const SETTINGS = (function () {
+  const s = D.settings || {};
+  const out = { residualK: s.residualK === undefined ? 4 : s.residualK, trials: {} };
+  Object.keys((s.trials) || {}).forEach(t => { out.trials[t] = Object.assign({}, s.trials[t]); });
+  if (D.boundaries) Object.keys(D.boundaries.trials).forEach(t => {
+    out.trials[t] = out.trials[t] || {};
+  });
+  return out;
+})();
 
 let pairs = [];      // {depth:[x,y], pi:[x,y]} in native pixel coords
 let pending = null;
@@ -3805,13 +3912,269 @@ function setCropMode(which, mode) {
 }
 
 // ------------------------------------------------------------------- tabs
+// ------------------------------------------------------------- boundaries
+const BCACHE = {};
+function bDecode(layer) {
+  if (BCACHE[layer.src]) return BCACHE[layer.src];
+  const m = layer.meta;
+  const c = document.createElement('canvas');
+  c.width = m.width; c.height = m.height;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(layer.img, 0, 0);
+  const px = ctx.getImageData(0, 0, m.width, m.height).data;
+  const out = new Float32Array(m.width * m.height);
+  for (let i = 0, p = 0; i < out.length; i++, p += 4)
+    out[i] = px[p+2] === 0 ? NaN : ((px[p] << 8) | px[p+1]) * m.scale + m.offset;
+  BCACHE[layer.src] = out;
+  return out;
+}
+
+function bLoad(layers) {
+  return Promise.all(layers.filter(Boolean).map(l => new Promise(res => {
+    if (l.img) return res();
+    const im = new Image();
+    im.onload = () => { l.img = im; res(); };
+    im.onerror = () => res();
+    im.src = l.src;
+  })));
+}
+
+function bJet(t) {
+  t = Math.min(1, Math.max(0, t));
+  return [Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 3)))*255,
+          Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 2)))*255,
+          Math.max(0, Math.min(1, 1.5 - Math.abs(4*t - 1)))*255];
+}
+
+function bChangeCanvas(a, b, meta, range) {
+  const c = document.createElement('canvas');
+  c.width = meta.width; c.height = meta.height;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(meta.width, meta.height);
+  let moved = 0, n = 0;
+  for (let i = 0, p = 0; i < a.length; i++, p += 4) {
+    const v = a[i] - b[i];
+    if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
+    n++;
+    if (Math.abs(v) > 0.15) moved++;
+    const col = bJet((v + range) / (2 * range));
+    img.data[p]=col[0]; img.data[p+1]=col[1]; img.data[p+2]=col[2]; img.data[p+3]=255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return { canvas: c, movedFraction: n ? moved / n : 0 };
+}
+
+function viewBoundaries() {
+  const box = document.createElement('div');
+  const B = D.boundaries;
+  if (!B) {
+    box.innerHTML = '<div class="msg info">This project has no boundary candidates. Rerun ' +
+      'createPrepFiles2.py to generate them.</div>';
+    return box;
+  }
+
+  box.innerHTML = '<p class="sub">The logged trial start is often too early, before the sand ' +
+    'has settled after a reset. Pick the first frame that looks settled. Every total-build ' +
+    'figure for a trial is measured from its start frame, so this matters most there. The ' +
+    'depth panel shows how far the sand moved since the zero-offset frame.</p>';
+
+  const KINDS = [['start', 'Trial start', 'later is safer: the sand settles'],
+                 ['stop', 'Trial stop', 'earlier is safer: the reset may have begun'],
+                 ['reset', 'After the final reset', 'the last picture of the bower']];
+
+  Object.keys(B.trials).sort((a, b) => +a - +b).forEach(trial => {
+    const kinds = B.trials[trial];
+    const sec = document.createElement('section');
+    sec.className = 'trial';
+    const times = B.trialTimes[trial] || {};
+    sec.innerHTML = '<h2>Trial ' + trial + '<span>logged ' +
+      (times.start || '').slice(0, 16) + ' to ' + (times.stop || '').slice(0, 16) + '</span></h2>';
+    box.appendChild(sec);
+
+    KINDS.forEach(([kind, title, hint]) => {
+      const cands = kinds[kind];
+      if (!cands || !cands.length) return;
+      const wrap = document.createElement('div');
+      wrap.innerHTML = '<p class="stat" style="margin:6px 0 8px"><b>' + title + '</b> \u2014 ' +
+        hint + '</p>';
+      const grid = document.createElement('div');
+      grid.className = 'grid cols-5';
+      wrap.appendChild(grid);
+      sec.appendChild(wrap);
+
+      bLoad(cands.map(c => c.depth)).then(() => {
+        const zero = bDecode(cands[0].depth);
+        cands.forEach(c => {
+          const fig = document.createElement('figure');
+          const chosen = chosenOffset(trial, kind) === c.offset;
+          fig.className = 'cand' + (chosen ? ' picked' : '');
+          const head = document.createElement('div');
+          head.className = 'candhead';
+          head.innerHTML = '<b>' + c.label + '</b><span>' + c.time.slice(11, 16) +
+                           ' \u00b7 frame ' + c.index + '</span>';
+          fig.appendChild(head);
+
+          const stage = document.createElement('div');
+          stage.className = 'stage';
+          stage.innerHTML = '<img src="' + c.jpg + '" alt="">';
+          fig.appendChild(stage);
+
+          const r = bChangeCanvas(zero, bDecode(c.depth), c.depth.meta, 1);
+          const dstage = document.createElement('div');
+          dstage.className = 'stage';
+          dstage.appendChild(r.canvas);
+          fig.appendChild(dstage);
+
+          const cap = document.createElement('figcaption');
+          cap.innerHTML = c.offset === 0
+            ? 'reference frame'
+            : (100 * r.movedFraction).toFixed(1) + '% of pixels moved more than 0.15 cm ' +
+              'since the reference';
+          fig.appendChild(cap);
+
+          const btn = document.createElement('button');
+          btn.className = 'pick';
+          btn.textContent = chosen ? 'Chosen' : 'Use this frame';
+          btn.addEventListener('click', () => {
+            setOffset(trial, kind, c.offset);
+            rebuildBoundaries();
+          });
+          fig.appendChild(btn);
+          grid.appendChild(fig);
+        });
+      });
+    });
+  });
+  return box;
+}
+
+function chosenOffset(trial, kind) {
+  const t = SETTINGS.trials[trial] || {};
+  const v = t[kind + 'Offset'];
+  return v === undefined || v === null ? 0 : v;
+}
+
+function setOffset(trial, kind, offset) {
+  SETTINGS.trials[trial] = SETTINGS.trials[trial] || {};
+  SETTINGS.trials[trial][kind + 'Offset'] = offset;
+}
+
+function rebuildQuality() {
+  const host = document.getElementById('viewQuality');
+  if (!host) return;
+  host.textContent = '';
+  const Q = D.quality;
+  if (!Q) {
+    host.innerHTML = '<div class="msg info">No DepthFiles bundle for this project, so there ' +
+      'is nothing to assess. Run the Depth stage, then rebuild this page.</div>';
+    return;
+  }
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.innerHTML = '<label>Residual k = <b id="rk">' + SETTINGS.residualK + '</b></label>' +
+    '<input type="range" id="rks" min="1" max="8" step="0.5" value="' + SETTINGS.residualK +
+    '"><span class="stat">Saved with the registration and used by the depth analysis.</span>';
+  host.appendChild(bar);
+  const note = document.createElement('p');
+  note.className = 'sub';
+  note.innerHTML = 'Residual is the RMS departure from a straight line fitted through the ' +
+    'day. Magenta is what this k would drop, over each day\u2019s total change. Pick the ' +
+    'value that clears the bad pixels without eating the bower.';
+  host.appendChild(note);
+  const body = document.createElement('div');
+  host.appendChild(body);
+
+  function draw() {
+    body.textContent = '';
+    Q.trials.forEach(t => {
+      const days = Q.days.filter(d => d.trial === t.trial);
+      const baseline = Q.frames[+Q.baselines[t.trial]];
+      if (!baseline) return;
+      const sec = document.createElement('section');
+      sec.className = 'trial';
+      sec.innerHTML = '<h2>Trial ' + t.trial + '<span>' + days.length + ' days</span></h2>';
+      const grid = document.createElement('div');
+      grid.className = 'grid cols-5';
+      sec.appendChild(grid);
+      body.appendChild(sec);
+
+      days.forEach(d => {
+        const f = Q.frames[d.day];
+        const st = (d.quality || {}).residual;
+        const fig = document.createElement('figure');
+        fig.className = 'cand';
+        fig.innerHTML = '<div class="candhead"><b>' + d.date.slice(5) + '</b><span>' +
+          (st ? 'median ' + st.median : 'no residual') + '</span></div>';
+        grid.appendChild(fig);
+        bLoad([f.rawFirst, f.rawLast, f.residual, baseline.rawFirst]).then(() => {
+          const rL = bDecode(f.rawLast);
+          const total = bDecode(baseline.rawFirst);
+          const vals = new Float32Array(total.length);
+          for (let i = 0; i < vals.length; i++) vals[i] = total[i] - rL[i];
+          let mark = null, n = 0, valid = 0;
+          if (f.residual && st) {
+            const thr = st.median * Math.pow(st.madFactor, SETTINGS.residualK);
+            const m = bDecode(f.residual);
+            mark = new Uint8Array(m.length);
+            for (let i = 0; i < m.length; i++) {
+              if (Number.isNaN(m[i])) continue;
+              valid++;
+              if (m[i] > thr) { mark[i] = 1; n++; }
+            }
+          }
+          const meta = f.rawFirst.meta;
+          const c = document.createElement('canvas');
+          c.width = meta.width; c.height = meta.height;
+          const ctx = c.getContext('2d');
+          const img = ctx.createImageData(meta.width, meta.height);
+          for (let i = 0, p = 0; i < vals.length; i++, p += 4) {
+            if (mark && mark[i]) {
+              img.data[p]=255; img.data[p+1]=0; img.data[p+2]=200; img.data[p+3]=255; continue;
+            }
+            const v = vals[i];
+            if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
+            const col = bJet((v + 2) / 4);
+            img.data[p]=col[0]; img.data[p+1]=col[1]; img.data[p+2]=col[2]; img.data[p+3]=255;
+          }
+          ctx.putImageData(img, 0, 0);
+          const stage = document.createElement('div');
+          stage.className = 'stage';
+          stage.appendChild(c);
+          fig.appendChild(stage);
+          const cap = document.createElement('figcaption');
+          cap.textContent = valid ? (100 * n / valid).toFixed(2) + '% removed' : '';
+          fig.appendChild(cap);
+        });
+      });
+    });
+  }
+  bar.querySelector('#rks').addEventListener('input', e => {
+    SETTINGS.residualK = parseFloat(e.target.value);
+    bar.querySelector('#rk').textContent = SETTINGS.residualK;
+    draw();
+  });
+  draw();
+}
+
+function rebuildBoundaries() {
+  const host = document.getElementById('viewBounds');
+  if (!host) return;
+  host.textContent = '';
+  host.appendChild(viewBoundaries());
+}
+
 function setTab(which) {
-  const points = which === 'points';
-  document.getElementById('tabPoints').setAttribute('aria-selected', points);
-  document.getElementById('tabCrop').setAttribute('aria-selected', !points);
-  document.getElementById('viewPoints').hidden = !points;
-  document.getElementById('viewCrop').hidden = points;
-  if (points) preview(); else redrawCrops();
+  const map = { bounds: 'tabBounds', points: 'tabPoints', crop: 'tabCrop',
+                quality: 'tabQuality' };
+  Object.keys(map).forEach(k => {
+    document.getElementById(map[k]).setAttribute('aria-selected', String(k === which));
+    document.getElementById('view' + k.charAt(0).toUpperCase() + k.slice(1)).hidden =
+      (k !== which);
+  });
+  if (which === 'points') preview();
+  else if (which === 'crop') redrawCrops();
+  else if (which === 'bounds') rebuildBoundaries();
+  else if (which === 'quality') rebuildQuality();
 }
 
 function flash(text, kind) {
@@ -3822,7 +4185,7 @@ function flash(text, kind) {
 
 function save() {
   const out = {
-    schema: 'cichlid-registration/1',
+    schema: 'cichlid-registration/2',
     projectID: D.projectID, analysisID: D.analysisID, tankID: D.tankID,
     pickPair: pickPair.key, viewPair: viewPair.key, cropPair: cropPair.key,
     depthFile: pickPair.depthFile, piFile: pickPair.piFile,
@@ -3831,6 +4194,7 @@ function save() {
     depthPoints: crops.depth.map(p => [Math.round(p[0]), Math.round(p[1])]),
     videoPoints: crops.video.map(p => [Math.round(p[0]), Math.round(p[1])]),
     browserTransM: H, browserRMS: rms,
+    trialSettings: SETTINGS,
     initials: document.getElementById('initials').value.trim().toUpperCase(),
     note: document.getElementById('note').value.trim(),
     created: new Date().toISOString(),
@@ -4000,8 +4364,10 @@ function build() {
       setCropMode(which, 'drag');
     }));
 
+  document.getElementById('tabBounds').addEventListener('click', () => setTab('bounds'));
   document.getElementById('tabPoints').addEventListener('click', () => setTab('points'));
   document.getElementById('tabCrop').addEventListener('click', () => setTab('crop'));
+  document.getElementById('tabQuality').addEventListener('click', () => setTab('quality'));
 
   const host = document.getElementById('preview');
   host.addEventListener('mousemove', ev => {
@@ -4026,7 +4392,7 @@ function build() {
   setPickPair(start.key);
   setViewPair(start.key);
   setCropPair(start.key);
-  setTab('points');
+  setTab('bounds');
 }
 build();
 </script>
@@ -4105,12 +4471,25 @@ def apply_submission(fm_obj, sub, s_dt, who=None):
     # last changed the registration without trawling the backups
     with open(registration_info_path(fm_obj), 'w') as f:
         json.dump(record, f, indent=1)
+
+    # the trial times and the residual k, which the depth analysis reads
+    settings = sub.get('trialSettings')
+    if settings:
+        payload = {'schema': 'cichlid-trial-settings/1',
+                   'appliedAt': record['appliedAt'], 'who': record['who'],
+                   'residualK': settings.get('residualK', 4),
+                   'trials': settings.get('trials', {})}
+        with open(trial_settings_path(fm_obj), 'w') as f:
+            json.dump(payload, f, indent=1)
+        record['trialSettings'] = payload
     with open(fm_obj.localBackupDir + stamp + '_registration.json', 'w') as f:
         json.dump({'submission': sub, 'applied': record}, f, indent=1)
 
     for path in [fm_obj.localDepthCropFile, fm_obj.localVideoCropFile,
                  fm_obj.localTransMFile, registration_info_path(fm_obj)]:
         upload(fm_obj, path)
+    if os.path.exists(trial_settings_path(fm_obj)):
+        upload(fm_obj, trial_settings_path(fm_obj))
     upload(fm_obj, fm_obj.localBackupDir + stamp + '_registration.json')
 
     stale = []
@@ -4379,7 +4758,7 @@ def apply_registrations(args):
             skipped.append(name)
             continue
 
-        if sub.get('schema') != 'cichlid-registration/1':
+        if sub.get('schema') not in ('cichlid-registration/1', 'cichlid-registration/2'):
             print(name + ': unrecognised schema, skipping')
             skipped.append(name)
             continue

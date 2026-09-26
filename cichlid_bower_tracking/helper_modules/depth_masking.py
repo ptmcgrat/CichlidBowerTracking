@@ -51,10 +51,58 @@ before the spatial one:
             day[:] = interpolate_space(day, usable=self.tray_mask)
 """
 
+import datetime
+import json
+import os
 import warnings
 
 import numpy as np
 from scipy import ndimage
+
+
+def readTrialSettings(fileManager):
+    """The trial times and residual k chosen in the register page, if any."""
+    path = fileManager.localAnalysisDir + 'TrialSettings.json'
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def adjustedDays(lp, trial, number, settings, min_frames=6):
+    """A trial's days, with the chosen start and stop offsets applied.
+
+    The logged start is often too early — the sand has not settled after a
+    reset — and every total-build figure for a trial is measured from its start
+    frame. The register page picks an offset in minutes; this drops the frames
+    before it, and after the stop offset, then returns the day list unchanged in
+    shape so the rest of createSmoothedArray is unaffected.
+
+    Returns (days, info). A day left with fewer than min_frames lights-on frames
+    is dropped rather than carried as a stub.
+    """
+    conf = ((settings or {}).get('trials') or {}).get(str(number)) or {}
+    start_off = conf.get('startOffset') or 0
+    stop_off = conf.get('stopOffset') or 0
+
+    start_at = trial.startTime + datetime.timedelta(minutes=start_off)
+    stop_at = trial.stopTime - datetime.timedelta(minutes=stop_off)
+
+    days, dropped = [], 0
+    for start_f, stop_f in trial.days:
+        inside = [f for f in lp.frames
+                  if start_f.index <= f.index <= stop_f.index and f.lof
+                  and start_at <= f.time <= stop_at]
+        if len(inside) < min_frames:
+            dropped += 1
+            continue
+        days.append((inside[0], inside[-1]))
+    return days, {'startOffset': start_off, 'stopOffset': stop_off,
+                  'startAt': str(start_at), 'stopAt': str(stop_at),
+                  'daysKept': len(days), 'daysDropped': dropped}
 
 
 def cropMask(points, shape):
