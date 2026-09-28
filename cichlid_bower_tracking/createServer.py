@@ -948,6 +948,28 @@ function qOutsideCrop() {
   return QCROP;
 }
 
+function qUnionMask(days, k) {
+  // threshold each day against its own median and MAD, then union: the noise
+  // floor drifts across a trial, and a pixel bad on any day corrupts the total
+  let union = null, perDay = [];
+  days.forEach(d => {
+    const f = D.quality.frames[d.day];
+    const st = (d.quality || {}).residual;
+    if (!f.residual || !st) { perDay.push(null); return; }
+    const thr = st.median * Math.pow(st.madFactor, k);
+    const m = qDecode(f.residual);
+    if (!union) union = new Uint8Array(m.length);
+    let n = 0, valid = 0;
+    for (let i = 0; i < m.length; i++) {
+      if (Number.isNaN(m[i])) continue;
+      valid++;
+      if (m[i] > thr) { union[i] = 1; n++; }
+    }
+    perDay.push({ date: d.date, threshold: thr, fraction: valid ? n / valid : 0 });
+  });
+  return { union, perDay };
+}
+
 function viewQuality() {
   const box = document.createElement('div');
   const Q = D.quality;
@@ -957,161 +979,95 @@ function viewQuality() {
     return box;
   }
 
-  let trial = Q.trials.length ? Q.trials[0].trial : 1;
   let k = 4;
-  let range = 2;
-
-  const sub = document.createElement('div');
-  sub.className = 'tabs';
-  box.appendChild(sub);
-
   const bar = document.createElement('div');
   bar.className = 'bar';
   bar.innerHTML =
     '<label>Residual k = <b id="qk">' + k + '</b></label>' +
     '<input type="range" id="qks" min="1" max="8" step="0.5" value="' + k + '">' +
-    '<label>Range \u00b1<b id="qr">' + range.toFixed(1) + '</b> cm</label>' +
-    '<input type="range" id="qrs" min="0.5" max="10" step="0.5" value="' + range + '">' +
-    '<span class="stat" id="qinfo"></span>';
+    '<span class="spacer"></span><span class="stat" id="qinfo"></span>';
   box.appendChild(bar);
 
   const note = document.createElement('p');
   note.className = 'sub';
-  note.innerHTML = 'Each row is one day. Residual is the RMS departure from a straight line ' +
-    'fitted through that day: a steadily building pixel scores near zero because the fit ' +
-    'absorbs the build, and it does not grow with the length of the day, so partial days stay ' +
-    'comparable. The cut is that day\u2019s own median times its MAD factor to the power k, ' +
-    'and the filtered columns are drawn on total change from the trial start. Use this to ' +
-    'judge whether the tray crop is excluding the right pixels. Change maps use the same ' +
-    'out-of-tray filter and the same default \u00b12 cm scale as the Depth Crop tab, so the ' +
-    'two are directly comparable.';
+  note.innerHTML = 'One row per trial, on total change from its first morning to its last ' +
+    'evening. Residual is the RMS departure from a straight line fitted through a day, so a ' +
+    'steadily building pixel scores near zero. Each day is cut against its own median and ' +
+    'MAD \u2014 the noise floor drifts across a trial \u2014 and the masks are unioned, ' +
+    'because a pixel that misbehaved on any day corrupts the total.';
   box.appendChild(note);
 
   const body = document.createElement('div');
   box.appendChild(body);
 
-  function cutAt(st) { return st ? st.median * Math.pow(st.madFactor, k) : Infinity; }
-
-  function dayRow(d, baseline) {
-    const sec = document.createElement('section');
-    sec.className = 'trial';
-    const st = (d.quality || {}).residual;
-    sec.innerHTML = '<h2>' + d.date + '<span>' + d.firstTime + ' to ' + d.lastTime + ' \u00b7 ' +
-      d.nFrames + ' frames' + (d.partial ? ' \u00b7 partial day' : '') +
-      (st ? ' \u00b7 residual median ' + st.median : '') + '</span></h2>';
-    const grid = document.createElement('div');
-    grid.className = 'grid cols-6';
-    sec.appendChild(grid);
-
-    const f = Q.frames[d.day];
-    qLoad([f.rawFirst, f.rawLast, f.residual, baseline.rawFirst]).then(() => {
-      const rF = qDecode(f.rawFirst), rL = qDecode(f.rawLast);
-      const daily = qFilteredDiff(rF, rL);
-      const total = qFilteredDiff(qDecode(baseline.rawFirst), rL);
-      // the filter columns are always shown on total change
-      const basis = total;
-      const bOpts = { range: range };
-
-      grid.textContent = '';
-      grid.appendChild(qMap(total, '<b>Total change, raw</b> \u2014 trial start to the end ' +
-        'of this day', { range: range }));
-      grid.appendChild(qMap(daily, '<b>Daily change, raw</b>', { range: range }));
-
-      let resid = null, nres = 0, nval = 0;
-      if (f.residual && st) {
-        const thr = cutAt(st), m = qDecode(f.residual);
-        resid = new Uint8Array(m.length);
-        for (let i = 0; i < m.length; i++) {
-          if (Number.isNaN(m[i])) continue;
-          nval++;
-          if (m[i] > thr) { resid[i] = 1; nres++; }
-        }
-        grid.appendChild(qMap(basis, '<b>Residual on total change</b> \u2014 k = ' + k +
-          ', cut at ' + thr.toFixed(3) + ' cm. <span style="color:#ff00c8">Magenta</span> is ' +
-          'what it removes: ' + nres + ' pixels, ' +
-          (100 * nres / Math.max(1, nval)).toFixed(2) + '%.',
-          Object.assign({ mark: resid }, bOpts)));
-      } else {
-        grid.appendChild(qPhoto(null, '<b>Residual</b>'));
-      }
-
-      const oc = qOutsideCrop();
-      let nout = 0, nvalid = 0;
-      for (let i = 0; i < basis.length; i++) {
-        if (Number.isNaN(basis[i])) continue;
-        nvalid++;
-        if (oc && oc[i]) nout++;
-      }
-      grid.appendChild(qMap(basis, '<b>Crop on total change</b> \u2014 ' +
-        (oc ? '<span style="color:#ff00c8">Magenta</span> is what the four-point crop ' +
-              'excludes: ' + nout + ' pixels, ' +
-              (100 * nout / Math.max(1, nvalid)).toFixed(2) + '%.'
-            : 'No DepthCrop.txt was available.'),
-        Object.assign({ mark: oc }, bOpts)));
-
-      const union = new Uint8Array(basis.length);
-      let nunion = 0, nboth = 0;
-      for (let i = 0; i < union.length; i++) {
-        const a = resid ? resid[i] : 0, b = oc ? oc[i] : 0;
-        if (a || b) { union[i] = 1; if (!Number.isNaN(basis[i])) nunion++; }
-        if (a && b && !Number.isNaN(basis[i])) nboth++;
-      }
-      grid.appendChild(qMap(basis, '<b>Both filters on total change</b> \u2014 together they ' +
-        'remove ' + nunion + ' pixels, ' + (100 * nunion / Math.max(1, nvalid)).toFixed(2) +
-        '%. ' + nboth + ' of those the crop already excluded, so residual adds ' +
-        (nunion - nout) + ' beyond it. Removed pixels are blacked out, so what remains in ' +
-        'colour is what the analysis would use.',
-        Object.assign({ mark: union, markColour: [0, 0, 0] }, bOpts)));
-
-      grid.appendChild(qPhoto(f.jpg, '<b>Depth camera</b> \u2014 ' + d.firstTime));
-    });
-    return sec;
-  }
-
   function draw() {
-    Array.from(sub.children).forEach(b =>
-      b.setAttribute('aria-selected', String(+b.dataset.trial === trial)));
-    const days = Q.days.filter(d => d.trial === trial);
-    const baseline = Q.frames[+Q.baselines[trial]];
-    bar.querySelector('#qinfo').innerHTML = '<b>' + days.length + '</b> days in trial ' + trial;
     body.textContent = '';
-    if (!baseline) return;
+    Q.trials.forEach(t => {
+      const days = Q.days.filter(d => d.trial === t.trial);
+      if (!days.length) return;
+      const first = Q.frames[days[0].day], last = Q.frames[days[days.length - 1].day];
+      const sec = document.createElement('section');
+      sec.className = 'trial';
+      sec.innerHTML = '<h2>Trial ' + t.trial + '<span>' + days.length + ' days \u00b7 ' +
+        days[0].date + ' to ' + days[days.length - 1].date + '</span></h2>';
+      const grid = document.createElement('div');
+      grid.className = 'grid cols-6';
+      sec.appendChild(grid);
+      body.appendChild(sec);
 
-    // rows are built as they scroll in: a long trial is a great many canvases
-    const io = typeof IntersectionObserver !== 'undefined'
-      ? new IntersectionObserver(entries => {
-          entries.forEach(e => {
-            if (!e.isIntersecting) return;
-            io.unobserve(e.target);
-            e.target.replaceWith(dayRow(days[+e.target.dataset.i], baseline));
-          });
-        }, { rootMargin: '400px' })
-      : null;
+      const need = [first.rawFirst, last.rawLast].concat(
+        days.map(d => Q.frames[d.day].residual).filter(Boolean));
+      qLoad(need).then(() => {
+        const total = qFilteredDiff(qDecode(first.rawFirst), qDecode(last.rawLast));
+        const { union, perDay } = qUnionMask(days, k);
 
-    days.forEach((d, i) => {
-      if (!io) { body.appendChild(dayRow(d, baseline)); return; }
-      const ph = document.createElement('section');
-      ph.className = 'trial';
-      ph.dataset.i = i;
-      ph.innerHTML = '<h2>' + d.date + '<span>loading\u2026</span></h2>';
-      body.appendChild(ph);
-      io.observe(ph);
+        let nvalid = 0;
+        for (let i = 0; i < total.length; i++) if (!Number.isNaN(total[i])) nvalid++;
+        const count = m => {
+          if (!m) return 0;
+          let n = 0;
+          for (let i = 0; i < total.length; i++) if (!Number.isNaN(total[i]) && m[i]) n++;
+          return n;
+        };
+        const oc = qOutsideCrop();
+        const nres = count(union), nout = count(oc);
+        const both = new Uint8Array(total.length);
+        for (let i = 0; i < both.length; i++)
+          both[i] = ((union && union[i]) || (oc && oc[i])) ? 1 : 0;
+        const nboth = count(both);
+
+        grid.textContent = '';
+        grid.appendChild(qMap(total, '<b>Total change, raw</b> \u2014 first morning to last ' +
+          'evening', { range: 2 }));
+        grid.appendChild(qMap(total, '<b>Residual, union over the trial</b> \u2014 k = ' + k +
+          '. <span style="color:#ff00c8">Magenta</span> removes ' + nres + ' pixels, ' +
+          (100 * nres / Math.max(1, nvalid)).toFixed(2) + '%.',
+          { range: 2, mark: union }));
+        grid.appendChild(qMap(total, '<b>Tray crop</b> \u2014 ' +
+          (oc ? '<span style="color:#ff00c8">magenta</span> removes ' + nout + ' pixels, ' +
+                (100 * nout / Math.max(1, nvalid)).toFixed(2) + '%.'
+              : 'no DepthCrop.txt available.'), { range: 2, mark: oc }));
+        grid.appendChild(qMap(total, '<b>Both</b> \u2014 together they remove ' + nboth +
+          ' pixels, ' + (100 * nboth / Math.max(1, nvalid)).toFixed(2) + '%. Residual adds ' +
+          (nboth - nout) + ' beyond the crop. Removed pixels are blacked out, so what remains ' +
+          'in colour is what the analysis would use.',
+          { range: 2, mark: both, markColour: [0, 0, 0] }));
+
+        const worst = days.map((d, i) => perDay[i]).filter(Boolean)
+          .sort((a, b) => b.fraction - a.fraction).slice(0, 4);
+        const tbl = document.createElement('figure');
+        tbl.innerHTML = '<figcaption><b>Per-day contribution</b><br>' +
+          (worst.length ? worst.map(w => w.date.slice(5) + ': ' +
+            (100 * w.fraction).toFixed(2) + '% at ' + w.threshold.toFixed(3) + ' cm').join('<br>')
+           : 'no residual data') + '</figcaption>';
+        grid.appendChild(tbl);
+
+        grid.appendChild(qPhoto(first.jpg, '<b>Depth camera</b> \u2014 trial start'));
+      });
     });
+    bar.querySelector('#qinfo').innerHTML = '<b>' + Q.trials.length + '</b> trials';
   }
 
-  Q.trials.forEach(t => {
-    const b = document.createElement('button');
-    b.textContent = 'Trial ' + t.trial;
-    b.dataset.trial = t.trial;
-    b.setAttribute('role', 'tab');
-    b.addEventListener('click', () => { trial = t.trial; draw(); });
-    sub.appendChild(b);
-  });
-  bar.querySelector('#qrs').addEventListener('input', e => {
-    range = parseFloat(e.target.value);
-    bar.querySelector('#qr').textContent = range.toFixed(1);
-    draw();
-  });
   bar.querySelector('#qks').addEventListener('input', e => {
     k = parseFloat(e.target.value);
     bar.querySelector('#qk').textContent = k;
@@ -4059,6 +4015,74 @@ function setOffset(trial, kind, offset) {
   SETTINGS.trials[trial][kind + 'Offset'] = offset;
 }
 
+function rCropMask() {
+  // the crop being edited on the crops tab, so its effect shows here live
+  const Q = D.quality;
+  if (!Q) return null;
+  const pts = crops.depth;
+  if (!pts || pts.length < 3) return null;
+  const W = Q.frameSize[0], H = Q.frameSize[1];
+  const m = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const py = y * 2 + 0.5;
+    for (let x = 0; x < W; x++) {
+      const px = x * 2 + 0.5;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1];
+        if ((yi > py) !== (yj > py) &&
+            px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      if (!inside) m[y * W + x] = 1;
+    }
+  }
+  return m;
+}
+
+function rFilteredDiff(first, last) {
+  const fin = [];
+  for (let i = 0; i < first.length; i++) if (!Number.isNaN(first[i])) fin.push(first[i]);
+  fin.sort((a, b) => a - b);
+  const med = fin.length ? fin[fin.length >> 1] : 0;
+  const o = new Float32Array(first.length);
+  for (let i = 0; i < first.length; i++) {
+    const avg = (first[i] + last[i]) / 2;
+    o[i] = (avg > med + 4 || avg < med - 8) ? NaN : first[i] - last[i];
+  }
+  return o;
+}
+
+function rMap(values, caption, opts) {
+  opts = opts || {};
+  const Q = D.quality, W = Q.frameSize[0], H = Q.frameSize[1];
+  const range = opts.range === undefined ? 2 : opts.range;
+  const mark = opts.mark, mc = opts.markColour || [255, 0, 200];
+  const fig = document.createElement('figure');
+  fig.className = 'cand';
+  const stage = document.createElement('div');
+  stage.className = 'stage';
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  stage.appendChild(c);
+  fig.appendChild(stage);
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  for (let i = 0, p = 0; i < values.length; i++, p += 4) {
+    if (mark && mark[i]) {
+      img.data[p]=mc[0]; img.data[p+1]=mc[1]; img.data[p+2]=mc[2]; img.data[p+3]=255; continue;
+    }
+    const v = values[i];
+    if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
+    const col = bJet((v + range) / (2 * range));
+    img.data[p]=col[0]; img.data[p+1]=col[1]; img.data[p+2]=col[2]; img.data[p+3]=255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const cap = document.createElement('figcaption');
+  cap.innerHTML = caption;
+  fig.appendChild(cap);
+  return fig;
+}
+
 function rebuildQuality() {
   const host = document.getElementById('viewQuality');
   if (!host) return;
@@ -4073,23 +4097,25 @@ function rebuildQuality() {
   bar.className = 'bar';
   bar.innerHTML = '<label>Residual k = <b id="rk">' + SETTINGS.residualK + '</b></label>' +
     '<input type="range" id="rks" min="1" max="8" step="0.5" value="' + SETTINGS.residualK +
-    '"><span class="stat">Saved with the registration and used by the depth analysis.</span>';
+    '"><span class="stat">Saved with the registration and used by the depth analysis. The ' +
+    'crop shown is the one on the crops tab, including any edits.</span>';
   host.appendChild(bar);
   const note = document.createElement('p');
   note.className = 'sub';
-  note.innerHTML = 'Residual is the RMS departure from a straight line fitted through the ' +
-    'day. Magenta is what this k would drop, over each day\u2019s total change. Pick the ' +
-    'value that clears the bad pixels without eating the bower.';
+  note.innerHTML = 'One row per trial, on total change. Each day is cut against its own ' +
+    'median and MAD, and the masks are unioned across the trial: a pixel that misbehaved on ' +
+    'any day corrupts the total.';
   host.appendChild(note);
   const body = document.createElement('div');
   host.appendChild(body);
 
   function draw() {
     body.textContent = '';
+    const oc = rCropMask();
     Q.trials.forEach(t => {
       const days = Q.days.filter(d => d.trial === t.trial);
-      const baseline = Q.frames[+Q.baselines[t.trial]];
-      if (!baseline) return;
+      if (!days.length) return;
+      const first = Q.frames[days[0].day], last = Q.frames[days[days.length - 1].day];
       const sec = document.createElement('section');
       sec.className = 'trial';
       sec.innerHTML = '<h2>Trial ' + t.trial + '<span>' + days.length + ' days</span></h2>';
@@ -4098,53 +4124,45 @@ function rebuildQuality() {
       sec.appendChild(grid);
       body.appendChild(sec);
 
-      days.forEach(d => {
-        const f = Q.frames[d.day];
-        const st = (d.quality || {}).residual;
+      const need = [first.rawFirst, last.rawLast].concat(
+        days.map(d => Q.frames[d.day].residual).filter(Boolean));
+      bLoad(need).then(() => {
+        const total = rFilteredDiff(bDecode(first.rawFirst), bDecode(last.rawLast));
+        let union = null;
+        days.forEach(d => {
+          const f = Q.frames[d.day], st = (d.quality || {}).residual;
+          if (!f.residual || !st) return;
+          const thr = st.median * Math.pow(st.madFactor, SETTINGS.residualK);
+          const m = bDecode(f.residual);
+          if (!union) union = new Uint8Array(m.length);
+          for (let i = 0; i < m.length; i++) if (!Number.isNaN(m[i]) && m[i] > thr) union[i] = 1;
+        });
+        let nvalid = 0;
+        for (let i = 0; i < total.length; i++) if (!Number.isNaN(total[i])) nvalid++;
+        const count = m => { if (!m) return 0; let n = 0;
+          for (let i = 0; i < total.length; i++) if (!Number.isNaN(total[i]) && m[i]) n++;
+          return n; };
+        const nres = count(union), nout = count(oc);
+        const both = new Uint8Array(total.length);
+        for (let i = 0; i < both.length; i++)
+          both[i] = ((union && union[i]) || (oc && oc[i])) ? 1 : 0;
+        const nboth = count(both);
+
+        grid.textContent = '';
+        grid.appendChild(rMap(total, '<b>Total change, raw</b>'));
+        grid.appendChild(rMap(total, '<b>Residual, union</b> \u2014 removes ' +
+          (100 * nres / Math.max(1, nvalid)).toFixed(2) + '%', { mark: union }));
+        grid.appendChild(rMap(total, '<b>Tray crop</b> \u2014 removes ' +
+          (100 * nout / Math.max(1, nvalid)).toFixed(2) + '%', { mark: oc }));
+        grid.appendChild(rMap(total, '<b>Both</b> \u2014 ' +
+          (100 * nboth / Math.max(1, nvalid)).toFixed(2) + '%, residual adding ' +
+          (nboth - nout) + ' pixels beyond the crop',
+          { mark: both, markColour: [0, 0, 0] }));
         const fig = document.createElement('figure');
         fig.className = 'cand';
-        fig.innerHTML = '<div class="candhead"><b>' + d.date.slice(5) + '</b><span>' +
-          (st ? 'median ' + st.median : 'no residual') + '</span></div>';
+        fig.innerHTML = '<div class="stage"><img src="' + (first.jpg || '') + '" alt=""></div>' +
+          '<figcaption><b>Depth camera</b> \u2014 trial start</figcaption>';
         grid.appendChild(fig);
-        bLoad([f.rawFirst, f.rawLast, f.residual, baseline.rawFirst]).then(() => {
-          const rL = bDecode(f.rawLast);
-          const total = bDecode(baseline.rawFirst);
-          const vals = new Float32Array(total.length);
-          for (let i = 0; i < vals.length; i++) vals[i] = total[i] - rL[i];
-          let mark = null, n = 0, valid = 0;
-          if (f.residual && st) {
-            const thr = st.median * Math.pow(st.madFactor, SETTINGS.residualK);
-            const m = bDecode(f.residual);
-            mark = new Uint8Array(m.length);
-            for (let i = 0; i < m.length; i++) {
-              if (Number.isNaN(m[i])) continue;
-              valid++;
-              if (m[i] > thr) { mark[i] = 1; n++; }
-            }
-          }
-          const meta = f.rawFirst.meta;
-          const c = document.createElement('canvas');
-          c.width = meta.width; c.height = meta.height;
-          const ctx = c.getContext('2d');
-          const img = ctx.createImageData(meta.width, meta.height);
-          for (let i = 0, p = 0; i < vals.length; i++, p += 4) {
-            if (mark && mark[i]) {
-              img.data[p]=255; img.data[p+1]=0; img.data[p+2]=200; img.data[p+3]=255; continue;
-            }
-            const v = vals[i];
-            if (Number.isNaN(v)) { img.data[p]=img.data[p+1]=img.data[p+2]=0; img.data[p+3]=255; continue; }
-            const col = bJet((v + 2) / 4);
-            img.data[p]=col[0]; img.data[p+1]=col[1]; img.data[p+2]=col[2]; img.data[p+3]=255;
-          }
-          ctx.putImageData(img, 0, 0);
-          const stage = document.createElement('div');
-          stage.className = 'stage';
-          stage.appendChild(c);
-          fig.appendChild(stage);
-          const cap = document.createElement('figcaption');
-          cap.textContent = valid ? (100 * n / valid).toFixed(2) + '% removed' : '';
-          fig.appendChild(cap);
-        });
       });
     });
   }
@@ -5020,4 +5038,4 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(main()) 

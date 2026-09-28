@@ -152,6 +152,70 @@ def dailyResidual(day, min_valid=0.5):
     return resid
 
 
+def trialMask(day_slices, crop, k=4.0, min_valid=0.5, close=3, open_=3, dilate=3,
+              max_fraction=0.5):
+    """One mask for a whole trial, from the union of its daily residual masks.
+
+    Each day is thresholded against its own median and MAD, because the noise
+    floor drifts across a trial and a single trial-wide threshold is then too
+    strict early and too loose late. The masks are then unioned: a pixel that
+    misbehaved on any day is dropped for the trial, since every cumulative
+    figure carries that day's error forward.
+
+    day_slices  a list of (frames, H, W) arrays, one per day, raw
+    Returns (mask, stats) with mask True for pixels to drop.
+    """
+    inside = crop if crop is not None else None
+    union = None
+    per_day = []
+    for i, day in enumerate(day_slices):
+        resid = dailyResidual(day, min_valid=min_valid)
+        if inside is None:
+            inside = np.ones(resid.shape, bool)
+        if union is None:
+            union = np.zeros(resid.shape, bool)
+        v = resid[inside & np.isfinite(resid) & (resid > 0)]
+        entry = {'day': i}
+        if v.size >= 100:
+            lv = np.log(v)
+            lmed = float(np.median(lv))
+            lmad = float(np.median(np.abs(lv - lmed))) * 1.4826
+            thr = float(np.exp(lmed + k * lmad))
+            entry.update({'median': float(np.exp(lmed)), 'mad_factor': float(np.exp(lmad)),
+                          'threshold': thr})
+            if lmad > 0:
+                bad = inside & np.isfinite(resid) & (resid > thr)
+                entry['fraction'] = float(bad.sum()) / max(1, int(inside.sum()))
+                union |= bad
+        # a pixel with too little data to fit a trend is dropped on that basis
+        union |= inside & ~np.isfinite(resid)
+        per_day.append(entry)
+
+    if union is None:
+        return np.zeros((1, 1), bool), {'k': k, 'reason': 'no days'}
+
+    if close:
+        union = ndimage.binary_closing(union, np.ones((close, close)))
+    if open_:
+        union = ndimage.binary_opening(union, np.ones((open_, open_)))
+    if dilate:
+        union = ndimage.binary_dilation(union, np.ones((dilate, dilate)))
+    union &= inside
+
+    stats = {'k': k, 'days': per_day,
+             'residual_fraction': float(union.sum()) / max(1, int(inside.sum()))}
+    if stats['residual_fraction'] > max_fraction:
+        stats['reason'] = ('the union would drop %.1f%% inside the crop, above the %.0f%% '
+                           'limit — keeping the crop only'
+                           % (100 * stats['residual_fraction'], 100 * max_fraction))
+        union = np.zeros(inside.shape, bool)
+        stats['residual_fraction'] = 0.0
+
+    mask = ~inside | union
+    stats['masked_fraction'] = float(mask.sum()) / mask.size
+    return mask, stats
+
+
 def dailyMask(day, crop, k=4.0, min_valid=0.5, close=3, open_=3, dilate=3,
               max_fraction=0.5):
     """Pixels to drop for a day: outside the crop, or too far from their trend.
