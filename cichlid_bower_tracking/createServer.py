@@ -558,6 +558,11 @@ PAGE = r"""<!DOCTYPE html>
   .grid.cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
   @media (max-width: 1600px) { .grid.cols-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (max-width: 900px) { .grid.cols-6 { grid-template-columns: 1fr; } }
+  .grid.cols-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; }
+  @media (max-width: 1500px) { .grid.cols-8 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 800px) { .grid.cols-8 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .grid.cols-8 figcaption { padding: 5px 7px; font-size: 11px; }
+  .grid.cols-8 .scalebar, .grid.cols-8 .scalelab { display: none; }
   .scalebar { height: 9px; border-radius: 2px; margin: 0 13px 4px; }
   .scalelab { display: flex; justify-content: space-between; padding: 0 13px 10px;
               font-size: 11px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
@@ -1056,13 +1061,48 @@ function viewQuality() {
         const worst = days.map((d, i) => perDay[i]).filter(Boolean)
           .sort((a, b) => b.fraction - a.fraction).slice(0, 4);
         const tbl = document.createElement('figure');
-        tbl.innerHTML = '<figcaption><b>Per-day contribution</b><br>' +
+        tbl.innerHTML = '<figcaption><b>Days contributing most</b><br>' +
           (worst.length ? worst.map(w => w.date.slice(5) + ': ' +
             (100 * w.fraction).toFixed(2) + '% at ' + w.threshold.toFixed(3) + ' cm').join('<br>')
            : 'no residual data') + '</figcaption>';
         grid.appendChild(tbl);
 
         grid.appendChild(qPhoto(first.jpg, '<b>Depth camera</b> \u2014 trial start'));
+
+        // and the days themselves, so it is visible which ones the union came
+        // from and how k moves each one
+        const dayHead = document.createElement('p');
+        dayHead.className = 'stat';
+        dayHead.style.margin = '14px 0 8px';
+        dayHead.innerHTML = 'Each day\u2019s own change, with that day\u2019s mask at k = ' +
+          k + ' in magenta. The trial mask above is the union of these.';
+        sec.appendChild(dayHead);
+        const dayGrid = document.createElement('div');
+        dayGrid.className = 'grid cols-8';
+        sec.appendChild(dayGrid);
+
+        qLoad(days.map(d => Q.frames[d.day].rawFirst)
+                  .concat(days.map(d => Q.frames[d.day].rawLast))).then(() => {
+          days.forEach((d, i) => {
+            const f = Q.frames[d.day];
+            const daily = qFilteredDiff(qDecode(f.rawFirst), qDecode(f.rawLast));
+            let mark = null, n = 0, valid = 0;
+            const st = (d.quality || {}).residual;
+            if (f.residual && st) {
+              const thr = st.median * Math.pow(st.madFactor, k);
+              const m = qDecode(f.residual);
+              mark = new Uint8Array(m.length);
+              for (let j = 0; j < m.length; j++) {
+                if (Number.isNaN(m[j])) continue;
+                valid++;
+                if (m[j] > thr) { mark[j] = 1; n++; }
+              }
+            }
+            dayGrid.appendChild(qMap(daily, '<b>' + d.date.slice(5) + '</b> ' +
+              (valid ? (100 * n / valid).toFixed(2) + '% removed' : '') +
+              (d.partial ? '<br>partial day' : ''), { range: 2, mark: mark }));
+          });
+        });
       });
     });
     bar.querySelector('#qinfo').innerHTML = '<b>' + Q.trials.length + '</b> trials';
@@ -3424,6 +3464,10 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
   .grid.cols-5 { grid-template-columns:repeat(5,minmax(0,1fr)); }
   @media (max-width:1300px) { .grid.cols-5 { grid-template-columns:repeat(3,minmax(0,1fr)); } }
   @media (max-width:800px) { .grid.cols-5 { grid-template-columns:1fr; } }
+  .grid.cols-8 { grid-template-columns:repeat(8,minmax(0,1fr)); gap:7px; }
+  @media (max-width:1500px) { .grid.cols-8 { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  @media (max-width:800px) { .grid.cols-8 { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  .grid.cols-8 figcaption { padding:5px 7px; font-size:11px; }
   .trial { margin-bottom:28px; }
   .trial h2 { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; font-size:15px;
               border-bottom:1px solid var(--line); padding-bottom:8px; margin:0 0 10px; }
@@ -4163,6 +4207,37 @@ function rebuildQuality() {
         fig.innerHTML = '<div class="stage"><img src="' + (first.jpg || '') + '" alt=""></div>' +
           '<figcaption><b>Depth camera</b> \u2014 trial start</figcaption>';
         grid.appendChild(fig);
+
+        // the days behind that union, so k can be judged against each one
+        const head = document.createElement('p');
+        head.className = 'stat';
+        head.style.margin = '12px 0 8px';
+        head.innerHTML = 'Each day\u2019s own change, with that day\u2019s mask at k = ' +
+          SETTINGS.residualK + '. The trial mask above is the union of these.';
+        sec.appendChild(head);
+        const dayGrid = document.createElement('div');
+        dayGrid.className = 'grid cols-8';
+        sec.appendChild(dayGrid);
+        bLoad(days.map(d => Q.frames[d.day].rawFirst)
+                  .concat(days.map(d => Q.frames[d.day].rawLast))).then(() => {
+          days.forEach(d => {
+            const f = Q.frames[d.day], st = (d.quality || {}).residual;
+            const daily = rFilteredDiff(bDecode(f.rawFirst), bDecode(f.rawLast));
+            let mark = null, n = 0, valid = 0;
+            if (f.residual && st) {
+              const thr = st.median * Math.pow(st.madFactor, SETTINGS.residualK);
+              const m = bDecode(f.residual);
+              mark = new Uint8Array(m.length);
+              for (let j = 0; j < m.length; j++) {
+                if (Number.isNaN(m[j])) continue;
+                valid++;
+                if (m[j] > thr) { mark[j] = 1; n++; }
+              }
+            }
+            dayGrid.appendChild(rMap(daily, '<b>' + d.date.slice(5) + '</b> ' +
+              (valid ? (100 * n / valid).toFixed(2) + '%' : ''), { mark: mark }));
+          });
+        });
       });
     });
   }
@@ -5038,4 +5113,4 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main()) 
+    sys.exit(main())
