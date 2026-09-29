@@ -835,6 +835,12 @@ const QCACHE = {};
 function qDecode(layer) {
   if (QCACHE[layer.src]) return QCACHE[layer.src];
   const m = layer.meta;
+  if (!layer.img) {
+    // not fetched yet: hand back all-NaN rather than throwing, and do not cache
+    const blank = new Float32Array(m.width * m.height);
+    blank.fill(NaN);
+    return blank;
+  }
   const c = document.createElement('canvas');
   c.width = m.width; c.height = m.height;
   const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -1037,6 +1043,12 @@ function viewQuality() {
 
   function draw() {
     body.textContent = '';
+    bar.querySelector('#qinfo').innerHTML = '<b>' + Q.trials.length + '</b> trials';
+    // every day's residual feeds the project mask, so load them all up front
+    qLoad(Q.days.map(d => Q.frames[d.day].residual).filter(Boolean)).then(drawTrials);
+  }
+
+  function drawTrials() {
     Q.trials.forEach(t => {
       const days = Q.days.filter(d => d.trial === t.trial);
       if (!days.length) return;
@@ -1137,7 +1149,6 @@ function viewQuality() {
         });
       });
     });
-    bar.querySelector('#qinfo').innerHTML = '<b>' + Q.trials.length + '</b> trials';
   }
 
   bar.querySelector('#qks').addEventListener('input', e => {
@@ -3574,6 +3585,7 @@ REGISTER_PAGE = r"""<!DOCTYPE html>
     <div class="panes">
       <div class="pane">
         <header><span>Registration preview</span><span>move the pointer to wipe</span></header>
+        <p class="stat" id="previewSource" style="margin:8px 12px 0"></p>
         <div class="preview" id="preview">
           <img class="base" id="previewBase" alt="">
           <div class="over" id="previewOver">
@@ -3662,6 +3674,11 @@ const SETTINGS = (function () {
 let pairs = [];      // {depth:[x,y], pi:[x,y]} in native pixel coords
 let pending = null;
 let H = null, residuals = [], rms = null;
+// the registration already on file, so the preview opens showing what the
+// project currently uses rather than blank. New points replace it once there
+// are enough to fit.
+const SAVED_H = (D.current && D.current.transM) ? D.current.transM : null;
+function activeH() { return H || SAVED_H; }
 let pickPair = null, viewPair = null, cropPair = null;
 const ORIGINAL = {
   depth: (D.current.depthPoints || [[80,60],[560,60],[560,420],[80,420]]).map(p => p.slice()),
@@ -3815,7 +3832,8 @@ function fit() {
                    (rms < 3 ? '' : ' &mdash; check the worst pair below');
   }
   document.getElementById('fitNote').textContent =
-    H ? 'worst point ' + Math.max(...residuals).toFixed(2) + ' px' : 'need four pairs';
+    H ? 'worst point ' + Math.max(...residuals).toFixed(2) + ' px'
+      : (SAVED_H ? 'showing the saved registration' : 'need four pairs');
   document.getElementById('pairCount').textContent = pairs.length + ' pairs';
   const ok = pairs.length >= 6 && rms !== null && document.getElementById('initials').value.trim();
   document.getElementById('download').disabled = !ok;
@@ -3839,15 +3857,25 @@ function preview() {
   const box = document.getElementById('warpBox');
   const svg = document.getElementById('previewSvg');
   paint(svg, viewPair.depthSize, '');
-  if (!H) { box.style.display = 'none'; return; }
+  const M = activeH();
+  const src = document.getElementById('previewSource');
+  if (!M) {
+    box.style.display = 'none';
+    if (src) src.innerHTML = 'No registration on file and no points picked yet.';
+    return;
+  }
   box.style.display = 'block';
+  if (src) src.innerHTML = H
+    ? 'Showing <b>your new fit</b> from ' + pairs.length + ' pairs.'
+    : 'Showing the <b>registration already on file</b>. Pick four or more pairs to ' +
+      'replace it, or leave it alone if the edges line up.';
   const host = document.getElementById('preview');
   const s = host.clientWidth / viewPair.depthSize[0];
   box.style.transform = 'scale(' + s + ') matrix3d(' +
-    [H[0][0], H[1][0], 0, H[2][0],
-     H[0][1], H[1][1], 0, H[2][1],
+    [M[0][0], M[1][0], 0, M[2][0],
+     M[0][1], M[1][1], 0, M[2][1],
      0, 0, 1, 0,
-     H[0][2], H[1][2], 0, H[2][2]].join(',') + ')';
+     M[0][2], M[1][2], 0, M[2][2]].join(',') + ')';
 }
 
 function setPickPair(key) {
@@ -3949,6 +3977,12 @@ const BCACHE = {};
 function bDecode(layer) {
   if (BCACHE[layer.src]) return BCACHE[layer.src];
   const m = layer.meta;
+  if (!layer.img) {
+    // not fetched yet: hand back all-NaN rather than throwing, and do not cache
+    const blank = new Float32Array(m.width * m.height);
+    blank.fill(NaN);
+    return blank;
+  }
   const c = document.createElement('canvas');
   c.width = m.width; c.height = m.height;
   const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -4233,6 +4267,14 @@ function rebuildQuality() {
   function draw() {
     body.textContent = '';
     const oc = rCropMask();
+    // the project mask reads every day's residual, so they must all be loaded
+    // before any trial is drawn — otherwise the first trial to resolve decodes
+    // images the later trials have not fetched yet
+    const all = Q.days.map(d => Q.frames[d.day].residual).filter(Boolean);
+    bLoad(all).then(() => drawTrials(oc));
+  }
+
+  function drawTrials(oc) {
     Q.trials.forEach(t => {
       const days = Q.days.filter(d => d.trial === t.trial);
       if (!days.length) return;
