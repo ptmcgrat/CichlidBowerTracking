@@ -953,26 +953,55 @@ function qOutsideCrop() {
   return QCROP;
 }
 
-function qUnionMask(days, k) {
-  // threshold each day against its own median and MAD, then union: the noise
-  // floor drifts across a trial, and a pixel bad on any day corrupts the total
-  let union = null, perDay = [];
-  days.forEach(d => {
-    const f = D.quality.frames[d.day];
-    const st = (d.quality || {}).residual;
-    if (!f.residual || !st) { perDay.push(null); return; }
-    const thr = st.median * Math.pow(st.madFactor, k);
+function qProjectMask(k) {
+  // each day's residual divided by that day's median, then the median of those
+  // ratios across every day in the project. A pixel is masked when it is
+  // usually far from its trend, not when it was bad once — a union would carry
+  // a single disturbed day across the whole project.
+  if (qProjectMask._k === k && qProjectMask._cached) return qProjectMask._cached;
+  const Q = D.quality;
+  const stacks = [];
+  Q.days.forEach(d => {
+    const f = Q.frames[d.day], st = (d.quality || {}).residual;
+    if (!f.residual || !st || !st.median) return;
     const m = qDecode(f.residual);
-    if (!union) union = new Uint8Array(m.length);
-    let n = 0, valid = 0;
-    for (let i = 0; i < m.length; i++) {
-      if (Number.isNaN(m[i])) continue;
-      valid++;
-      if (m[i] > thr) { union[i] = 1; n++; }
-    }
-    perDay.push({ date: d.date, threshold: thr, fraction: valid ? n / valid : 0 });
+    const r = new Float32Array(m.length);
+    for (let i = 0; i < m.length; i++) r[i] = m[i] / st.median;
+    stacks.push(r);
   });
-  return { union, perDay };
+  if (!stacks.length) return (qProjectMask._cached = { mark: null, score: null });
+
+  const n = stacks[0].length;
+  const score = new Float32Array(n);
+  const buf = new Float64Array(stacks.length);
+  for (let i = 0; i < n; i++) {
+    let c = 0;
+    for (let s = 0; s < stacks.length; s++) {
+      const v = stacks[s][i];
+      if (!Number.isNaN(v)) buf[c++] = v;
+    }
+    if (!c) { score[i] = NaN; continue; }
+    const sl = Array.prototype.slice.call(buf, 0, c).sort((a, b) => a - b);
+    score[i] = c % 2 ? sl[(c - 1) >> 1] : (sl[c/2 - 1] + sl[c/2]) / 2;
+  }
+
+  const fin = [];
+  for (let i = 0; i < n; i++) if (!Number.isNaN(score[i]) && score[i] > 0) fin.push(score[i]);
+  fin.sort((a, b) => a - b);
+  if (!fin.length) return (qProjectMask._cached = { mark: null, score: score });
+  const logs = fin.map(Math.log);
+  const lmed = logs[logs.length >> 1];
+  const dev = logs.map(v => Math.abs(v - lmed)).sort((a, b) => a - b);
+  const lmad = dev[dev.length >> 1] * 1.4826;
+  const thr = Math.exp(lmed + k * lmad);
+  const mark = new Uint8Array(n);
+  for (let i = 0; i < n; i++)
+    if (Number.isNaN(score[i]) || score[i] > thr) mark[i] = 1;
+
+  qProjectMask._k = k;
+  return (qProjectMask._cached = { mark, score, threshold: thr,
+                                   median: Math.exp(lmed), madFactor: Math.exp(lmad),
+                                   nDays: stacks.length });
 }
 
 function viewQuality() {
@@ -998,8 +1027,9 @@ function viewQuality() {
   note.innerHTML = 'One row per trial, on total change from its first morning to its last ' +
     'evening. Residual is the RMS departure from a straight line fitted through a day, so a ' +
     'steadily building pixel scores near zero. Each day is cut against its own median and ' +
-    'MAD \u2014 the noise floor drifts across a trial \u2014 and the masks are unioned, ' +
-    'because a pixel that misbehaved on any day corrupts the total.';
+    'MAD \u2014 the noise floor drifts \u2014 and the median of those ratios is taken ' +
+    'across every day in the project. A pixel is masked when it is usually far from its ' +
+    'trend, not when it was bad once.';
   box.appendChild(note);
 
   const body = document.createElement('div');
@@ -1024,7 +1054,8 @@ function viewQuality() {
         days.map(d => Q.frames[d.day].residual).filter(Boolean));
       qLoad(need).then(() => {
         const total = qFilteredDiff(qDecode(first.rawFirst), qDecode(last.rawLast));
-        const { union, perDay } = qUnionMask(days, k);
+        const proj = qProjectMask(k);
+        const union = proj.mark;
 
         let nvalid = 0;
         for (let i = 0; i < total.length; i++) if (!Number.isNaN(total[i])) nvalid++;
@@ -1044,9 +1075,10 @@ function viewQuality() {
         grid.textContent = '';
         grid.appendChild(qMap(total, '<b>Total change, raw</b> \u2014 first morning to last ' +
           'evening', { range: 2 }));
-        grid.appendChild(qMap(total, '<b>Residual, union over the trial</b> \u2014 k = ' + k +
-          '. <span style="color:#ff00c8">Magenta</span> removes ' + nres + ' pixels, ' +
-          (100 * nres / Math.max(1, nvalid)).toFixed(2) + '%.',
+        grid.appendChild(qMap(total, '<b>Residual, whole project</b> \u2014 k = ' + k +
+          ', cut at ' + (proj.threshold || 0).toFixed(3) + ' times the typical residual over ' +
+          (proj.nDays || 0) + ' days. <span style="color:#ff00c8">Magenta</span> removes ' +
+          nres + ' pixels, ' + (100 * nres / Math.max(1, nvalid)).toFixed(2) + '%.',
           { range: 2, mark: union }));
         grid.appendChild(qMap(total, '<b>Tray crop</b> \u2014 ' +
           (oc ? '<span style="color:#ff00c8">magenta</span> removes ' + nout + ' pixels, ' +
@@ -1058,13 +1090,12 @@ function viewQuality() {
           'in colour is what the analysis would use.',
           { range: 2, mark: both, markColour: [0, 0, 0] }));
 
-        const worst = days.map((d, i) => perDay[i]).filter(Boolean)
-          .sort((a, b) => b.fraction - a.fraction).slice(0, 4);
         const tbl = document.createElement('figure');
-        tbl.innerHTML = '<figcaption><b>Days contributing most</b><br>' +
-          (worst.length ? worst.map(w => w.date.slice(5) + ': ' +
-            (100 * w.fraction).toFixed(2) + '% at ' + w.threshold.toFixed(3) + ' cm').join('<br>')
-           : 'no residual data') + '</figcaption>';
+        tbl.innerHTML = '<figcaption><b>Project residual score</b><br>' +
+          'median ' + (proj.median || 0).toFixed(3) + '<br>MAD factor &times;' +
+          (proj.madFactor || 0).toFixed(3) + '<br>cut at ' + (proj.threshold || 0).toFixed(3) +
+          '<br>over ' + (proj.nDays || 0) + ' days<br><br>One mask for the project, so a ' +
+          'day that was merely odd does not remove pixels from every other day.</figcaption>';
         grid.appendChild(tbl);
 
         grid.appendChild(qPhoto(first.jpg, '<b>Depth camera</b> \u2014 trial start'));
@@ -1074,8 +1105,9 @@ function viewQuality() {
         const dayHead = document.createElement('p');
         dayHead.className = 'stat';
         dayHead.style.margin = '14px 0 8px';
-        dayHead.innerHTML = 'Each day\u2019s own change, with that day\u2019s mask at k = ' +
-          k + ' in magenta. The trial mask above is the union of these.';
+        dayHead.innerHTML = 'Each day\u2019s own change, with that day\u2019s own mask at ' +
+          'k = ' + k + ' in magenta, for reference. The project mask above is not their ' +
+          'union \u2014 a pixel has to be bad on most days to be masked.';
         sec.appendChild(dayHead);
         const dayGrid = document.createElement('div');
         dayGrid.className = 'grid cols-8';
@@ -4059,6 +4091,50 @@ function setOffset(trial, kind, offset) {
   SETTINGS.trials[trial][kind + 'Offset'] = offset;
 }
 
+function rProjectMask(k) {
+  // each day's residual over that day's median, then the median across every
+  // day in the project. One mask, robust to a single odd day.
+  if (rProjectMask._k === k && rProjectMask._cached) return rProjectMask._cached;
+  const Q = D.quality;
+  const stacks = [];
+  Q.days.forEach(d => {
+    const f = Q.frames[d.day], st = (d.quality || {}).residual;
+    if (!f.residual || !st || !st.median) return;
+    const m = bDecode(f.residual);
+    const r = new Float32Array(m.length);
+    for (let i = 0; i < m.length; i++) r[i] = m[i] / st.median;
+    stacks.push(r);
+  });
+  if (!stacks.length) return (rProjectMask._cached = { mark: null });
+
+  const n = stacks[0].length;
+  const score = new Float32Array(n);
+  const buf = new Float64Array(stacks.length);
+  for (let i = 0; i < n; i++) {
+    let c = 0;
+    for (let s = 0; s < stacks.length; s++) {
+      const v = stacks[s][i];
+      if (!Number.isNaN(v)) buf[c++] = v;
+    }
+    if (!c) { score[i] = NaN; continue; }
+    const sl = Array.prototype.slice.call(buf, 0, c).sort((a, b) => a - b);
+    score[i] = c % 2 ? sl[(c - 1) >> 1] : (sl[c/2 - 1] + sl[c/2]) / 2;
+  }
+  const fin = [];
+  for (let i = 0; i < n; i++) if (!Number.isNaN(score[i]) && score[i] > 0) fin.push(score[i]);
+  fin.sort((a, b) => a - b);
+  if (!fin.length) return (rProjectMask._cached = { mark: null });
+  const logs = fin.map(Math.log);
+  const lmed = logs[logs.length >> 1];
+  const dev = logs.map(v => Math.abs(v - lmed)).sort((a, b) => a - b);
+  const lmad = dev[dev.length >> 1] * 1.4826;
+  const thr = Math.exp(lmed + k * lmad);
+  const mark = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (Number.isNaN(score[i]) || score[i] > thr) mark[i] = 1;
+  rProjectMask._k = k;
+  return (rProjectMask._cached = { mark, threshold: thr, nDays: stacks.length });
+}
+
 function rCropMask() {
   // the crop being edited on the crops tab, so its effect shows here live
   const Q = D.quality;
@@ -4146,9 +4222,10 @@ function rebuildQuality() {
   host.appendChild(bar);
   const note = document.createElement('p');
   note.className = 'sub';
-  note.innerHTML = 'One row per trial, on total change. Each day is cut against its own ' +
-    'median and MAD, and the masks are unioned across the trial: a pixel that misbehaved on ' +
-    'any day corrupts the total.';
+  note.innerHTML = 'One row per trial, on total change. The residual mask is computed once ' +
+    'for the whole project: each day\u2019s residual over that day\u2019s median, then the ' +
+    'median across days. A pixel has to be bad on most days to be masked, so one odd day ' +
+    'does not remove pixels everywhere.';
   host.appendChild(note);
   const body = document.createElement('div');
   host.appendChild(body);
@@ -4172,15 +4249,7 @@ function rebuildQuality() {
         days.map(d => Q.frames[d.day].residual).filter(Boolean));
       bLoad(need).then(() => {
         const total = rFilteredDiff(bDecode(first.rawFirst), bDecode(last.rawLast));
-        let union = null;
-        days.forEach(d => {
-          const f = Q.frames[d.day], st = (d.quality || {}).residual;
-          if (!f.residual || !st) return;
-          const thr = st.median * Math.pow(st.madFactor, SETTINGS.residualK);
-          const m = bDecode(f.residual);
-          if (!union) union = new Uint8Array(m.length);
-          for (let i = 0; i < m.length; i++) if (!Number.isNaN(m[i]) && m[i] > thr) union[i] = 1;
-        });
+        const union = rProjectMask(SETTINGS.residualK).mark;
         let nvalid = 0;
         for (let i = 0; i < total.length; i++) if (!Number.isNaN(total[i])) nvalid++;
         const count = m => { if (!m) return 0; let n = 0;
@@ -4194,7 +4263,7 @@ function rebuildQuality() {
 
         grid.textContent = '';
         grid.appendChild(rMap(total, '<b>Total change, raw</b>'));
-        grid.appendChild(rMap(total, '<b>Residual, union</b> \u2014 removes ' +
+        grid.appendChild(rMap(total, '<b>Residual, whole project</b> \u2014 removes ' +
           (100 * nres / Math.max(1, nvalid)).toFixed(2) + '%', { mark: union }));
         grid.appendChild(rMap(total, '<b>Tray crop</b> \u2014 removes ' +
           (100 * nout / Math.max(1, nvalid)).toFixed(2) + '%', { mark: oc }));
@@ -4213,7 +4282,7 @@ function rebuildQuality() {
         head.className = 'stat';
         head.style.margin = '12px 0 8px';
         head.innerHTML = 'Each day\u2019s own change, with that day\u2019s mask at k = ' +
-          SETTINGS.residualK + '. The trial mask above is the union of these.';
+          SETTINGS.residualK + ', for reference. The project mask above is not their union.';
         sec.appendChild(head);
         const dayGrid = document.createElement('div');
         dayGrid.className = 'grid cols-8';

@@ -152,6 +152,86 @@ def dailyResidual(day, min_valid=0.5):
     return resid
 
 
+def projectMask(day_slices, crop, k=4.0, min_valid=0.5, close=3, open_=3, dilate=3,
+                max_fraction=0.5):
+    """One mask for the whole project, from each pixel's typical residual.
+
+    Each day's residual map is divided by that day's own median, which makes
+    days comparable even though the noise floor drifts, and the median of those
+    ratios is taken across every day. A pixel is masked when it is usually far
+    from its trend, not when it was bad once.
+
+    That is the difference from a union of daily masks. A union grows with the
+    number of days and cannot tell a pixel that failed on two days out of
+    thirty-four from one that failed on all of them. On a simulated project a
+    union masked a 609-pixel region that was bad on 2 days of 34; this does not,
+    while both catch a persistently bad region in full.
+
+    day_slices  list of (frames, H, W) raw arrays, one per day, across the whole
+                project rather than one trial
+    Returns (mask, stats) with mask True for pixels to drop.
+    """
+    inside = crop
+    ratios, per_day = [], []
+    for i, day in enumerate(day_slices):
+        resid = dailyResidual(day, min_valid=min_valid)
+        if inside is None:
+            inside = np.ones(resid.shape, bool)
+        v = resid[inside & np.isfinite(resid) & (resid > 0)]
+        if v.size < 100:
+            per_day.append({'day': i, 'reason': 'too few pixels with a fitted trend'})
+            continue
+        med = float(np.median(v))
+        if med <= 0:
+            per_day.append({'day': i, 'reason': 'zero median residual'})
+            continue
+        ratios.append(resid / med)
+        per_day.append({'day': i, 'median': med})
+
+    if not ratios:
+        return np.zeros((1, 1), bool), {'k': k, 'reason': 'no usable days'}
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=RuntimeWarning)
+        score = np.nanmedian(np.stack(ratios), axis=0)
+
+    stats = {'k': k, 'days': per_day, 'nDays': len(ratios)}
+    v = score[inside & np.isfinite(score) & (score > 0)]
+    bad = np.zeros(score.shape, bool)
+    if v.size >= 100:
+        lv = np.log(v)
+        lmed = float(np.median(lv))
+        lmad = float(np.median(np.abs(lv - lmed))) * 1.4826
+        thr = float(np.exp(lmed + k * lmad))
+        stats.update({'median': float(np.exp(lmed)), 'mad_factor': float(np.exp(lmad)),
+                      'threshold': thr})
+        if lmad > 0:
+            bad = inside & np.isfinite(score) & (score > thr)
+            if close:
+                bad = ndimage.binary_closing(bad, np.ones((close, close)))
+            if open_:
+                bad = ndimage.binary_opening(bad, np.ones((open_, open_)))
+            if dilate:
+                bad = ndimage.binary_dilation(bad, np.ones((dilate, dilate)))
+            bad &= inside
+
+    never = inside & ~np.isfinite(score)
+    bad |= never
+
+    stats['residual_fraction'] = float(bad.sum()) / max(1, int(inside.sum()))
+    if stats['residual_fraction'] > max_fraction:
+        stats['reason'] = ('the residual test would drop %.1f%% inside the crop, above the '
+                           '%.0f%% limit — keeping the crop only'
+                           % (100 * stats['residual_fraction'], 100 * max_fraction))
+        bad = np.zeros(score.shape, bool)
+        stats['residual_fraction'] = 0.0
+
+    mask = ~inside | bad
+    stats['masked_fraction'] = float(mask.sum()) / mask.size
+    stats['untrended'] = int(never.sum())
+    return mask, stats
+
+
 def trialMask(day_slices, crop, k=4.0, min_valid=0.5, close=3, open_=3, dilate=3,
               max_fraction=0.5):
     """One mask for a whole trial, from the union of its daily residual masks.
