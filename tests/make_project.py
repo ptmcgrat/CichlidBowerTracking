@@ -39,6 +39,23 @@ def build(remote_root, project_id='MC_920_t001_tr1', days=6, resets=(2,4),
                 info = tarfile.TarInfo(f.std_file); info.size = raw.tell()
                 raw.seek(0); tar.addfile(info, raw)
     (proj/'Frames.tar').write_bytes(buf.getvalue())
+    mad = proj/'MasterAnalysisFiles'
+    mad.mkdir(exist_ok=True)
+    import pandas as _pd, datetime as _dt
+    rows=[]
+    lights=[f for f in log.frames if f.lights_on]
+    for n,f in enumerate(lights):
+        for k in range(3):
+            bid = ['c','p','b','f','t','m','s','d','o','x'][(n+k)%10]
+            border = (n+k)%17==0
+            rows.append({'TimeStamp':f.time+_dt.timedelta(seconds=17*k),
+                         'X':rng.uniform(0,972),'Y':rng.uniform(0,1296),
+                         'Prediction':(None if border else bid),
+                         'Probability':rng.uniform(0.3,1.0),
+                         'ClipCreated':('No' if border else 'Yes'),
+                         'TrackID':n,'N':120})
+    _pd.DataFrame(rows).set_index('TimeStamp').to_csv(mad/'AllLabeledClusters.csv')
+
     videos = proj/'Videos'
     videos.mkdir(exist_ok=True)
     for m in log.movies:

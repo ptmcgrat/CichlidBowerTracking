@@ -10,17 +10,21 @@
  * smaller bower for a reason that is not biological.
  */
 
-let THRESHOLD = 0.4;     // cm of height for a pixel to count as bower
-let MIN_PIXELS = 100;    // contiguous pixels for a region to be kept
+let THRESHOLD = 0.6;     // cm of height for a pixel to count as bower
+let MIN_PIXELS = 400;    // contiguous pixels for a region to be kept
+let RANGE = 2;           // colour scale for a daily map; total uses twice this
 let MASKS = null;        // {crop, residual} once the score is loaded
 
+// The colour scale is a multiple of RANGE rather than a fixed number: change
+// accumulates, so a total map wants twice the span a single day does, and
+// holding that ratio means one control sets both.
 const ROWS = [
-  ['Total change', 'trial start to end of day', 'total', 4],
-  ['24 hour change', 'morning to next morning', 'full', 2],
-  ['Daylight change', 'morning to evening', 'daylight', 2],
-  ['Night change', 'evening to next morning', 'night', 2],
-  ['Bower, total', 'regions in total change', 'bowerTotal', 4],
-  ['Bower, daylight', 'regions in daylight change', 'bowerDaily', 2],
+  ['Total change', 'trial start to end of day', 'total', 2],
+  ['24 hour change', 'morning to next morning', 'full', 1],
+  ['Daylight change', 'morning to evening', 'daylight', 1],
+  ['Night change', 'evening to next morning', 'night', 1],
+  ['Bower, total', 'regions in total change', 'bowerTotal', 2],
+  ['Bower, daylight', 'regions in daylight change', 'bowerDaily', 1],
 ];
 
 // Connected components over the thresholded change, castle and pit labelled
@@ -172,12 +176,12 @@ function renderTrial(trial, daysInTrial, host) {
           if (opts && opts.foot) slot.appendChild(el('div', 'cellfoot', opts.foot));
         };
 
-        put('total', total, 4);
-        put('full', full, 2);
-        put('daylight', daylight, 2);
-        put('night', night, 2);
+        put('total', total, 2 * RANGE);
+        put('full', full, RANGE);
+        put('daylight', daylight, RANGE);
+        put('night', night, RANGE);
 
-        [['bowerTotal', total, 4], ['bowerDaily', daylight, 2]]
+        [['bowerTotal', total, 2 * RANGE], ['bowerDaily', daylight, RANGE]]
           .forEach(([key, values, range]) => {
             const regions = bowerRegions(values, meta.width, meta.height,
                                          THRESHOLD, MIN_PIXELS);
@@ -233,6 +237,9 @@ function build() {
     '<input type="range" id="tr" min="0.1" max="3" step="0.05" value="' + THRESHOLD + '">' +
     '<label>Minimum region <b id="pv">' + MIN_PIXELS + '</b> px</label>' +
     '<input type="range" id="pr" min="0" max="2000" step="25" value="' + MIN_PIXELS + '">' +
+    '<label>Colour scale \u00b1<b id="rv">' + RANGE.toFixed(1) +
+    '</b> cm, total \u00b1<b id="rv2">' + (2 * RANGE).toFixed(1) + '</b></label>' +
+    '<input type="range" id="rr" min="0.5" max="8" step="0.5" value="' + RANGE + '">' +
     '<span class="spacer"></span><span class="stat" id="maskNote"></span>';
 
   let pending = null;
@@ -249,6 +256,12 @@ function build() {
   bar.querySelector('#pr').addEventListener('input', event => {
     MIN_PIXELS = parseInt(event.target.value, 10);
     bar.querySelector('#pv').textContent = MIN_PIXELS;
+    later();
+  });
+  bar.querySelector('#rr').addEventListener('input', event => {
+    RANGE = parseFloat(event.target.value);
+    bar.querySelector('#rv').textContent = RANGE.toFixed(1);
+    bar.querySelector('#rv2').textContent = (2 * RANGE).toFixed(1);
     later();
   });
 

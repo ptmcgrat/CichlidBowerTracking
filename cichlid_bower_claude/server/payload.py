@@ -145,6 +145,10 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
         'pairs': pairs,
         'offsets': sorted({c['offset'] for c in manifest.get('candidates', [])}),
         'residualScore': score_url,
+        # the packed events are served separately: they are larger than every
+        # image put together, and only one page needs them
+        'hasClusters': project_paths.clusters_packed.exists(),
+        'clusterSummary': manifest.get('clusters'),
         'logIssues': manifest.get('logIssues', []),
         'missing': manifest.get('missing', []),
         'prep': prep.to_dict(),

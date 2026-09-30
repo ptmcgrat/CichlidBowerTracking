@@ -204,6 +204,11 @@ class ProjectPaths:
 
     # -- analysis outputs ---------------------------------------------------
     @property
+    def clusters_packed(self) -> Path:
+        """Events as typed columns, small enough for the page to hold them all."""
+        return self.collected_dir / 'clusters.json'
+
+    @property
     def pages_dir(self) -> Path:
         """Generated page assets: small HTML, a payload, and PNGs served
         separately so the browser can cache them."""

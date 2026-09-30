@@ -88,15 +88,18 @@ def test_paths_cannot_escape_the_pages_directory(client):
     assert http.get('/' + PROJECT + '/../../../etc/passwd').status_code in (403, 404)
 
 
-def test_nothing_is_written_outside_corrections(client):
+def test_a_save_writes_nowhere_but_corrections(client):
+    """Collecting reads the old pipeline's files; saving must not touch them."""
     http, layout = client
     http.get('/' + PROJECT + '/')
-    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0})
     paths = layout.project(PROJECT, ANALYSIS)
-    touched = {p.relative_to(paths.root).parts[0]
-               for p in paths.root.rglob('*') if p.is_file()}
-    assert 'MasterAnalysisFiles' not in touched
-    assert 'Corrections' in touched
+    before = {p: p.stat().st_mtime_ns for p in paths.root.rglob('*') if p.is_file()}
+    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0})
+    after = {p: p.stat().st_mtime_ns for p in paths.root.rglob('*') if p.is_file()}
+    changed = {p for p in after if before.get(p) != after[p]}
+    assert changed, 'the save wrote nothing at all'
+    for path in changed:
+        assert path.relative_to(paths.root).parts[0] == 'Corrections', str(path)
 
 
 def test_a_save_survives_a_reload(client):
@@ -144,3 +147,15 @@ def test_prep_and_depth_link_to_each_other(client):
     http, _ = client
     assert 'depth' in http.get('/' + PROJECT + '/prep').get_data(as_text=True)
     assert 'prep' in http.get('/' + PROJECT + '/depth').get_data(as_text=True)
+
+
+def test_cluster_events_are_served_separately(client):
+    """They are larger than every image together; only one page needs them."""
+    http, layout = client
+    http.get('/' + PROJECT + '/')
+    payload = json.loads(http.get('/' + PROJECT + '/page.json').get_data(as_text=True))
+    assert 'clusters' not in payload                 # not embedded
+    assert payload['hasClusters'] is True
+    packed = http.get('/' + PROJECT + '/clusters.json')
+    assert packed.status_code == 200
+    assert json.loads(packed.get_data(as_text=True))['n'] > 0

@@ -24,6 +24,7 @@ from ..paths import Layout, ProjectPaths
 from . import bundle as B
 from . import residual as R
 from .archive import Archive, ArchiveError, ensure_archive
+from .clusters import ClustersMissing, pack, read_clusters, summarise
 from .frames import plan_for
 
 
@@ -38,6 +39,7 @@ class Result:
     candidates: int = 0
     pairs: int = 0
     extracted: int = 0
+    clusters: int = 0
     missing: List[str] = field(default_factory=list)
     bundle_bytes: int = 0
     source_bytes: Optional[int] = None
@@ -52,6 +54,8 @@ class Result:
                 '%.1f MB bundle in %.0fs'
                 % (self.project_id, self.days, self.candidates, self.pairs,
                    self.bundle_bytes / 1e6, self.seconds))
+        if self.clusters:
+            text += ', %d clusters' % self.clusters
         if self.missing:
             text += ' (%d frames missing from the archive)' % len(self.missing)
         return text
@@ -128,6 +132,21 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                 continue
             (paths.collected_dir / (pair.stem + '_pi.jpg')).write_bytes(source.read_bytes())
 
+        # the cluster file, if the cluster stage has run. Absent is normal, not
+        # an error: a project can be collected long before it is classified.
+        cluster_summary = None
+        cloud.download_optional(paths.clusters_csv)
+        if paths.clusters_csv.exists():
+            try:
+                table = read_clusters(paths.clusters_csv)
+                cluster_summary = summarise(table)
+                result.clusters = cluster_summary['n']
+                result._cluster_table = table
+            except ClustersMissing:
+                pass
+            except Exception as error:
+                print('    cluster file unreadable: ' + repr(error))
+
         stacked_arrays = {key: np.stack(value) for key, value in arrays.items() if value}
         first = stacked_arrays.get('first')
         depth_size = [int(first.shape[2]), int(first.shape[1])] if first is not None else None
@@ -143,6 +162,13 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                                     bundle_bytes=result.bundle_bytes,
                                     source_bytes=source_bytes,
                                     branch=branch, depth_size=depth_size)
+        if cluster_summary is not None:
+            manifest['clusters'] = cluster_summary
+            packed = pack(result._cluster_table, manifest['days'])
+            with open(paths.clusters_packed, 'w') as handle:
+                json.dump(packed, handle)
+            if upload:
+                cloud.upload(paths.clusters_packed)
         B.write_manifest(paths.manifest, manifest)
         if upload:
             cloud.upload(paths.manifest)

@@ -107,6 +107,19 @@ def depth_page(project_id: str):
     return _template('depth.html').replace('__TITLE__', project_id + ' \u00b7 Depth')
 
 
+@app.route('/<project_id>/clusters.json')
+def project_clusters(project_id: str):
+    """The packed events, served on their own.
+
+    Larger than every image in the page put together, and only the cluster
+    view needs them, so they are not embedded in the payload.
+    """
+    paths = _paths(project_id)
+    if not paths.clusters_packed.exists():
+        return jsonify({'error': 'no cluster data collected for this project'}), 404
+    return send_from_directory(str(paths.collected_dir), 'clusters.json')
+
+
 @app.route('/<project_id>/page.json')
 def project_payload(project_id: str):
     """The built payload, with the corrections read fresh.
