@@ -91,11 +91,20 @@ def index():
 
 @app.route('/<project_id>/')
 @app.route('/<project_id>/index.html')
+@app.route('/<project_id>/prep')
 def project_page(project_id: str):
     paths = _paths(project_id)
     if not (paths.pages_dir / 'page.json').exists():
         PL.build_prep_payload(paths)
     return _render_prep(project_id)
+
+
+@app.route('/<project_id>/depth')
+def depth_page(project_id: str):
+    paths = _paths(project_id)
+    if not (paths.pages_dir / 'page.json').exists():
+        PL.build_prep_payload(paths)
+    return _template('depth.html').replace('__TITLE__', project_id + ' \u00b7 Depth')
 
 
 @app.route('/<project_id>/page.json')
@@ -120,8 +129,8 @@ def project_payload(project_id: str):
 @app.route('/<project_id>/<path:name>')
 def project_asset(project_id: str, name: str):
     paths = _paths(project_id)
-    if name == 'prep.js':
-        return send_from_directory(str(Path(__file__).parent / 'templates'), 'prep.js')
+    if name in ('prep.js', 'depth.js', 'common.js'):
+        return send_from_directory(str(Path(__file__).parent / 'templates'), name)
     root = paths.pages_dir.resolve()
     target = (root / name).resolve()
     if not str(target).startswith(str(root)):

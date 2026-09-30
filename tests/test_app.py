@@ -125,3 +125,22 @@ def test_the_cached_payload_is_not_rebuilt_on_every_request(client):
     http.get('/' + PROJECT + '/page.json')
     after = (layout.project(PROJECT, ANALYSIS).pages_dir / 'page.json').stat().st_mtime
     assert built == after
+
+
+def test_the_depth_page_is_served(client):
+    http, _ = client
+    response = http.get('/' + PROJECT + '/depth')
+    assert response.status_code == 200
+    assert 'depth.js' in response.get_data(as_text=True)
+
+
+def test_the_shared_and_page_scripts_are_served(client):
+    http, _ = client
+    for name in ('common.js', 'prep.js', 'depth.js'):
+        assert http.get('/' + PROJECT + '/' + name).status_code == 200
+
+
+def test_prep_and_depth_link_to_each_other(client):
+    http, _ = client
+    assert 'depth' in http.get('/' + PROJECT + '/prep').get_data(as_text=True)
+    assert 'prep' in http.get('/' + PROJECT + '/depth').get_data(as_text=True)

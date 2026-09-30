@@ -114,6 +114,20 @@
   .foot { margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
           color:var(--dim); font-size:12px; }
   .swap { display:flex; gap:10px; align-items:center; }
+  .block { margin-bottom:24px; }
+  .matrix { display:grid; gap:6px; align-items:start; }
+  .matrix .colhead { font-size:12px; color:var(--dim); padding:0 0 4px;
+                     font-variant-numeric:tabular-nums; }
+  .matrix .colhead b { display:block; color:var(--ink); font-weight:600; font-size:13px; }
+  .rowlab { font-size:12px; color:var(--ink); padding:4px 8px 0 0; }
+  .rowlab b { display:block; font-weight:600; }
+  .rowlab span { color:var(--dim); font-size:11px; }
+  .cell { background:var(--panel); border:1px solid var(--line); border-radius:5px;
+          overflow:hidden; }
+  .cellnote { padding:14px 8px; font-size:11px; color:var(--dim); text-align:center; }
+  .cellfoot { padding:3px 6px; font-size:10px; color:var(--dim);
+              border-top:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .blank { }
 </style>
 </head>
 <body>
@@ -123,20 +137,16 @@
   <p class="sub" id="subtitle"></p>
   <div class="meta" id="meta"></div>
   <div class="bar">
-    <a class="back" href="depth" style="margin:0">Depth for this project &rarr;</a>
-    <button class="act" id="prev">&larr; Previous</button>
-    <button class="act" id="next">Next &rarr;</button>
-    <span class="stat" id="position"></span>
-    <span class="spacer"></span>
-    <span class="stat" id="state"></span>
-    <button class="act primary" id="save">Save</button>
+    <a class="back" href="prep" style="margin:0">&larr; Prep for this project</a>
   </div>
-  <div id="msg"></div>
-  <div class="tabs" id="tabs" role="tablist"></div>
+  <div class="bar" id="controls"></div>
+  <p class="sub">One column per day, eight to a block. Nothing is interpolated, so a
+     change map is defined only where both frames have a reading, and each bower cell
+     reports the pixels it was measured over.</p>
   <div id="body"></div>
   <p class="foot" id="foot"></p>
 </div>
 <script src="common.js"></script>
-<script src="prep.js"></script>
+<script src="depth.js"></script>
 </body>
 </html>
