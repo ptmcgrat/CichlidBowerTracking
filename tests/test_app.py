@@ -159,3 +159,11 @@ def test_cluster_events_are_served_separately(client):
     packed = http.get('/' + PROJECT + '/clusters.json')
     assert packed.status_code == 200
     assert json.loads(packed.get_data(as_text=True))['n'] > 0
+
+
+def test_the_clusters_page_is_served(client):
+    http, _ = client
+    response = http.get('/' + PROJECT + '/clusters')
+    assert response.status_code == 200
+    assert 'clusters.js' in response.get_data(as_text=True)
+    assert http.get('/' + PROJECT + '/clusters.js').status_code == 200
