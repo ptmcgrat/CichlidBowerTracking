@@ -69,6 +69,7 @@ def no_cache(response):
 
 
 @app.route('/')
+@app.route('/index.html')
 def index():
     states = STATE['states']
     rows = []

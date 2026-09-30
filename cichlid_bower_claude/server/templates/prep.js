@@ -298,8 +298,9 @@ function viewTimes() {
             '</b>' + c.time.slice(11, 16) + ' \u00b7 frame ' + c.index + '</div>'));
           if (c.jpg) {
             const stage = el('div', 'stage');
-            stage.appendChild(el('img'));
-            stage.firstChild.src = c.jpg;
+            const image = el('img');
+            image.src = c.jpg;
+            stage.appendChild(image);
             fig.appendChild(stage);
           }
           let moved = '';
@@ -355,30 +356,29 @@ function setOffset(trial, kind, offset) {
 }
 
 // ------------------------------------------------------------- registration
+// Points are kept per project, not per pair: the cameras do not move between
+// trials, so a fit made on one pair applies to all of them. Switching pairs is
+// how that gets confirmed, not how a second fit gets made.
+let POINTS = [];
+let PENDING = null;        // a click on one side waiting for its partner
+
 function viewRegistration() {
   const box = el('div');
   if (!D.pairs.length) {
-    box.appendChild(el('div', 'note', 'No registration pairs were collected. The ' +
-      'project may have no video stills, or it predates the collector change that ' +
-      'gathers them.'));
+    box.appendChild(el('div', 'note', 'No registration pairs were collected for this ' +
+      'project. It may have no video stills.'));
     return box;
   }
   box.appendChild(el('p', 'sub',
-    'Click the same feature in both images, at least four times \u2014 tray corners ' +
-    'work well. The fit updates as you go. If the outlines already line up, leave it ' +
-    'alone; the registration on file is shown until new points replace it.'));
+    'Click the same feature in both images \u2014 tray corners work well \u2014 four ' +
+    'pairs at least, six for a fit worth trusting. The magnifier follows the cursor. ' +
+    'The wipe below shows the result: tray edges should stay continuous across the ' +
+    'divider.'));
 
-  const bar = el('div', 'bar');
-  const select = el('select');
-  D.pairs.forEach((p, i) => {
-    const option = el('option', null, 'Trial ' + p.trial + ' ' + p.side +
-      ' \u00b7 matched to ' + p.gapMinutes + ' min');
-    option.value = String(i);
-    select.appendChild(option);
-  });
-  bar.appendChild(el('label', null, 'Pair'));
-  bar.appendChild(select);
+  const bar = trialSelector(() => show(current));
   const clear = el('button', 'act', 'Clear points');
+  const undo = el('button', 'act', 'Undo last');
+  bar.appendChild(undo);
   bar.appendChild(clear);
   bar.appendChild(el('span', 'spacer'));
   const fitNote = el('span', 'stat');
@@ -387,68 +387,188 @@ function viewRegistration() {
 
   const grid = el('div', 'grid cols-2');
   box.appendChild(grid);
-  let points = [];
+  const previewSlot = el('div');
+  box.appendChild(previewSlot);
+  const tableSlot = el('div');
+  box.appendChild(tableSlot);
 
-  function draw() {
-    const pair = D.pairs[+select.value];
-    grid.textContent = '';
-    fitNote.innerHTML = points.length >= 4
-      ? '<b>' + points.length + '</b> pairs \u00b7 fit ' + fitRms(points).toFixed(2) + ' px'
-      : (PREP.transform ? 'showing the registration on file'
-                        : 'pick four or more pairs');
+  const pair = D.pairs[TRIAL_INDEX] || {};
 
-    [['piJpg', 'Pi camera', 'pi'], ['depthJpg', 'Depth camera', 'depth']]
-      .forEach(([key, title, which]) => {
-        if (!pair[key]) return;
-        const fig = el('figure');
-        const stage = el('div', 'stage');
-        const img = el('img');
-        img.src = pair[key];
-        stage.appendChild(img);
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        stage.appendChild(svg);
-        fig.appendChild(stage);
-        fig.appendChild(el('figcaption', null, '<b>' + title + '</b> \u2014 ' +
-          points.length + ' point(s) placed'));
-        grid.appendChild(fig);
-
-        stage.addEventListener('click', event => {
-          const rect = stage.getBoundingClientRect();
-          const x = (event.clientX - rect.left) / rect.width;
-          const y = (event.clientY - rect.top) / rect.height;
-          addPoint(which, x, y);
-        });
-        renderPoints(svg, which);
-      });
+  function currentFit() {
+    const complete = POINTS.filter(p => p.pi && p.depth);
+    if (complete.length < 4) return null;
+    const H = homography(complete.map(p => p.pi), complete.map(p => p.depth));
+    if (!H) return null;
+    const errors = residuals(H, complete.map(p => p.pi), complete.map(p => p.depth));
+    const rms = Math.sqrt(errors.reduce((sum, e) => sum + e*e, 0) / errors.length);
+    return { H, errors, rms, n: complete.length };
   }
 
-  function addPoint(which, x, y) {
-    const open = points.find(p => !p[which]);
-    if (open) open[which] = [x, y];
-    else points.push({ [which]: [x, y] });
+  function draw() {
+    grid.textContent = '';
+    const fit = currentFit();
+    const active = fit ? fit.H : PREP.transform;
+
+    fitNote.innerHTML = fit
+      ? '<b>' + fit.n + '</b> pairs \u00b7 fit <b>' + fit.rms.toFixed(2) +
+        '</b> px \u00b7 worst <b>' + Math.max(...fit.errors).toFixed(2) + '</b> px'
+      : (PREP.transform
+          ? 'showing the registration on file \u2014 pick four pairs to replace it'
+          : 'pick four or more pairs');
+
+    [['pi', 'Pi camera', pair.piJpg, D.videoSize],
+     ['depth', 'Depth camera', pair.depthJpg, D.depthSize]
+    ].forEach(([side, title, src, size]) => {
+      if (!src) return;
+      const fig = el('figure');
+      const stage = el('div', 'stage');
+      const img = el('img');
+      img.src = src;
+      stage.appendChild(img);
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 ' + size[0] + ' ' + size[1]);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      stage.appendChild(svg);
+      fig.appendChild(stage);
+      const waiting = PENDING && PENDING.side !== side;
+      fig.appendChild(el('figcaption', null, '<b>' + title + '</b> \u2014 ' +
+        POINTS.filter(p => p[side]).length + ' placed' +
+        (waiting ? ' \u00b7 <span style="color:var(--tray)">now click the matching ' +
+                   'point here</span>' : '')));
+      grid.appendChild(fig);
+
+      img.addEventListener('load', () => attachLoupe(stage, img, 5));
+      if (img.complete) attachLoupe(stage, img, 5);
+
+      stage.addEventListener('click', event => {
+        const rect = stage.getBoundingClientRect();
+        const point = [(event.clientX - rect.left) / rect.width * size[0],
+                       (event.clientY - rect.top) / rect.height * size[1]];
+        placePoint(side, point);
+      });
+      paintPoints(svg, side, size, fit);
+    });
+
+    drawPreview(previewSlot, pair, active);
+    drawTable(tableSlot, fit);
+  }
+
+  function placePoint(side, point) {
+    if (PENDING && PENDING.side !== side) {
+      const entry = { [PENDING.side]: PENDING.point, [side]: point };
+      POINTS.push(entry);
+      PENDING = null;
+    } else {
+      PENDING = { side, point };
+    }
     markDirty();
     draw();
   }
 
-  function renderPoints(svg, which) {
-    svg.innerHTML = points.map((p, i) => {
-      if (!p[which]) return '';
-      return '<circle cx="' + (p[which][0] * 100) + '%" cy="' + (p[which][1] * 100) +
-             '%" r="5" class="handle"/><text x="' + (p[which][0] * 100) + '%" y="' +
-             (p[which][1] * 100) + '%" dy="-9" fill="#fff" font-size="11" ' +
-             'text-anchor="middle">' + (i + 1) + '</text>';
+  function paintPoints(svg, side, size, fit) {
+    const radius = Math.max(4, size[0] / 120);
+    let markup = POINTS.map((p, i) => {
+      if (!p[side]) return '';
+      const bad = fit && fit.errors[i] !== undefined && fit.errors[i] > 3 * fit.rms;
+      return '<circle cx="' + p[side][0] + '" cy="' + p[side][1] + '" r="' + radius +
+             '" class="handle" style="fill:' + (bad ? 'var(--warn)' : 'var(--tray)') +
+             '"/><text x="' + p[side][0] + '" y="' + p[side][1] + '" dy="' +
+             (-radius * 1.6) + '" fill="#fff" font-size="' + (radius * 2.4) +
+             '" text-anchor="middle">' + (i + 1) + '</text>';
     }).join('');
+    if (PENDING && PENDING.side === side) {
+      markup += '<circle cx="' + PENDING.point[0] + '" cy="' + PENDING.point[1] +
+                '" r="' + radius + '" style="fill:none;stroke:var(--ok);stroke-width:2"/>';
+    }
+    svg.innerHTML = markup;
   }
 
-  select.addEventListener('change', draw);
-  clear.addEventListener('click', () => { points = []; draw(); });
+  undo.addEventListener('click', () => {
+    if (PENDING) PENDING = null; else POINTS.pop();
+    markDirty();
+    draw();
+  });
+  clear.addEventListener('click', () => {
+    POINTS = []; PENDING = null;
+    markDirty();
+    draw();
+  });
   draw();
   return box;
 }
 
-function fitRms(points) {
-  const usable = points.filter(p => p.pi && p.depth);
-  return usable.length >= 4 ? 0.0 : NaN;    // the fit itself is computed on save
+// The wipe: judging a registration by whether tray edges stay continuous
+// across a moving divider is far better than reading a number, because it
+// shows *where* a fit is wrong rather than only how much.
+function drawPreview(slot, pair, H) {
+  slot.textContent = '';
+  if (!H || !pair.depthJpg || !pair.piJpg) return;
+  slot.appendChild(el('h2', null, 'Preview'));
+  const fig = el('figure');
+  const stage = el('div', 'stage');
+  const base = el('img');
+  base.src = pair.depthJpg;
+  stage.appendChild(base);
+
+  const over = el('div', 'wipe');
+  const warped = el('img');
+  warped.src = pair.piJpg;
+  warped.style.transformOrigin = '0 0';
+  over.appendChild(warped);
+  stage.appendChild(over);
+  const divider = el('div', 'divider');
+  stage.appendChild(divider);
+  fig.appendChild(stage);
+  fig.appendChild(el('figcaption', null,
+    '<b>Depth frame with the Pi frame warped over it.</b> Move the pointer to wipe. ' +
+    'Continuous tray edges across the divider mean the fit holds.'));
+  slot.appendChild(fig);
+
+  function place() {
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width) return;
+    const scaleX = rect.width / D.depthSize[0], scaleY = rect.height / D.depthSize[1];
+    // CSS matrix3d is column-major, and maps Pi pixels to depth pixels before
+    // the element is scaled to the box it is drawn in
+    const M = [H[0][0], H[1][0], 0, H[2][0],
+               H[0][1], H[1][1], 0, H[2][1],
+               0, 0, 1, 0,
+               H[0][2], H[1][2], 0, H[2][2]];
+    warped.style.width = D.videoSize[0] + 'px';
+    warped.style.height = D.videoSize[1] + 'px';
+    warped.style.transform = 'scale(' + scaleX + ',' + scaleY + ') matrix3d(' +
+                             M.join(',') + ')';
+  }
+  base.addEventListener('load', place);
+  if (base.complete) place();
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(place).observe(stage);
+
+  stage.addEventListener('mousemove', event => {
+    const rect = stage.getBoundingClientRect();
+    const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    over.style.width = (fraction * 100) + '%';
+    divider.style.left = (fraction * 100) + '%';
+  });
+  over.style.width = '50%';
+  divider.style.left = '50%';
+}
+
+// Per-point residuals, so an outlier is visible rather than silently dragging
+// the fit. Least squares spreads one bad pick across every point, which is why
+// the table matters more than the summary number.
+function drawTable(slot, fit) {
+  slot.textContent = '';
+  if (!fit) return;
+  slot.appendChild(el('h2', null, 'Per-point error'));
+  const table = el('table', 'points');
+  table.innerHTML = '<tr><th>point</th><th>error px</th><th></th></tr>' +
+    fit.errors.map((error, i) => {
+      const bad = error > 3 * fit.rms;
+      return '<tr><td>' + (i + 1) + '</td><td>' + error.toFixed(2) + '</td><td>' +
+             (bad ? '<span style="color:var(--warn)">well above the rest \u2014 ' +
+                    'check this pick</span>' : '') + '</td></tr>';
+    }).join('');
+  slot.appendChild(table);
 }
 
 // -------------------------------------------------------------------- crops
@@ -604,6 +724,46 @@ function mountCrop(svg, which, size) {
 }
 
 // ------------------------------------------------------------ pixel quality
+function cropMaskFor(meta) {
+  // the crop is in full-resolution depth coordinates; the maps may be smaller
+  if (!PREP.depth_crop || PREP.depth_crop.length < 3) return null;
+  const points = PREP.depth_crop;
+  const sx = D.depthSize[0] / meta.width, sy = D.depthSize[1] / meta.height;
+  const mask = new Uint8Array(meta.width * meta.height);
+  for (let y = 0; y < meta.height; y++) {
+    const py = (y + 0.5) * sy;
+    for (let x = 0; x < meta.width; x++) {
+      const px = (x + 0.5) * sx;
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const xi = points[i][0], yi = points[i][1];
+        const xj = points[j][0], yj = points[j][1];
+        if ((yi > py) !== (yj > py) &&
+            px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      if (!inside) mask[y * meta.width + x] = 1;
+    }
+  }
+  return mask;
+}
+
+function scoreMask(score, k) {
+  const finite = [];
+  for (let i = 0; i < score.length; i++)
+    if (!Number.isNaN(score[i]) && score[i] > 0) finite.push(score[i]);
+  if (!finite.length) return { mark: null };
+  finite.sort((a, b) => a - b);
+  const logs = finite.map(Math.log);
+  const median = logs[logs.length >> 1];
+  const deviations = logs.map(v => Math.abs(v - median)).sort((a, b) => a - b);
+  const mad = deviations[deviations.length >> 1] * 1.4826;
+  const cut = Math.exp(median + k * mad);
+  const mark = new Uint8Array(score.length);
+  for (let i = 0; i < score.length; i++)
+    if (Number.isNaN(score[i]) || score[i] > cut) mark[i] = 1;
+  return { mark, cut, median: Math.exp(median), madFactor: Math.exp(mad) };
+}
+
 function viewQuality() {
   const box = el('div');
   if (!D.residualScore) {
@@ -626,46 +786,123 @@ function viewQuality() {
   bar.appendChild(info);
   box.appendChild(bar);
 
-  const grid = el('div', 'grid cols-3');
-  box.appendChild(grid);
+  const body = el('div');
+  box.appendChild(body);
 
   function draw() {
     loadDepth(D.residualScore).then(score => {
       if (!score) return;
       const meta = D.residualScore;
-      const finite = [];
-      for (let i = 0; i < score.length; i++)
-        if (!Number.isNaN(score[i]) && score[i] > 0) finite.push(score[i]);
-      finite.sort((a, b) => a - b);
-      const logs = finite.map(Math.log);
-      const median = logs[logs.length >> 1];
-      const deviations = logs.map(v => Math.abs(v - median)).sort((a, b) => a - b);
-      const mad = deviations[deviations.length >> 1] * 1.4826;
-      const cut = Math.exp(median + PREP.residual_k * mad);
+      const result = scoreMask(score, PREP.residual_k);
+      const crop = cropMaskFor(meta);
+      body.textContent = '';
 
-      const mark = new Uint8Array(score.length);
-      let masked = 0;
-      for (let i = 0; i < score.length; i++)
-        if (Number.isNaN(score[i]) || score[i] > cut) { mark[i] = 1; masked++; }
+      const byTrial = {};
+      D.days.forEach(day => { (byTrial[day.trial] = byTrial[day.trial] || []).push(day); });
 
-      info.innerHTML = 'cut at <b>' + cut.toFixed(2) + '</b> \u00b7 masks <b>' +
-        (100 * masked / score.length).toFixed(2) + '%</b> of the frame';
+      Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
+        const days = byTrial[trial];
+        const section = el('div', 'trial');
+        section.appendChild(el('h3', null, 'Trial ' + trial +
+          '<span>' + days.length + ' days \u00b7 ' + days[0].date + ' to ' +
+          days[days.length - 1].date + '</span>'));
+        body.appendChild(section);
 
-      grid.textContent = '';
-      const first = D.days[0], last = D.days[D.days.length - 1];
-      Promise.all([loadDepth(first.firstPng), loadDepth(last.lastPng)])
-        .then(([a, b]) => {
+        const grid = el('div', 'grid cols-5');
+        section.appendChild(grid);
+
+        Promise.all([loadDepth(days[0].firstPng),
+                     loadDepth(days[days.length - 1].lastPng)]).then(([a, b]) => {
           if (!a || !b) return;
           const total = difference(a, b);
-          grid.appendChild(mapFigure(total, first.firstPng,
-            '<b>Total change</b> \u2014 first morning to last evening', { range: 2 }));
-          grid.appendChild(mapFigure(total, first.firstPng,
-            '<b>Masked at k = ' + PREP.residual_k + '</b> \u2014 magenta is removed',
-            { range: 2, mark: mark }));
-          grid.appendChild(mapFigure(score, meta,
-            '<b>Residual score</b> \u2014 each pixel\u2019s typical departure, ' +
-            'relative to its day', { range: 4 }));
+          const shape = days[0].firstPng;
+
+          let valid = 0;
+          for (let i = 0; i < total.length; i++) if (!Number.isNaN(total[i])) valid++;
+          const count = mask => {
+            if (!mask) return 0;
+            let n = 0;
+            for (let i = 0; i < total.length; i++)
+              if (!Number.isNaN(total[i]) && mask[i]) n++;
+            return n;
+          };
+          const both = new Uint8Array(total.length);
+          for (let i = 0; i < both.length; i++)
+            both[i] = ((result.mark && result.mark[i]) || (crop && crop[i])) ? 1 : 0;
+          const nResidual = count(result.mark), nCrop = count(crop), nBoth = count(both);
+
+          grid.appendChild(mapFigure(total, shape,
+            '<b>Total change, raw</b> \u2014 first morning to last evening',
+            { range: 2 }));
+          grid.appendChild(mapFigure(total, shape,
+            '<b>Residual, whole project</b> \u2014 k = ' + PREP.residual_k +
+            '. Magenta removes ' + nResidual + ' pixels, ' +
+            (100 * nResidual / Math.max(1, valid)).toFixed(2) + '%.',
+            { range: 2, mark: result.mark }));
+          grid.appendChild(mapFigure(total, shape,
+            '<b>Tray crop</b> \u2014 ' + (crop
+              ? 'magenta removes ' + nCrop + ' pixels, ' +
+                (100 * nCrop / Math.max(1, valid)).toFixed(2) + '%.'
+              : 'no crop set yet.'), { range: 2, mark: crop }));
+          grid.appendChild(mapFigure(total, shape,
+            '<b>Both</b> \u2014 together they remove ' + nBoth + ' pixels, ' +
+            (100 * nBoth / Math.max(1, valid)).toFixed(2) + '%. Residual adds <b>' +
+            (nBoth - nCrop) + '</b> beyond the crop. Blacked out is what the analysis ' +
+            'would discard.',
+            { range: 2, mark: both, markColour: [0, 0, 0] }));
+
+          const worst = days.map(day => {
+            const stats = day.residualStats;
+            if (!stats || !stats.median) return null;
+            return { date: day.date,
+                     cut: stats.median * Math.pow(stats.madFactor, PREP.residual_k),
+                     median: stats.median };
+          }).filter(Boolean).sort((a, b) => a.median - b.median).reverse().slice(0, 5);
+          const panel = el('figure');
+          panel.appendChild(el('figcaption', null,
+            '<b>Noisiest days</b><br>' + (worst.length
+              ? worst.map(w => w.date.slice(5) + ': median ' + w.median.toFixed(3) +
+                               ', cut ' + w.cut.toFixed(3)).join('<br>')
+              : 'no residual statistics') +
+            '<br><br>A mask driven by one bad day shows up here as a single ' +
+            'day well above the rest.'));
+          grid.appendChild(panel);
+
+          // and the days themselves, so which ones drive the mask is visible
+          section.appendChild(el('p', 'stat',
+            'Each day\u2019s own change, with that day\u2019s own cut at k = ' +
+            PREP.residual_k + ' in magenta. The project mask above is not their ' +
+            'union \u2014 a pixel has to be bad on most days to be masked.'));
+          const strip = el('div', 'grid cols-8');
+          section.appendChild(strip);
+          days.forEach(day => {
+            Promise.all([loadDepth(day.firstPng), loadDepth(day.lastPng),
+                         loadDepth(day.residualPng)]).then(([f, l, r]) => {
+              if (!f || !l) return;
+              const daily = difference(f, l);
+              let mark = null, n = 0, seen = 0;
+              const stats = day.residualStats;
+              if (r && stats && stats.median) {
+                const cut = stats.median * Math.pow(stats.madFactor, PREP.residual_k);
+                mark = new Uint8Array(r.length);
+                for (let i = 0; i < r.length; i++) {
+                  if (Number.isNaN(r[i])) continue;
+                  seen++;
+                  if (r[i] > cut) { mark[i] = 1; n++; }
+                }
+              }
+              strip.appendChild(mapFigure(daily, day.firstPng,
+                '<b>' + day.date.slice(5) + '</b> ' +
+                (seen ? (100 * n / seen).toFixed(2) + '% removed' : ''),
+                { range: 2, mark: mark }));
+            });
+          });
         });
+      });
+
+      info.innerHTML = 'cut at <b>' + (result.cut || 0).toFixed(2) +
+        '</b> \u00b7 median <b>' + (result.median || 0).toFixed(3) +
+        '</b> \u00b7 MAD factor <b>\u00d7' + (result.madFactor || 0).toFixed(3) + '</b>';
     });
   }
 
@@ -701,6 +938,18 @@ function flash(text, kind) {
 }
 
 function save() {
+  // the fit is computed here rather than server-side: the points were picked
+  // in the browser and the transform is what they mean
+  const complete = POINTS.filter(p => p.pi && p.depth);
+  if (complete.length >= 4) {
+    const H = homography(complete.map(p => p.pi), complete.map(p => p.depth));
+    if (H) {
+      const errors = residuals(H, complete.map(p => p.pi), complete.map(p => p.depth));
+      PREP.transform = H;
+      PREP.points = complete;
+      PREP.fit_rms_px = Math.sqrt(errors.reduce((s, e) => s + e*e, 0) / errors.length);
+    }
+  }
   const button = document.getElementById('save');
   button.disabled = true;
   document.getElementById('state').textContent = 'saving\u2026';
