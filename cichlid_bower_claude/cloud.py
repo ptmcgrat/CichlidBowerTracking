@@ -36,7 +36,11 @@ class Cloud:
             print('    rclone ' + ' '.join(args))
         if self.dry_run and args[0] in ('copy', 'copyto', 'delete', 'deletefile', 'moveto'):
             return subprocess.CompletedProcess(args, 0, '', '')
-        result = subprocess.run(['rclone'] + args, capture_output=True, encoding='utf-8')
+        try:
+            result = subprocess.run(['rclone'] + args, capture_output=True,
+                                    encoding='utf-8')
+        except FileNotFoundError:
+            raise CloudError('rclone is not installed, or not on PATH')
         if check and result.returncode != 0:
             raise CloudError('rclone ' + args[0] + ' failed: ' + (result.stderr or '').strip())
         return result
@@ -49,10 +53,18 @@ class Cloud:
         return result.returncode == 0 and bool(result.stdout.strip())
 
     def listdir(self, local_dir: Path) -> List[str]:
-        """Names in a cloud directory; empty if it cannot be read."""
-        result = self._run(['lsf', self.layout.cloud(local_dir)], check=False)
+        """Names in a cloud directory.
+
+        Raises on failure rather than returning nothing. Swallowing the error
+        made a misconfigured remote indistinguishable from an empty directory,
+        which is the difference between a five-second fix and an afternoon.
+        """
+        remote = self.layout.cloud(local_dir)
+        result = self._run(['lsf', remote], check=False)
         if result.returncode != 0:
-            return []
+            raise CloudError('rclone lsf ' + remote + ' failed: ' +
+                             ((result.stderr or '').strip() or
+                              'exit %d with no message' % result.returncode))
         return [n.strip().rstrip('/') for n in result.stdout.splitlines() if n.strip()]
 
     def size(self, local: Path) -> Optional[int]:

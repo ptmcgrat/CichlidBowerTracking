@@ -149,5 +149,5 @@ def list_analyses(layout: Layout, cloud=None) -> List[str]:
     if local.is_dir():
         found.update(p.name for p in local.iterdir() if p.is_dir())
     if cloud is not None:
-        found.update(cloud.listdir(local))
+        found.update(cloud.listdir(local))   # raises if the remote is unreachable
     return sorted(found)

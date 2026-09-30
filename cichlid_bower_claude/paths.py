@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 DEFAULT_REMOTE = 'ptm_dropbox:'
-DEFAULT_CLOUD_ROOT = 'CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/'
+DEFAULT_CLOUD_ROOT = '/CoS/BioSci/BioSci-McGrath/Apps/CichlidPiData/'
 LOCAL_ROOT_ENV = 'CICHLID_LOCAL_ROOT'
 REMOTE_ENV = 'CICHLID_REMOTE'
 
@@ -62,6 +62,9 @@ class Layout:
             rel = Path(local).resolve().relative_to(self.local_root.resolve())
         except ValueError:
             raise LayoutError(str(local) + ' is not inside ' + str(self.local_root))
+        # the leading slash matters: this remote resolves ptm_dropbox:CoS/...
+        # and ptm_dropbox:/CoS/... to different places, and only the second is
+        # where the data is
         return self.remote + str(self.cloud_root / PurePosixPath(rel))
 
     def analysis(self, analysis_id: str) -> 'AnalysisPaths':

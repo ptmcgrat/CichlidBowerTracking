@@ -17,7 +17,7 @@ import argparse
 import sys
 from typing import List, Optional
 
-from .cloud import Cloud
+from .cloud import Cloud, CloudError
 from .collect import bundle as B
 from .collect.collector import collect_project
 from .paths import Layout, LayoutError
@@ -52,9 +52,21 @@ def _projects(states: AnalysisStates, requested: Optional[List[str]]) -> List[st
 def cmd_analyses(args) -> int:
     layout = _layout(args)
     cloud = Cloud(layout=layout, verbose=args.verbose)
-    names = list_analyses(layout, cloud)
+    try:
+        names = list_analyses(layout, cloud)
+    except CloudError as error:
+        print('Could not reach the cloud.')
+        print('  ' + str(error))
+        print('\nCheck that rclone has the remote: rclone listremotes')
+        return 2
     if not names:
-        print('no analyses found under ' + str(layout.local_root / '__AnalysisStates'))
+        remote = layout.cloud(layout.local_root / '__AnalysisStates')
+        print('No analyses found.')
+        print('  locally: ' + str(layout.local_root / '__AnalysisStates'))
+        print('  cloud:   ' + remote)
+        print('\nThe cloud directory was readable but empty. If that is not what '
+              'you expect,\ncheck the path above against where the data actually '
+              'lives.')
         return 1
     for name in names:
         paths = layout.analysis(name)

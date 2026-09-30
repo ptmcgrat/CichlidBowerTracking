@@ -109,3 +109,27 @@ def test_a_missing_analysis_lists_what_is_there(tmp_path):
     with pytest.raises(StatesError) as caught:
         AnalysisStates.load(layout.analysis('Typo_Parentals'), cloud)
     assert 'MC_singles' in str(caught.value)
+
+
+def test_a_failed_listing_is_not_mistaken_for_an_empty_one(tmp_path):
+    """An unreachable remote must not read as 'nothing there'."""
+    from cichlid_bower_claude.cloud import Cloud, CloudError
+    layout = Layout(local_root=tmp_path)
+    cloud = Cloud(layout=layout)
+
+    class Failing(Cloud):
+        def _run(self, args, check=True):
+            import subprocess
+            return subprocess.CompletedProcess(args, 1, '', 'remote not found')
+
+    with pytest.raises(CloudError) as caught:
+        Failing(layout=layout).listdir(tmp_path / '__AnalysisStates')
+    assert 'remote not found' in str(caught.value)
+
+
+def test_cloud_paths_keep_the_leading_slash(tmp_path):
+    """ptm_dropbox:CoS/... and ptm_dropbox:/CoS/... are different places."""
+    layout = Layout(local_root=tmp_path)
+    remote = layout.cloud(tmp_path / 'MC_920_t001_tr1' / 'Frames.tar')
+    assert remote.startswith('ptm_dropbox:/CoS/')
+    assert remote.endswith('/MC_920_t001_tr1/Frames.tar')
