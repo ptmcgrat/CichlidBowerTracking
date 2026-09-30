@@ -5,8 +5,8 @@ import numpy as np
 from tests.make_log import write_log
 
 def build(remote_root, project_id='MC_920_t001_tr1', days=6, resets=(2,4),
-          H=48, W=64, with_std=True, drop_frames=()):
-    proj = Path(remote_root)/project_id
+          H=48, W=64, with_std=True, drop_frames=(), analysis_id='YH_MC_Parentals'):
+    proj = Path(remote_root)/'__ProjectData'/analysis_id/project_id
     proj.mkdir(parents=True, exist_ok=True)
     write_log(proj/'Logfile.txt', days=days, resets=resets)
     import sys; sys.path.insert(0,'/home/claude/cbc')

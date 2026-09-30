@@ -70,8 +70,14 @@ class Layout:
     def analysis(self, analysis_id: str) -> 'AnalysisPaths':
         return AnalysisPaths(self, analysis_id)
 
-    def project(self, project_id: str) -> 'ProjectPaths':
-        return ProjectPaths(self, project_id)
+    def project(self, project_id: str, analysis_id: str) -> 'ProjectPaths':
+        """A project's paths.
+
+        The analysisID is required: project data lives under
+        ``__ProjectData/<analysisID>/<projectID>/``, so the same projectID
+        under two analyses is two directories.
+        """
+        return ProjectPaths(self, project_id, analysis_id)
 
 
 @dataclass(frozen=True)
@@ -108,19 +114,29 @@ class AnalysisPaths:
         return self.server_dir / '_submissions'
 
     def project_dir(self, project_id: str) -> Path:
+        """Where this project's generated pages go."""
         return self.server_dir / project_id
+
+    def project(self, project_id: str) -> 'ProjectPaths':
+        return ProjectPaths(self.layout, project_id, self.analysis_id)
 
 
 @dataclass(frozen=True)
 class ProjectPaths:
-    """One projectID: one tank recorded over days to weeks."""
+    """One projectID: one tank recorded over days to weeks.
+
+    Project data is stored per analysis, not at the top level: the same
+    projectID can appear in more than one analysis and each has its own copy.
+    """
 
     layout: Layout
     project_id: str
+    analysis_id: str
 
     @property
     def root(self) -> Path:
-        return self.layout.local_root / self.project_id
+        return (self.layout.local_root / '__ProjectData' / self.analysis_id
+                / self.project_id)
 
     # -- source data, written by the tank ---------------------------------
     @property

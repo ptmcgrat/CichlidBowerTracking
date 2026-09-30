@@ -94,7 +94,7 @@ def cmd_status(args) -> int:
     print('%-30s %-10s %-9s %s' % ('project', 'category', 'collected', 'days'))
     collected = 0
     for project_id in projects:
-        paths = layout.project(project_id)
+        paths = layout.project(project_id, args.analysis_id)
         manifest = B.read_manifest(paths.manifest)
         if manifest:
             collected += 1
@@ -130,13 +130,14 @@ def cmd_collect(args) -> int:
         if args.raise_errors:
             # deliberately outside the collector's own guard
             from .collect.collector import collect_project as run
-            result = run(layout, cloud, project_id, force=args.force,
+            result = run(layout, cloud, project_id, args.analysis_id, force=args.force,
                          keep_archive=args.keep_archive, upload=not args.no_upload,
                          branch=args.branch)
             if result.status == 'failed':
                 raise RuntimeError(result.reason)
         else:
-            result = collect_project(layout, cloud, project_id, force=args.force,
+            result = collect_project(layout, cloud, project_id, args.analysis_id,
+                                     force=args.force,
                                      keep_archive=args.keep_archive,
                                      upload=not args.no_upload, branch=args.branch)
         print('    ' + result.line())

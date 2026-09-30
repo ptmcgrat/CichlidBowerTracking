@@ -65,12 +65,12 @@ def read_trial_settings(paths: ProjectPaths) -> Optional[dict]:
         return None
 
 
-def collect_project(layout: Layout, cloud, project_id: str, *,
+def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                     force: bool = False, keep_archive: bool = False,
                     upload: bool = True, branch: str = '') -> Result:
     """Collect one project. Never raises — the sweep keeps going."""
     started = dt.datetime.now()
-    paths = layout.project(project_id)
+    paths = layout.project(project_id, analysis_id)
     result = Result(project_id=project_id)
 
     try:
@@ -153,12 +153,13 @@ def collect_project(layout: Layout, cloud, project_id: str, *,
     return result
 
 
-def collect_many(layout: Layout, cloud, project_ids: List[str], **kwargs) -> List[Result]:
+def collect_many(layout: Layout, cloud, project_ids: List[str], analysis_id: str,
+                 **kwargs) -> List[Result]:
     """Collect several projects, reporting each as it finishes."""
     results = []
     for number, project_id in enumerate(project_ids, 1):
         print('[%d/%d] %s' % (number, len(project_ids), project_id))
-        result = collect_project(layout, cloud, project_id, **kwargs)
+        result = collect_project(layout, cloud, project_id, analysis_id, **kwargs)
         print('    ' + result.line())
         results.append(result)
     return results
