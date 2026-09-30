@@ -23,7 +23,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-SCHEMA = 'cichlid-bundle/1'
+SCHEMA = 'cichlid-bundle/2'
 
 ARRAY_KEYS = ('first', 'last', 'residual', 'trend', 'travel', 'valid',
               'std_mean', 'std_max')
@@ -55,7 +55,7 @@ def load_bundle(path: Path) -> Dict[str, np.ndarray]:
 
 def build_manifest(log, plan, *, extracted: int, missing: List[str],
                    bundle_bytes: int, source_bytes: Optional[int] = None,
-                   settings: Optional[dict] = None, branch: str = '',
+                   branch: str = '',
                    depth_size: Optional[List[int]] = None) -> dict:
     """Describe what was collected, and under what assumptions.
 
@@ -82,7 +82,6 @@ def build_manifest(log, plan, *, extracted: int, missing: List[str],
         'extracted': extracted,
         'missing': missing,
         'logIssues': log.issues,
-        'trialSettings': settings,
         'trials': [{'number': t.number, 'start': str(t.start_time),
                     'stop': str(t.stop_time),
                     'reset': str(t.reset_time) if t.reset_time else None}
@@ -118,15 +117,11 @@ def read_manifest(path: Path) -> Optional[dict]:
 def is_current(manifest: Optional[dict], settings: Optional[dict] = None) -> bool:
     """Whether a collected bundle can be reused.
 
-    Stale for three reasons, each of which would otherwise produce a bundle
-    that looks fine and is not: the schema changed, the trial offsets changed
-    so the day endpoints no longer match, or there is no manifest at all
-    because the run that should have written it did not finish.
+    Only two things make one stale: the schema changed, or there is no manifest
+    because the run that should have written it did not finish. Corrections do
+    not, by design — ``settings`` is accepted and ignored so older callers keep
+    working.
     """
     if not manifest:
         return False
-    if manifest.get('schema') != SCHEMA:
-        return False
-    stored = (manifest.get('trialSettings') or {}).get('trials') or {}
-    current = (settings or {}).get('trials') or {}
-    return stored == current
+    return manifest.get('schema') == SCHEMA

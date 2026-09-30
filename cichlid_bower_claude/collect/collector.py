@@ -57,28 +57,6 @@ class Result:
         return text
 
 
-def read_trial_settings(paths: ProjectPaths) -> Optional[dict]:
-    """The trial offsets, in the shape days.Offsets expects.
-
-    Read from the corrections file the server writes. The day endpoints depend
-    on these, so a bundle collected under one set and read under another would
-    quietly disagree with the interface about where a day starts.
-    """
-    if not paths.prep_json.exists():
-        return None
-    try:
-        with open(paths.prep_json) as handle:
-            data = json.load(handle)
-    except Exception:
-        return None
-    trials = {}
-    for number, times in (data.get('trials') or {}).items():
-        trials[str(number)] = {'startOffset': times.get('start', 0),
-                               'stopOffset': times.get('stop', 0),
-                               'resetOffset': times.get('reset', 0)}
-    return {'trials': trials, 'residualK': data.get('residual_k')}
-
-
 def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                     force: bool = False, keep_archive: bool = False,
                     upload: bool = True, branch: str = '') -> Result:
@@ -88,14 +66,10 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
     result = Result(project_id=project_id)
 
     try:
-        # the corrections first: the day endpoints depend on the trial offsets
-        cloud.download_optional(paths.prep_json)
-        settings = read_trial_settings(paths)
-
         existing = B.read_manifest(paths.manifest)
         if existing is None and cloud.download_optional(paths.manifest):
             existing = B.read_manifest(paths.manifest)
-        if not force and B.is_current(existing, settings):
+        if not force and B.is_current(existing):
             result.status = 'skipped'
             return result
 
@@ -113,7 +87,7 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
             videos = cloud.listdir(paths.videos_dir)
         except Exception:
             videos = None
-        plan = plan_for(log, settings, videos=videos)
+        plan = plan_for(log, videos=videos)
         if not plan.days:
             result.status = 'failed'
             result.reason = 'no days survived the trial offsets'
@@ -168,8 +142,7 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                                     missing=result.missing,
                                     bundle_bytes=result.bundle_bytes,
                                     source_bytes=source_bytes,
-                                    settings=settings, branch=branch,
-                                    depth_size=depth_size)
+                                    branch=branch, depth_size=depth_size)
         B.write_manifest(paths.manifest, manifest)
         if upload:
             cloud.upload(paths.manifest)

@@ -225,18 +225,26 @@ class Plan:
         return wanted
 
 
-def plan_for(log: ProjectLog, settings: Optional[dict] = None,
-             offsets=OFFSET_MINUTES, videos: Optional[List[str]] = None) -> Plan:
-    """What to collect for a project, given whatever trial settings exist.
+def plan_for(log: ProjectLog, offsets=OFFSET_MINUTES,
+             videos: Optional[List[str]] = None) -> Plan:
+    """What to collect for a project.
 
-    Days are computed under the *current* offsets so the bundle's endpoints
-    match what the interface shows. The candidates are collected regardless,
-    so a later change of mind costs a rebuild rather than a recollection.
+    Days come from the *logged* trial times, never from a chosen offset, so the
+    bundle does not depend on a human decision and cannot be invalidated by one.
+
+    An offset moves only the first and last day of a trial — intermediate days
+    begin and end at lights-on boundaries, which no offset touches — and the
+    frames it moves them to are collected as boundary candidates anyway. So the
+    server can honour any offset from what is already here.
+
+    The cost is that those two days' residual covers the whole logged day,
+    including any settling period, which inflates it a little. The project
+    score is a median across every day, so two days out of thirty-four barely
+    move it.
     """
     days: List[Day] = []
     for trial in log.trials:
-        trial_offsets = Offsets.for_trial(settings, trial.number)
-        for day in days_for(log, trial, trial_offsets):
+        for day in days_for(log, trial, Offsets()):
             days.append(Day(index=len(days), trial=trial.number,
                             first=day.first, last=day.last))
     pairs = []

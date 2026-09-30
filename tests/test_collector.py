@@ -37,15 +37,49 @@ def test_a_second_run_is_skipped(project):
     assert collect_project(layout, cloud, project_id, ANALYSIS).status == 'skipped'
 
 
-def test_changing_an_offset_forces_a_rebuild(project):
+def test_corrections_never_invalidate_the_bundle(project):
+    """The whole point of collecting: no human decision can make it stale.
+
+    An offset moves only the first and last day of a trial, and the frames it
+    moves them to are collected as boundary candidates, so the server can
+    honour any offset from what is already here.
+    """
     layout, cloud, project_id = project
     collect_project(layout, cloud, project_id, ANALYSIS)
     settings = layout.project(project_id, ANALYSIS).prep_json
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps({'schema': 'cichlid-prep/1',
-                                    'trials': {'1': {'start': 30, 'stop': 0, 'reset': 0}}}))
+                                    'residual_k': 6.0,
+                                    'depth_crop': [[1, 1], [9, 1], [9, 9], [1, 9]],
+                                    'trials': {'1': {'start': 30, 'stop': 15,
+                                                     'reset': 0}}}))
     cloud.upload(settings)
-    assert collect_project(layout, cloud, project_id, ANALYSIS).status == 'ok'
+    assert collect_project(layout, cloud, project_id, ANALYSIS).status == 'skipped'
+
+
+def test_every_offset_has_a_frame_already_collected(project):
+    """The server can move a boundary without asking for anything new."""
+    layout, cloud, project_id = project
+    collect_project(layout, cloud, project_id, ANALYSIS)
+    paths = layout.project(project_id, ANALYSIS)
+    manifest = B.read_manifest(paths.manifest)
+    assert manifest['candidates']
+    for candidate in manifest['candidates']:
+        assert (paths.collected_dir / (candidate['stem'] + '.npy')).exists()
+
+
+def test_days_come_from_the_logged_times(project):
+    """Collected twice with different corrections in place, same days."""
+    layout, cloud, project_id = project
+    first = collect_project(layout, cloud, project_id, ANALYSIS)
+    paths = layout.project(project_id, ANALYSIS)
+    before = [d['firstIndex'] for d in B.read_manifest(paths.manifest)['days']]
+    paths.prep_json.parent.mkdir(parents=True, exist_ok=True)
+    paths.prep_json.write_text(json.dumps(
+        {'schema': 'cichlid-prep/1', 'trials': {'1': {'start': 60, 'stop': 60}}}))
+    collect_project(layout, cloud, project_id, ANALYSIS, force=True)
+    after = [d['firstIndex'] for d in B.read_manifest(paths.manifest)['days']]
+    assert before == after
 
 
 def test_nan_survives_the_bundle_round_trip(project):
