@@ -155,35 +155,28 @@ class ProjectPaths:
     def videos_dir(self) -> Path:
         return self.root / 'Videos'
 
-    # -- human corrections, written by the server --------------------------
+    # -- human corrections, written by the new server only ------------------
+    @property
+    def corrections_dir(self) -> Path:
+        """Everything this server writes, and nothing the old pipeline did.
+
+        A directory of its own so provenance is unambiguous: a file here was
+        made by this code, and anything in MasterAnalysisFiles was not.
+        """
+        return self.root / 'Corrections'
+
+    @property
+    def prep_json(self) -> Path:
+        return self.corrections_dir / 'prep.json'
+
+    @property
+    def corrections_history(self) -> Path:
+        return self.corrections_dir / 'history'
+
     @property
     def analysis_dir(self) -> Path:
+        """The old pipeline's outputs. Read for cluster data; never written."""
         return self.root / 'MasterAnalysisFiles'
-
-    @property
-    def depth_crop(self) -> Path:
-        return self.analysis_dir / 'DepthCrop.txt'
-
-    @property
-    def video_crop(self) -> Path:
-        return self.analysis_dir / 'VideoCrop.txt'
-
-    @property
-    def transform(self) -> Path:
-        return self.analysis_dir / 'TransMFile.npy'
-
-    @property
-    def trial_settings(self) -> Path:
-        """Trial offsets and the residual k, chosen in the interface."""
-        return self.analysis_dir / 'TrialSettings.json'
-
-    @property
-    def registration_info(self) -> Path:
-        return self.analysis_dir / 'RegistrationInfo.json'
-
-    @property
-    def backups_dir(self) -> Path:
-        return self.root / 'Backups'
 
     # -- collected data, written by the collector ---------------------------
     @property

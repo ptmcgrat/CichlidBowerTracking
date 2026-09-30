@@ -100,12 +100,90 @@ def all_candidates(log: ProjectLog, offsets=OFFSET_MINUTES) -> List[Candidate]:
     return out
 
 
+@dataclass(frozen=True)
+class RegistrationPair:
+    """A Pi still paired with the depth frame closest to it in time.
+
+    Registration needs both cameras looking at the same sand. The Pi camera
+    only writes a still when a recording starts, so the depth frame is chosen
+    to match it rather than the other way round, and the gap is recorded: a
+    pair matched to within a minute is trustworthy, one matched to twenty is
+    registering two different arrangements of sand.
+    """
+
+    trial: int
+    side: str                 # 'first' or 'last' video of the trial
+    pi_file: str              # as it appears in Videos/
+    frame: Frame
+    gap_minutes: float
+
+    @property
+    def stem(self) -> str:
+        return 'Reg_T%d_%s' % (self.trial, self.side)
+
+    def as_dict(self) -> dict:
+        return {'trial': self.trial, 'side': self.side, 'stem': self.stem,
+                'piFile': self.pi_file, 'piTime': None,
+                'depthIndex': self.frame.index, 'depthTime': str(self.frame.time),
+                'gapMinutes': round(self.gap_minutes, 2)}
+
+
+def still_for_movie(movie, available: Optional[List[str]]) -> Optional[str]:
+    """The Pi still for a video, allowing for the name varying by project.
+
+    The log records ``Videos/NNNN_pic.jpg``, but not every project has that
+    file — some wrote a different suffix and some are missing it entirely. So
+    match on the four-digit index against what is actually in the directory
+    rather than trusting the recorded name.
+    """
+    logged = (getattr(movie, 'pic_file', '') or '').split('/')[-1]
+    if available is None:
+        return 'Videos/' + logged if logged else None
+    if logged and logged in available:
+        return 'Videos/' + logged
+    stem = logged.split('_')[0] if logged else '%04d' % (movie.index + 1)
+    matches = [n for n in available
+               if n.startswith(stem) and n.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    matches.sort(key=lambda n: (0 if '_pic' in n else 1, len(n)))
+    return 'Videos/' + matches[0] if matches else None
+
+
+def registration_pairs(log: ProjectLog, trial: Trial,
+                       available: Optional[List[str]] = None) -> List[RegistrationPair]:
+    """One pair from the first video of a trial and one from the last.
+
+    Videos that began before the trial are excluded: their opening frames show
+    the previous trial's sand. If the outermost video has no usable still the
+    search walks inward rather than giving up on the trial.
+    """
+    movies = log.movies_between(trial.start_time, trial.stop_time)
+    if not movies:
+        return []
+    frames = [f for f in log.frames if f.lights_on]
+    if not frames:
+        return []
+
+    out = []
+    for side, ordered in (('first', movies), ('last', list(reversed(movies)))):
+        for movie in ordered:
+            still = still_for_movie(movie, available)
+            if not still:
+                continue
+            nearest = min(frames, key=lambda f: abs((f.time - movie.start_time).total_seconds()))
+            gap = abs((nearest.time - movie.start_time).total_seconds()) / 60.0
+            out.append(RegistrationPair(trial=trial.number, side=side, pi_file=still,
+                                        frame=nearest, gap_minutes=gap))
+            break
+    return out
+
+
 @dataclass
 class Plan:
     """Everything one project needs out of its archive."""
 
     days: List[Day] = field(default_factory=list)
     candidates: List[Candidate] = field(default_factory=list)
+    pairs: List[RegistrationPair] = field(default_factory=list)
 
     def day_frames(self) -> List[Frame]:
         """Endpoint frames, in order, one pair per day."""
@@ -129,6 +207,9 @@ class Plan:
         for candidate in self.candidates:
             wanted[candidate.frame.npy_file] = candidate.stem + '.npy'
             wanted[candidate.frame.pic_file] = candidate.stem + '.jpg'
+        for pair in self.pairs:
+            wanted[pair.frame.npy_file] = pair.stem + '_depth.npy'
+            wanted[pair.frame.pic_file] = pair.stem + '_depth.jpg'
         return wanted
 
     def residual_members(self) -> dict:
@@ -145,7 +226,7 @@ class Plan:
 
 
 def plan_for(log: ProjectLog, settings: Optional[dict] = None,
-             offsets=OFFSET_MINUTES) -> Plan:
+             offsets=OFFSET_MINUTES, videos: Optional[List[str]] = None) -> Plan:
     """What to collect for a project, given whatever trial settings exist.
 
     Days are computed under the *current* offsets so the bundle's endpoints
@@ -158,4 +239,8 @@ def plan_for(log: ProjectLog, settings: Optional[dict] = None,
         for day in days_for(log, trial, trial_offsets):
             days.append(Day(index=len(days), trial=trial.number,
                             first=day.first, last=day.last))
-    return Plan(days=days, candidates=all_candidates(log, offsets=offsets))
+    pairs = []
+    for trial in log.trials:
+        pairs.extend(registration_pairs(log, trial, available=videos))
+    return Plan(days=days, candidates=all_candidates(log, offsets=offsets),
+                pairs=pairs)

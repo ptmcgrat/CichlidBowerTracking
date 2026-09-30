@@ -40,9 +40,10 @@ def test_a_second_run_is_skipped(project):
 def test_changing_an_offset_forces_a_rebuild(project):
     layout, cloud, project_id = project
     collect_project(layout, cloud, project_id, ANALYSIS)
-    settings = layout.project(project_id, ANALYSIS).trial_settings
+    settings = layout.project(project_id, ANALYSIS).prep_json
     settings.parent.mkdir(parents=True, exist_ok=True)
-    settings.write_text(json.dumps({'trials': {'1': {'startOffset': 30}}}))
+    settings.write_text(json.dumps({'schema': 'cichlid-prep/1',
+                                    'trials': {'1': {'start': 30, 'stop': 0, 'reset': 0}}}))
     cloud.upload(settings)
     assert collect_project(layout, cloud, project_id, ANALYSIS).status == 'ok'
 

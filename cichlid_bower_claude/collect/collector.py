@@ -36,6 +36,7 @@ class Result:
     reason: str = ''
     days: int = 0
     candidates: int = 0
+    pairs: int = 0
     extracted: int = 0
     missing: List[str] = field(default_factory=list)
     bundle_bytes: int = 0
@@ -47,8 +48,9 @@ class Result:
             return '%s: already collected' % self.project_id
         if self.status == 'failed':
             return '%s: failed — %s' % (self.project_id, self.reason)
-        text = ('%s: %d days, %d candidates, %.1f MB bundle in %.0fs'
-                % (self.project_id, self.days, self.candidates,
+        text = ('%s: %d days, %d candidates, %d registration pairs, '
+                '%.1f MB bundle in %.0fs'
+                % (self.project_id, self.days, self.candidates, self.pairs,
                    self.bundle_bytes / 1e6, self.seconds))
         if self.missing:
             text += ' (%d frames missing from the archive)' % len(self.missing)
@@ -56,13 +58,25 @@ class Result:
 
 
 def read_trial_settings(paths: ProjectPaths) -> Optional[dict]:
-    if not paths.trial_settings.exists():
+    """The trial offsets, in the shape days.Offsets expects.
+
+    Read from the corrections file the server writes. The day endpoints depend
+    on these, so a bundle collected under one set and read under another would
+    quietly disagree with the interface about where a day starts.
+    """
+    if not paths.prep_json.exists():
         return None
     try:
-        with open(paths.trial_settings) as handle:
-            return json.load(handle)
+        with open(paths.prep_json) as handle:
+            data = json.load(handle)
     except Exception:
         return None
+    trials = {}
+    for number, times in (data.get('trials') or {}).items():
+        trials[str(number)] = {'startOffset': times.get('start', 0),
+                               'stopOffset': times.get('stop', 0),
+                               'resetOffset': times.get('reset', 0)}
+    return {'trials': trials, 'residualK': data.get('residual_k')}
 
 
 def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
@@ -75,7 +89,7 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
 
     try:
         # the corrections first: the day endpoints depend on the trial offsets
-        cloud.download_optional(paths.trial_settings)
+        cloud.download_optional(paths.prep_json)
         settings = read_trial_settings(paths)
 
         existing = B.read_manifest(paths.manifest)
@@ -93,13 +107,20 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
             result.reason = 'no trials in the logfile'
             return result
 
-        plan = plan_for(log, settings)
+        # the Pi stills live beside the videos, not in the archive; list the
+        # directory rather than trusting the names the log recorded
+        try:
+            videos = cloud.listdir(paths.videos_dir)
+        except Exception:
+            videos = None
+        plan = plan_for(log, settings, videos=videos)
         if not plan.days:
             result.status = 'failed'
             result.reason = 'no days survived the trial offsets'
             return result
         result.days = len(plan.days)
         result.candidates = len(plan.candidates)
+        result.pairs = len(plan.pairs)
 
         archive_path, source_bytes = ensure_archive(cloud, paths, force=force)
         result.source_bytes = source_bytes
@@ -124,6 +145,14 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                 summary['last'] = stacked[-1].astype(np.float32)
                 for key, value in summary.items():
                     arrays.setdefault(key, []).append(value)
+
+        # the Pi stills live beside the videos rather than in the archive
+        for pair in plan.pairs:
+            source = paths.root / pair.pi_file
+            if not cloud.download_optional(source):
+                missing.append(pair.pi_file)
+                continue
+            (paths.collected_dir / (pair.stem + '_pi.jpg')).write_bytes(source.read_bytes())
 
         stacked_arrays = {key: np.stack(value) for key, value in arrays.items() if value}
         result.bundle_bytes = B.write_bundle(paths.bundle, stacked_arrays)
