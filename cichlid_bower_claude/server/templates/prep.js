@@ -230,6 +230,10 @@ function attachLoupe(stage, image, factor) {
   factor = factor || 5;
   const loupe = el('div', 'loupe');
   loupe.style.backgroundImage = 'url(' + image.src + ')';
+  // a crosshair at the centre: without it the magnifier shows you the
+  // neighbourhood but not which pixel a click would actually take
+  loupe.appendChild(el('span', 'crosshair-h'));
+  loupe.appendChild(el('span', 'crosshair-v'));
   stage.appendChild(loupe);
   stage.addEventListener('mousemove', event => {
     const rect = stage.getBoundingClientRect();
@@ -387,10 +391,12 @@ function viewRegistration() {
 
   const grid = el('div', 'grid cols-2');
   box.appendChild(grid);
+  const lower = el('div', 'grid cols-2 lower');
   const previewSlot = el('div');
-  box.appendChild(previewSlot);
   const tableSlot = el('div');
-  box.appendChild(tableSlot);
+  lower.appendChild(previewSlot);
+  lower.appendChild(tableSlot);
+  box.appendChild(lower);
 
   const pair = D.pairs[TRIAL_INDEX] || {};
 
@@ -504,7 +510,7 @@ function drawPreview(slot, pair, H) {
   slot.textContent = '';
   if (!H || !pair.depthJpg || !pair.piJpg) return;
   slot.appendChild(el('h2', null, 'Preview'));
-  const fig = el('figure');
+  const fig = el('figure', 'half');
   const stage = el('div', 'stage');
   const base = el('img');
   base.src = pair.depthJpg;
@@ -560,6 +566,9 @@ function drawTable(slot, fit) {
   slot.textContent = '';
   if (!fit) return;
   slot.appendChild(el('h2', null, 'Per-point error'));
+  slot.appendChild(el('p', 'stat', 'Least squares spreads one bad pick across every ' +
+    'point, so a single row well above the rest is the pick to redo \u2014 not ' +
+    'evidence that the whole fit is poor.'));
   const table = el('table', 'points');
   table.innerHTML = '<tr><th>point</th><th>error px</th><th></th></tr>' +
     fit.errors.map((error, i) => {
@@ -617,8 +626,10 @@ function viewCrops() {
   bar.appendChild(reset);
   box.appendChild(bar);
 
-  const grid = el('div', 'grid cols-2');
+  const grid = el('div', 'grid cols-2 threequarter');
   box.appendChild(grid);
+  const changeSlot = el('div');
+  box.appendChild(changeSlot);
   const pair = D.pairs[TRIAL_INDEX] || {};
 
   [['depth', 'Depth crop', pair.depthJpg, D.depthSize,
@@ -639,7 +650,45 @@ function viewCrops() {
     grid.appendChild(fig);
     mountCrop(svg, which, size);
   });
+
+  drawCropChange(changeSlot, pair.trial);
   return box;
+}
+
+// The crop drawn on the trial's own total change, so what it excludes can be
+// judged against the data rather than against a photograph. Change running up
+// to the boundary means the crop is clipping part of the bower.
+function drawCropChange(slot, trial) {
+  slot.textContent = '';
+  const days = D.days.filter(d => String(d.trial) === String(trial));
+  if (days.length < 1) return;
+  slot.appendChild(el('h2', null, 'Total change for this trial'));
+  const grid = el('div', 'grid cols-2 threequarter');
+  slot.appendChild(grid);
+
+  Promise.all([loadDepth(days[0].firstPng),
+               loadDepth(days[days.length - 1].lastPng)]).then(([a, b]) => {
+    if (!a || !b) return;
+    const total = difference(a, b);
+    const meta = days[0].firstPng;
+    const outside = cropMaskFor(meta);
+    let valid = 0, cut = 0;
+    for (let i = 0; i < total.length; i++) {
+      if (Number.isNaN(total[i])) continue;
+      valid++;
+      if (outside && outside[i]) cut++;
+    }
+    grid.appendChild(mapFigure(total, meta,
+      '<b>Total change</b> \u2014 ' + days[0].date + ' to ' +
+      days[days.length - 1].date + ', with no crop applied', { range: 2 }));
+    grid.appendChild(mapFigure(total, meta,
+      '<b>What the depth crop excludes</b> \u2014 ' +
+      (outside ? 'magenta, ' + cut + ' pixels, ' +
+                 (100 * cut / Math.max(1, valid)).toFixed(1) + '% of the frame. Change ' +
+                 'running up to the boundary means the crop is clipping the bower.'
+              : 'no crop set yet.'),
+      { range: 2, mark: outside }));
+  });
 }
 
 function cropPoints(which, size) {
@@ -1017,7 +1066,7 @@ fetch('prep.json')
     D = payload;
     PREP = payload.prep || {};
     PREP.trials = PREP.trials || {};
-    if (PREP.residual_k === undefined || PREP.residual_k === null) PREP.residual_k = 4;
+    if (PREP.residual_k === undefined || PREP.residual_k === null) PREP.residual_k = 5;
     build();
   })
   .catch(error => {

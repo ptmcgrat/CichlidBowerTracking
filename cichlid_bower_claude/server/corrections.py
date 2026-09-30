@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 SCHEMA = 'cichlid-prep/1'
-DEFAULT_K = 4.0
+DEFAULT_K = 5.0
 
 
 class CorrectionsError(Exception):

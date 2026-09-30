@@ -48,6 +48,10 @@
   .cols-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .cols-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .cols-8 { grid-template-columns:repeat(8,minmax(0,1fr)); gap:7px; }
+  .lower { align-items:start; margin-top:4px; }
+  .lower figure.half { max-width:100%; }
+  .threequarter figure { max-width:75%; }
+  @media (max-width:1100px) { .threequarter figure { max-width:100%; } }
   .cols-8 figcaption { padding:5px 7px; font-size:11px; }
   @media (max-width:1500px) { .cols-8 { grid-template-columns:repeat(4,minmax(0,1fr)); } }
   .wipe { position:absolute; inset:0; overflow:hidden; width:50%; }
@@ -74,6 +78,10 @@
   .stage polygon.video { stroke:var(--video); }
   .stage polygon.derived { stroke:rgba(242,163,60,.55); stroke-width:2;
                            stroke-dasharray:8 6; }
+  .crosshair-h, .crosshair-v { position:absolute; background:rgba(255,255,255,.85);
+                               pointer-events:none; }
+  .crosshair-h { left:0; right:0; top:50%; height:1px; margin-top:-0.5px; }
+  .crosshair-v { top:0; bottom:0; left:50%; width:1px; margin-left:-0.5px; }
   .loupe { position:absolute; width:140px; height:140px; border-radius:50%;
            border:2px solid var(--tray); background-repeat:no-repeat;
            pointer-events:none; display:none; box-shadow:0 4px 18px rgba(0,0,0,.6);
