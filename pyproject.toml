@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cichlid_bower_claude"
+version = "0.1.0"
+description = "Collection and review tooling for cichlid bower-building experiments"
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22", "pandas>=1.4"]
+
+[project.optional-dependencies]
+server = ["flask>=2.2", "opencv-python-headless>=4.7"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+cichlid-bower = "cichlid_bower_claude.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cichlid_bower_claude*"]
