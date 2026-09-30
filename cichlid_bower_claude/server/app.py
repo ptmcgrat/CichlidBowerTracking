@@ -93,9 +93,28 @@ def index():
 @app.route('/<project_id>/index.html')
 def project_page(project_id: str):
     paths = _paths(project_id)
-    if not (paths.pages_dir / 'prep.json').exists():
+    if not (paths.pages_dir / 'page.json').exists():
         PL.build_prep_payload(paths)
     return _render_prep(project_id)
+
+
+@app.route('/<project_id>/page.json')
+def project_payload(project_id: str):
+    """The built payload, with the corrections read fresh.
+
+    The payload is generated once and cached, so the copy of the corrections
+    inside it is a snapshot from build time. Serving that back after a save
+    loses the save, which is exactly what happened: the file on disk was right
+    and the page was reading a stale embedded copy.
+    """
+    paths = _paths(project_id)
+    source = paths.pages_dir / 'page.json'
+    if not source.exists():
+        PL.build_prep_payload(paths)
+    with open(source) as handle:
+        payload = json.load(handle)
+    payload['prep'] = C.load(paths).to_dict()
+    return jsonify(payload)
 
 
 @app.route('/<project_id>/<path:name>')

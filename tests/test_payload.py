@@ -29,7 +29,7 @@ def test_builds_assets_and_a_payload(collected):
     payload = P.build_prep_payload(collected)
     assert payload['schema'] == P.SCHEMA
     assert payload['days'] and payload['trials']
-    assert (collected.pages_dir / 'prep.json').exists()
+    assert (collected.pages_dir / 'page.json').exists()
     assert (collected.pages_dir / 'assets').is_dir()
 
 

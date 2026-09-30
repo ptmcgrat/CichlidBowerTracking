@@ -43,15 +43,15 @@ def test_the_index_lists_the_project(client):
 def test_the_project_page_builds_on_first_visit(client):
     http, layout = client
     paths = layout.project(PROJECT, ANALYSIS)
-    assert not (paths.pages_dir / 'prep.json').exists()
+    assert not (paths.pages_dir / 'page.json').exists()
     assert http.get('/' + PROJECT + '/').status_code == 200
-    assert (paths.pages_dir / 'prep.json').exists()
+    assert (paths.pages_dir / 'page.json').exists()
 
 
 def test_the_payload_and_assets_are_served(client):
     http, _ = client
     http.get('/' + PROJECT + '/')
-    payload = http.get('/' + PROJECT + '/prep.json')
+    payload = http.get('/' + PROJECT + '/page.json')
     assert payload.status_code == 200
     data = json.loads(payload.get_data(as_text=True))
     url = data['days'][0]['firstPng']['url']
@@ -97,3 +97,31 @@ def test_nothing_is_written_outside_corrections(client):
                for p in paths.root.rglob('*') if p.is_file()}
     assert 'MasterAnalysisFiles' not in touched
     assert 'Corrections' in touched
+
+
+def test_a_save_survives_a_reload(client):
+    """The payload is cached, so the corrections inside it must be read fresh."""
+    http, layout = client
+    http.get('/' + PROJECT + '/')                      # builds and caches the payload
+    http.post('/' + PROJECT + '/save',
+              json={'residual_k': 6.0,
+                    'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]],
+                    'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                    'points': [{'pi': [1, 2], 'depth': [3, 4]}],
+                    'trials': {'1': {'start': 45, 'stop': 0, 'reset': 0}}})
+    payload = json.loads(http.get('/' + PROJECT + '/page.json').get_data(as_text=True))
+    assert payload['prep']['residual_k'] == 6.0
+    assert payload['prep']['depth_crop'][0] == [5, 5]
+    assert payload['prep']['transform'][0][0] == 1
+    assert payload['prep']['points']
+    assert payload['prep']['trials']['1']['start'] == 45
+    assert payload['prep']['updated']
+
+
+def test_the_cached_payload_is_not_rebuilt_on_every_request(client):
+    http, layout = client
+    http.get('/' + PROJECT + '/')
+    built = (layout.project(PROJECT, ANALYSIS).pages_dir / 'page.json').stat().st_mtime
+    http.get('/' + PROJECT + '/page.json')
+    after = (layout.project(PROJECT, ANALYSIS).pages_dir / 'page.json').stat().st_mtime
+    assert built == after

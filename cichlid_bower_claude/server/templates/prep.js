@@ -648,7 +648,8 @@ function viewCrops() {
     fig.appendChild(stage);
     fig.appendChild(el('figcaption', null, '<b>' + title + '</b> \u2014 ' + hint));
     grid.appendChild(fig);
-    mountCrop(svg, which, size);
+    mountCrop(svg, which, size,
+              which === 'depth' ? () => repaintCropChange() : null);
   });
 
   drawCropChange(changeSlot, pair.trial);
@@ -658,8 +659,11 @@ function viewCrops() {
 // The crop drawn on the trial's own total change, so what it excludes can be
 // judged against the data rather than against a photograph. Change running up
 // to the boundary means the crop is clipping part of the bower.
+let CROP_CHANGE = null;     // {values, meta, canvas, caption} once loaded
+
 function drawCropChange(slot, trial) {
   slot.textContent = '';
+  CROP_CHANGE = null;
   const days = D.days.filter(d => String(d.trial) === String(trial));
   if (days.length < 1) return;
   slot.appendChild(el('h2', null, 'Total change for this trial'));
@@ -671,24 +675,46 @@ function drawCropChange(slot, trial) {
     if (!a || !b) return;
     const total = difference(a, b);
     const meta = days[0].firstPng;
-    const outside = cropMaskFor(meta);
-    let valid = 0, cut = 0;
-    for (let i = 0; i < total.length; i++) {
-      if (Number.isNaN(total[i])) continue;
-      valid++;
-      if (outside && outside[i]) cut++;
-    }
+    grid.textContent = '';
     grid.appendChild(mapFigure(total, meta,
       '<b>Total change</b> \u2014 ' + days[0].date + ' to ' +
       days[days.length - 1].date + ', with no crop applied', { range: 2 }));
-    grid.appendChild(mapFigure(total, meta,
-      '<b>What the depth crop excludes</b> \u2014 ' +
-      (outside ? 'magenta, ' + cut + ' pixels, ' +
-                 (100 * cut / Math.max(1, valid)).toFixed(1) + '% of the frame. Change ' +
-                 'running up to the boundary means the crop is clipping the bower.'
-              : 'no crop set yet.'),
-      { range: 2, mark: outside }));
+
+    // the second panel is kept so a crop change repaints it rather than
+    // reloading and re-differencing two frames that have not changed
+    const fig = el('figure');
+    const stage = el('div', 'stage');
+    const canvas = el('canvas');
+    stage.appendChild(canvas);
+    fig.appendChild(stage);
+    const caption = el('figcaption');
+    fig.appendChild(caption);
+    grid.appendChild(fig);
+    CROP_CHANGE = { values: total, meta, canvas, caption };
+    repaintCropChange();
   });
+}
+
+// Recomputing the mask is a point-in-polygon test per pixel, so this runs when
+// a corner is released rather than on every mouse move: at 640x480 that is
+// three hundred thousand tests, which is fine once and not fine at sixty a
+// second.
+function repaintCropChange() {
+  if (!CROP_CHANGE) return;
+  const { values, meta, canvas, caption } = CROP_CHANGE;
+  const outside = cropMaskFor(meta);
+  let valid = 0, cut = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (Number.isNaN(values[i])) continue;
+    valid++;
+    if (outside && outside[i]) cut++;
+  }
+  paintMap(canvas, values, meta, { range: 2, mark: outside });
+  caption.innerHTML = '<b>What the depth crop excludes</b> \u2014 ' +
+    (outside ? 'magenta, ' + cut + ' pixels, ' +
+               (100 * cut / Math.max(1, valid)).toFixed(1) + '% of the frame. Change ' +
+               'running up to the boundary means the crop is clipping the bower.'
+             : 'no crop set yet.');
 }
 
 function cropPoints(which, size) {
@@ -705,7 +731,7 @@ function cropPoints(which, size) {
 // every mousemove, as this did, re-attached the listeners each time and never
 // removed them, so a single drag left hundreds of handlers all rebuilding the
 // same element. That was the lag.
-function mountCrop(svg, which, size) {
+function mountCrop(svg, which, size, onSettled) {
   const points = cropPoints(which, size);
   const namespace = 'http://www.w3.org/2000/svg';
   const radius = Math.max(4, size[0] / 90);
@@ -764,6 +790,7 @@ function mountCrop(svg, which, size) {
     if (dragging === null) return;
     dragging = null;
     markDirty();                   // once per drag, not once per pixel
+    if (onSettled) onSettled();    // and redraw what the crop excludes
     if (event && event.pointerId !== undefined && svg.hasPointerCapture(event.pointerId))
       svg.releasePointerCapture(event.pointerId);
   };
@@ -1060,13 +1087,16 @@ function build() {
     'Collected ' + D.collected + ' \u00b7 page built ' + D.built;
 }
 
-fetch('prep.json')
+fetch('page.json')
   .then(response => response.json())
   .then(payload => {
     D = payload;
     PREP = payload.prep || {};
     PREP.trials = PREP.trials || {};
     if (PREP.residual_k === undefined || PREP.residual_k === null) PREP.residual_k = 5;
+    // the points that produced the saved fit, so a reload shows the work
+    // rather than an empty canvas with a transform that came from nowhere
+    POINTS = Array.isArray(PREP.points) ? PREP.points.slice() : [];
     build();
   })
   .catch(error => {

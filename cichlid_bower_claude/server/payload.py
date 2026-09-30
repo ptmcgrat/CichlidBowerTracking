@@ -126,6 +126,8 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
                 item[key] = 'assets/' + source.name
         pairs.append(item)
 
+    # the corrections are embedded for a first paint, but the page fetches the
+    # live copy: this snapshot goes stale the moment anybody saves
     prep = C.load(project_paths)
     payload = {
         'schema': SCHEMA,
@@ -147,7 +149,7 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
         'missing': manifest.get('missing', []),
         'prep': prep.to_dict(),
     }
-    with open(out_dir / 'prep.json', 'w') as handle:
+    with open(out_dir / 'page.json', 'w') as handle:
         json.dump(payload, handle)
     return payload
 
@@ -179,5 +181,5 @@ def payload_size(out_dir: Path) -> Dict[str, int]:
     files = list(assets.glob('*')) if assets.is_dir() else []
     return {'files': len(files),
             'assetBytes': sum(f.stat().st_size for f in files),
-            'payloadBytes': (out_dir / 'prep.json').stat().st_size
-                            if (out_dir / 'prep.json').exists() else 0}
+            'payloadBytes': (out_dir / 'page.json').stat().st_size
+                            if (out_dir / 'page.json').exists() else 0}
