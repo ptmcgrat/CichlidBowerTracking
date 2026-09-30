@@ -55,7 +55,8 @@ def load_bundle(path: Path) -> Dict[str, np.ndarray]:
 
 def build_manifest(log, plan, *, extracted: int, missing: List[str],
                    bundle_bytes: int, source_bytes: Optional[int] = None,
-                   settings: Optional[dict] = None, branch: str = '') -> dict:
+                   settings: Optional[dict] = None, branch: str = '',
+                   depth_size: Optional[List[int]] = None) -> dict:
     """Describe what was collected, and under what assumptions.
 
     The trial settings are recorded because the day endpoints depend on them:
@@ -69,7 +70,11 @@ def build_manifest(log, plan, *, extracted: int, missing: List[str],
         'analysisID': log.analysis_id,
         'built': str(dt.datetime.now().replace(microsecond=0)),
         'branch': branch,
-        'frameSize': [log.width, log.height],
+        # the two cameras differ: depth is typically 640x480 and the Pi
+        # 1296x972. Recording one 'frameSize' invited reading the Pi's
+        # resolution as the shape of the depth arrays, which it is not.
+        'depthSize': depth_size,
+        'videoSize': [log.width, log.height],
         'nFrames': len(log.frames),
         'nMovies': len(log.movies),
         'sourceBytes': source_bytes,
@@ -88,6 +93,7 @@ def build_manifest(log, plan, *, extracted: int, missing: List[str],
                   'hours': round(d.hours, 3)}
                  for d in plan.days],
         'candidates': [c.as_dict() for c in plan.candidates],
+        'pairs': [p.as_dict() for p in plan.pairs],
     }
 
 

@@ -155,6 +155,8 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
             (paths.collected_dir / (pair.stem + '_pi.jpg')).write_bytes(source.read_bytes())
 
         stacked_arrays = {key: np.stack(value) for key, value in arrays.items() if value}
+        first = stacked_arrays.get('first')
+        depth_size = [int(first.shape[2]), int(first.shape[1])] if first is not None else None
         result.bundle_bytes = B.write_bundle(paths.bundle, stacked_arrays)
         result.missing = sorted(set(missing))
 
@@ -166,7 +168,8 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                                     missing=result.missing,
                                     bundle_bytes=result.bundle_bytes,
                                     source_bytes=source_bytes,
-                                    settings=settings, branch=branch)
+                                    settings=settings, branch=branch,
+                                    depth_size=depth_size)
         B.write_manifest(paths.manifest, manifest)
         if upload:
             cloud.upload(paths.manifest)
