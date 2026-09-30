@@ -113,6 +113,142 @@ function markDirty() {
   document.getElementById('state').textContent = 'unsaved changes';
 }
 
+
+// --------------------------------------------------------------- homography
+// Normalised DLT. Conditioning matters: raw pixel coordinates are in the
+// hundreds, so the unnormalised system is badly scaled and the fit wanders.
+function normalise(points) {
+  let cx = 0, cy = 0;
+  points.forEach(p => { cx += p[0]; cy += p[1]; });
+  cx /= points.length; cy /= points.length;
+  let mean = 0;
+  points.forEach(p => { mean += Math.hypot(p[0] - cx, p[1] - cy); });
+  mean /= points.length || 1;
+  const scale = mean > 0 ? Math.SQRT2 / mean : 1;
+  return { matrix: [[scale, 0, -scale * cx], [0, scale, -scale * cy], [0, 0, 1]],
+           points: points.map(p => [(p[0] - cx) * scale, (p[1] - cy) * scale]) };
+}
+
+function solveLeastSquares(A, rows, cols) {
+  // normal equations with partial pivoting; nine unknowns, so this is ample
+  const N = [];
+  for (let i = 0; i < cols; i++) {
+    N.push(new Float64Array(cols));
+    for (let j = 0; j < cols; j++) {
+      let sum = 0;
+      for (let r = 0; r < rows; r++) sum += A[r][i] * A[r][j];
+      N[i][j] = sum;
+    }
+  }
+  // smallest eigenvector by inverse iteration on N
+  let v = new Float64Array(cols).fill(1 / Math.sqrt(cols));
+  for (let iteration = 0; iteration < 200; iteration++) {
+    const M = N.map(row => Float64Array.from(row));
+    for (let i = 0; i < cols; i++) M[i][i] += 1e-9;
+    const x = gaussian(M, v, cols);
+    if (!x) break;
+    let norm = Math.hypot(...x);
+    if (!norm) break;
+    v = x.map(value => value / norm);
+  }
+  return v;
+}
+
+function gaussian(M, b, n) {
+  const a = M.map((row, i) => Float64Array.from([...row, b[i]]));
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let r = col + 1; r < n; r++)
+      if (Math.abs(a[r][col]) > Math.abs(a[pivot][col])) pivot = r;
+    if (Math.abs(a[pivot][col]) < 1e-14) return null;
+    [a[col], a[pivot]] = [a[pivot], a[col]];
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const factor = a[r][col] / a[col][col];
+      for (let c = col; c <= n; c++) a[r][c] -= factor * a[col][c];
+    }
+  }
+  return Array.from({ length: n }, (_, i) => a[i][n] / a[i][i]);
+}
+
+function homography(from, to) {
+  if (from.length < 4) return null;
+  const F = normalise(from), T = normalise(to);
+  const A = [];
+  for (let i = 0; i < from.length; i++) {
+    const [x, y] = F.points[i], [u, v] = T.points[i];
+    A.push([-x, -y, -1, 0, 0, 0, u*x, u*y, u]);
+    A.push([0, 0, 0, -x, -y, -1, v*x, v*y, v]);
+  }
+  const h = solveLeastSquares(A, A.length, 9);
+  if (!h) return null;
+  const Hn = [[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], h[8]]];
+  const Ti = invert3(T.matrix);
+  if (!Ti) return null;
+  const H = multiply3(multiply3(Ti, Hn), F.matrix);
+  const scale = H[2][2];
+  return scale ? H.map(row => row.map(value => value / scale)) : H;
+}
+
+function multiply3(A, B) {
+  const out = [[0,0,0],[0,0,0],[0,0,0]];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    let sum = 0;
+    for (let k = 0; k < 3; k++) sum += A[i][k] * B[k][j];
+    out[i][j] = sum;
+  }
+  return out;
+}
+
+function invert3(M) {
+  const [a,b,c] = M[0], [d,e,f] = M[1], [g,h,i] = M[2];
+  const det = a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
+  if (!det) return null;
+  return [[(e*i-f*h)/det, (c*h-b*i)/det, (b*f-c*e)/det],
+          [(f*g-d*i)/det, (a*i-c*g)/det, (c*d-a*f)/det],
+          [(d*h-e*g)/det, (b*g-a*h)/det, (a*e-b*d)/det]];
+}
+
+function applyH(H, point) {
+  const w = H[2][0]*point[0] + H[2][1]*point[1] + H[2][2];
+  return [(H[0][0]*point[0] + H[0][1]*point[1] + H[0][2]) / w,
+          (H[1][0]*point[0] + H[1][1]*point[1] + H[1][2]) / w];
+}
+
+function residuals(H, from, to) {
+  return from.map((point, i) => {
+    const mapped = applyH(H, point);
+    return Math.hypot(mapped[0] - to[i][0], mapped[1] - to[i][1]);
+  });
+}
+
+// -------------------------------------------------------------------- loupe
+// Picking the same tray corner in two images is impossible at page scale, so
+// a magnifier follows the cursor. It flips above or below so it never sits
+// under the hand that is pointing.
+function attachLoupe(stage, image, factor) {
+  factor = factor || 5;
+  const loupe = el('div', 'loupe');
+  loupe.style.backgroundImage = 'url(' + image.src + ')';
+  stage.appendChild(loupe);
+  stage.addEventListener('mousemove', event => {
+    const rect = stage.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    if (x < 0 || y < 0 || x > 1 || y > 1) { loupe.style.display = 'none'; return; }
+    loupe.style.display = 'block';
+    loupe.style.backgroundSize = (rect.width * factor) + 'px ' +
+                                 (rect.height * factor) + 'px';
+    loupe.style.backgroundPosition =
+      (-x * rect.width * factor + 70) + 'px ' + (-y * rect.height * factor + 70) + 'px';
+    loupe.style.left = (event.clientX - rect.left - 70) + 'px';
+    loupe.style.top = (y < 0.4 ? event.clientY - rect.top + 24
+                               : event.clientY - rect.top - 164) + 'px';
+  });
+  stage.addEventListener('mouseleave', () => { loupe.style.display = 'none'; });
+  return loupe;
+}
+
 // ------------------------------------------------------------- trial times
 function viewTimes() {
   const box = el('div');
@@ -316,29 +452,72 @@ function fitRms(points) {
 }
 
 // -------------------------------------------------------------------- crops
+// One trial selector shared by the registration and crop tabs: the cameras do
+// not move between trials, so a crop that fits one should fit them all, and
+// stepping through is how that gets confirmed.
+let TRIAL_INDEX = 0;
+
+function trialSelector(onChange) {
+  const bar = el('div', 'bar');
+  bar.appendChild(el('label', null, 'Pair'));
+  const select = el('select');
+  D.pairs.forEach((p, i) => {
+    const option = el('option', null, 'Trial ' + p.trial + ' ' + p.side +
+      ' \u00b7 matched to ' + p.gapMinutes + ' min');
+    option.value = String(i);
+    if (i === TRIAL_INDEX) option.selected = true;
+    select.appendChild(option);
+  });
+  select.addEventListener('change', () => {
+    TRIAL_INDEX = +select.value;
+    onChange();
+  });
+  bar.appendChild(select);
+  if (D.pairs.length > 1)
+    bar.appendChild(el('span', 'stat', 'step through these to confirm the crops and ' +
+      'registration hold across trials \u2014 the cameras do not move'));
+  return bar;
+}
+
 function viewCrops() {
   const box = el('div');
   box.appendChild(el('p', 'sub',
     'Drag a corner to move it. The depth crop bounds the sand the depth camera sees; ' +
     'the video crop bounds the arena in Pi coordinates. They are independent \u2014 ' +
     'the depth camera does not always see the whole video field.'));
+  const bar = trialSelector(() => show(current));
+  const reset = el('button', 'act', 'Reset both crops');
+  reset.addEventListener('click', () => {
+    PREP.depth_crop = null;
+    PREP.video_crop = null;
+    markDirty();
+    show(current);
+  });
+  bar.appendChild(el('span', 'spacer'));
+  bar.appendChild(reset);
+  box.appendChild(bar);
+
   const grid = el('div', 'grid cols-2');
   box.appendChild(grid);
+  const pair = D.pairs[TRIAL_INDEX] || {};
 
-  const pair = D.pairs[0];
-  [['depth', 'Depth crop', pair && pair.depthJpg, D.depthSize],
-   ['video', 'Video crop', pair && pair.piJpg, D.videoSize]
-  ].forEach(([which, title, src, size]) => {
+  [['depth', 'Depth crop', pair.depthJpg, D.depthSize,
+    'orange bounds the tray the depth camera sees'],
+   ['video', 'Video crop', pair.piJpg, D.videoSize,
+    'blue bounds the arena; the dashed orange outline is the depth crop mapped ' +
+    'into Pi coordinates, and should sit inside it']
+  ].forEach(([which, title, src, size, hint]) => {
     const fig = el('figure');
     const stage = el('div', 'stage');
     if (src) { const img = el('img'); img.src = src; stage.appendChild(img); }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 ' + size[0] + ' ' + size[1]);
+    svg.setAttribute('preserveAspectRatio', 'none');
     stage.appendChild(svg);
     fig.appendChild(stage);
-    fig.appendChild(el('figcaption', null, '<b>' + title + '</b>'));
+    fig.appendChild(el('figcaption', null, '<b>' + title + '</b> \u2014 ' + hint));
     grid.appendChild(fig);
-    renderCrop(svg, which, size);
+    mountCrop(svg, which, size);
   });
   return box;
 }
@@ -347,37 +526,81 @@ function cropPoints(which, size) {
   const key = which === 'depth' ? 'depth_crop' : 'video_crop';
   if (!PREP[key]) {
     const inset = 0.12;
-    PREP[key] = [[size[0]*inset, size[1]*inset], [size[0]*(1-inset), size[1]*inset],
-                 [size[0]*(1-inset), size[1]*(1-inset)], [size[0]*inset, size[1]*(1-inset)]]
-                .map(p => [Math.round(p[0]), Math.round(p[1])]);
+    PREP[key] = [[inset, inset], [1-inset, inset], [1-inset, 1-inset], [inset, 1-inset]]
+      .map(p => [Math.round(p[0]*size[0]), Math.round(p[1]*size[1])]);
   }
   return PREP[key];
 }
 
-function renderCrop(svg, which, size) {
+// Built once and then only its attributes change. Rebuilding the whole SVG on
+// every mousemove, as this did, re-attached the listeners each time and never
+// removed them, so a single drag left hundreds of handlers all rebuilding the
+// same element. That was the lag.
+function mountCrop(svg, which, size) {
   const points = cropPoints(which, size);
-  const cls = which === 'video' ? 'video' : '';
-  svg.innerHTML = '<polygon class="' + cls + '" points="' +
-    points.map(p => p.join(',')).join(' ') + '"/>' +
-    points.map((p, i) => '<circle class="handle" cx="' + p[0] + '" cy="' + p[1] +
-                         '" r="' + Math.max(4, size[0] / 90) + '" data-i="' + i + '"/>')
-          .join('');
-  let dragging = null;
-  svg.addEventListener('mousedown', event => {
-    const index = event.target.getAttribute && event.target.getAttribute('data-i');
-    if (index !== null && index !== undefined) dragging = +index;
+  const namespace = 'http://www.w3.org/2000/svg';
+  const radius = Math.max(4, size[0] / 90);
+
+  const polygon = document.createElementNS(namespace, 'polygon');
+  if (which === 'video') polygon.setAttribute('class', 'video');
+  svg.appendChild(polygon);
+
+  let derived = null;
+  if (which === 'video' && PREP.transform) {
+    derived = document.createElementNS(namespace, 'polygon');
+    derived.setAttribute('class', 'derived');
+    svg.appendChild(derived);
+  }
+
+  const handles = points.map((point, index) => {
+    const circle = document.createElementNS(namespace, 'circle');
+    circle.setAttribute('class', 'handle');
+    circle.setAttribute('r', radius);
+    circle.dataset.index = String(index);
+    svg.appendChild(circle);
+    return circle;
   });
-  svg.addEventListener('mousemove', event => {
+
+  function paint() {
+    polygon.setAttribute('points', points.map(p => p.join(',')).join(' '));
+    handles.forEach((circle, index) => {
+      circle.setAttribute('cx', points[index][0]);
+      circle.setAttribute('cy', points[index][1]);
+    });
+    if (derived && PREP.transform && PREP.depth_crop) {
+      const inverse = invert3(PREP.transform);
+      if (inverse) {
+        derived.setAttribute('points', PREP.depth_crop
+          .map(p => applyH(inverse, p).map(Math.round).join(',')).join(' '));
+      }
+    }
+  }
+
+  let dragging = null;
+  svg.addEventListener('pointerdown', event => {
+    const index = event.target.dataset && event.target.dataset.index;
+    if (index === undefined) return;
+    dragging = +index;
+    svg.setPointerCapture(event.pointerId);
+  });
+  svg.addEventListener('pointermove', event => {
     if (dragging === null) return;
     const rect = svg.getBoundingClientRect();
     points[dragging] = [
       Math.round((event.clientX - rect.left) / rect.width * size[0]),
       Math.round((event.clientY - rect.top) / rect.height * size[1])];
-    renderCrop(svg, which, size);
-    markDirty();
+    paint();                       // attributes only; nothing is rebuilt
   });
-  svg.addEventListener('mouseup', () => { dragging = null; });
-  svg.addEventListener('mouseleave', () => { dragging = null; });
+  const release = event => {
+    if (dragging === null) return;
+    dragging = null;
+    markDirty();                   // once per drag, not once per pixel
+    if (event && event.pointerId !== undefined && svg.hasPointerCapture(event.pointerId))
+      svg.releasePointerCapture(event.pointerId);
+  };
+  svg.addEventListener('pointerup', release);
+  svg.addEventListener('pointercancel', release);
+  paint();
 }
 
 // ------------------------------------------------------------ pixel quality
