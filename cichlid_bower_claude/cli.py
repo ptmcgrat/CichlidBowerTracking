@@ -158,6 +158,52 @@ def cmd_collect(args) -> int:
     return 1 if failed else 0
 
 
+def cmd_build(args) -> int:
+    layout = _layout(args)
+    cloud = Cloud(layout=layout, verbose=args.verbose)
+    try:
+        states = AnalysisStates.load(layout.analysis(args.analysis_id), cloud)
+    except StatesError as error:
+        print(str(error))
+        return 1
+    from .server import payload as PL
+    built = 0
+    for project_id in _projects(states, args.projects):
+        paths = layout.project(project_id, args.analysis_id)
+        if not paths.manifest.exists():
+            print('%-30s not collected' % project_id)
+            continue
+        try:
+            PL.build_prep_payload(paths)
+        except Exception as error:
+            print('%-30s failed: %r' % (project_id, error))
+            continue
+        sizes = PL.payload_size(paths.pages_dir)
+        print('%-30s %d assets, %.1f MB, payload %.0f kB'
+              % (project_id, sizes['files'], sizes['assetBytes'] / 1e6,
+                 sizes['payloadBytes'] / 1000))
+        built += 1
+    print('\nBuilt %d project page(s).' % built)
+    return 0
+
+
+def cmd_serve(args) -> int:
+    layout = _layout(args)
+    cloud = Cloud(layout=layout, verbose=args.verbose)
+    try:
+        from .server.app import run
+    except ImportError:
+        print('Flask is not installed. pip install "flask>=2.2"')
+        return 2
+    try:
+        run(layout, args.analysis_id, host=args.host, port=args.port, cloud=cloud,
+            upload=not args.no_upload)
+    except StatesError as error:
+        print(str(error))
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='cichlid_bower_claude',
                                      description='Collect and serve cichlid bower data')
@@ -190,6 +236,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--refresh-states', action='store_true',
                    help='refetch the states file even if it is already here')
     p.set_defaults(func=cmd_collect)
+
+    p = sub.add_parser('build', help='generate page assets from collected bundles')
+    p.add_argument('analysis_id')
+    p.add_argument('--projects', nargs='+')
+    p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser('serve', help='serve the pages and accept corrections')
+    p.add_argument('analysis_id')
+    p.add_argument('--host', default='127.0.0.1',
+                   help='bind address; leave at localhost and put a tunnel in front')
+    p.add_argument('--port', type=int, default=8080)
+    p.add_argument('--no-upload', action='store_true',
+                   help='save corrections locally without uploading')
+    p.set_defaults(func=cmd_serve)
     return parser
 
 

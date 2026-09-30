@@ -204,6 +204,12 @@ class ProjectPaths:
 
     # -- analysis outputs ---------------------------------------------------
     @property
+    def pages_dir(self) -> Path:
+        """Generated page assets: small HTML, a payload, and PNGs served
+        separately so the browser can cache them."""
+        return self.root / 'Pages'
+
+    @property
     def clusters_csv(self) -> Path:
         return self.analysis_dir / 'AllLabeledClusters.csv'
 

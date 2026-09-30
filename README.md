@@ -24,7 +24,12 @@ and stop.
     python -m cichlid_bower_claude analyses
     python -m cichlid_bower_claude status YH_MC_Parentals
     python -m cichlid_bower_claude collect YH_MC_Parentals
-    python -m cichlid_bower_claude collect YH_MC_Parentals --projects MC_920_t001_tr1
+    python -m cichlid_bower_claude build   YH_MC_Parentals
+    python -m cichlid_bower_claude serve   YH_MC_Parentals --port 8080
+
+`collect` reads the archives; `build` turns a collected bundle into page
+assets; `serve` puts them on HTTP and takes corrections back. `serve` builds a
+page on first visit, so `build` is only needed to warm them in advance.
 
 Useful flags: `--force` recollects even where the manifest is current,
 `--keep-archive` leaves `Frames.tar` on disk, `--dry-run` makes no cloud
@@ -64,6 +69,10 @@ About 80 MB per project for a 34-day recording at 640x480, against a
 | `collect/frames.py` | Which frames to keep |
 | `collect/bundle.py` | The bundle and its manifest |
 | `collect/collector.py` | One project, end to end |
+| `server/encode.py` | Depth arrays as PNGs the browser can read values from |
+| `server/payload.py` | Bundle to page assets: a directory of PNGs and one JSON |
+| `server/corrections.py` | `Corrections/prep.json`, the only thing the server writes |
+| `server/app.py` | Flask: serves pages, accepts saves |
 | `cli.py` | Entry points |
 
 Three of those write nothing at all. That is deliberate: `paths`, `residual`

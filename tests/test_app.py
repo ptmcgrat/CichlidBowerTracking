@@ -1,0 +1,99 @@
+import json
+
+import pandas as pd
+import pytest
+
+flask = pytest.importorskip('flask')
+
+from cichlid_bower_claude.cloud import FakeCloud
+from cichlid_bower_claude.collect.collector import collect_project
+from cichlid_bower_claude.paths import Layout
+from cichlid_bower_claude.server import app as A
+from cichlid_bower_claude.server import corrections as C
+from tests.make_project import build
+
+ANALYSIS = 'YH_MC_Parentals'
+PROJECT = 'MC_920_t001_tr1'
+
+
+@pytest.fixture
+def client(tmp_path):
+    local, remote = tmp_path / 'local', tmp_path / 'remote'
+    local.mkdir(); remote.mkdir()
+    build(remote, project_id=PROJECT, days=4, resets=(), H=32, W=40)
+    states_dir = local / '__AnalysisStates' / ANALYSIS
+    states_dir.mkdir(parents=True)
+    pd.DataFrame({'projectID': [PROJECT], 'tankID': ['t001'], 'Prep': [True],
+                  'RunAnalysis': [True], 'Category': ['MC']}
+                 ).to_csv(states_dir / (ANALYSIS + '.csv'), index=False)
+    layout = Layout(local_root=local)
+    cloud = FakeCloud(layout=layout, remote_dir=remote)
+    assert collect_project(layout, cloud, PROJECT, ANALYSIS).status == 'ok'
+    A.configure(layout, ANALYSIS, cloud=cloud, upload=False)
+    A.app.config['TESTING'] = True
+    return A.app.test_client(), layout
+
+
+def test_the_index_lists_the_project(client):
+    response = client[0].get('/')
+    assert response.status_code == 200
+    assert PROJECT in response.get_data(as_text=True)
+
+
+def test_the_project_page_builds_on_first_visit(client):
+    http, layout = client
+    paths = layout.project(PROJECT, ANALYSIS)
+    assert not (paths.pages_dir / 'prep.json').exists()
+    assert http.get('/' + PROJECT + '/').status_code == 200
+    assert (paths.pages_dir / 'prep.json').exists()
+
+
+def test_the_payload_and_assets_are_served(client):
+    http, _ = client
+    http.get('/' + PROJECT + '/')
+    payload = http.get('/' + PROJECT + '/prep.json')
+    assert payload.status_code == 200
+    data = json.loads(payload.get_data(as_text=True))
+    url = data['days'][0]['firstPng']['url']
+    image = http.get('/' + PROJECT + '/' + url)
+    assert image.status_code == 200
+    assert image.get_data()[:8] == b'\x89PNG\r\n\x1a\n'
+
+
+def test_a_save_lands_and_reads_back(client):
+    http, layout = client
+    body = {'residual_k': 4.5, 'trials': {'1': {'start': 30, 'stop': 0, 'reset': 0}},
+            'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]]}
+    response = http.post('/' + PROJECT + '/save', json=body)
+    assert response.status_code == 200
+    prep = C.load(layout.project(PROJECT, ANALYSIS))
+    assert prep.residual_k == 4.5
+    assert prep.times_for(1).start == 30
+
+
+def test_a_save_keeps_the_previous_version(client):
+    http, layout = client
+    http.post('/' + PROJECT + '/save', json={'residual_k': 3.0})
+    http.post('/' + PROJECT + '/save', json={'residual_k': 5.0})
+    assert len(C.history(layout.project(PROJECT, ANALYSIS))) == 1
+
+
+def test_an_unknown_project_is_refused(client):
+    assert client[0].get('/NOT_A_PROJECT/').status_code == 404
+
+
+def test_paths_cannot_escape_the_pages_directory(client):
+    http, _ = client
+    http.get('/' + PROJECT + '/')
+    assert http.get('/' + PROJECT + '/../../../etc/passwd').status_code in (403, 404)
+
+
+def test_nothing_is_written_outside_corrections(client):
+    http, layout = client
+    http.get('/' + PROJECT + '/')
+    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0})
+    paths = layout.project(PROJECT, ANALYSIS)
+    touched = {p.relative_to(paths.root).parts[0]
+               for p in paths.root.rglob('*') if p.is_file()}
+    assert 'MasterAnalysisFiles' not in touched
+    assert 'Corrections' in touched

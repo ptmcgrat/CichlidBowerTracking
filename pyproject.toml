@@ -18,3 +18,6 @@ cichlid-bower = "cichlid_bower_claude.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["cichlid_bower_claude*"]
+
+[tool.setuptools.package-data]
+cichlid_bower_claude = ["server/templates/*"]

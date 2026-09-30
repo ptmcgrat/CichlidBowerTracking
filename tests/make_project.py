@@ -39,4 +39,8 @@ def build(remote_root, project_id='MC_920_t001_tr1', days=6, resets=(2,4),
                 info = tarfile.TarInfo(f.std_file); info.size = raw.tell()
                 raw.seek(0); tar.addfile(info, raw)
     (proj/'Frames.tar').write_bytes(buf.getvalue())
+    videos = proj/'Videos'
+    videos.mkdir(exist_ok=True)
+    for m in log.movies:
+        (videos/Path(m.pic_file).name).write_bytes(b'\xff\xd8\xff' + bytes(300))
     return project_id, log
