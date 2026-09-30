@@ -124,6 +124,14 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                 for key, value in summary.items():
                     arrays.setdefault(key, []).append(value)
 
+        # one Pi still per day, for the cluster page's top row
+        for index, still in plan.stills.items():
+            source = paths.root / still['file']
+            if not cloud.download_optional(source):
+                continue
+            (paths.collected_dir / ('Video_%02d.jpg' % index)).write_bytes(
+                source.read_bytes())
+
         # the Pi stills live beside the videos rather than in the archive
         for pair in plan.pairs:
             source = paths.root / pair.pi_file

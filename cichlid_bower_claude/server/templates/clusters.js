@@ -24,7 +24,8 @@ const COLOURS = {
 };
 
 const ROWS = [
-  ['Building', 'scoops and spits together, binned', 'buildTotal'],
+  ['Pi camera', 'the tank that day', 'still'],
+  ['Building', 'spits minus scoops \u2014 sand added against sand removed', 'buildNet'],
   ['Build by type', 'scoop orange, spit blue, multiple green', 'build'],
   ['Feed by type', 'scoop orange, spit blue, multiple green', 'feed'],
   ['Spawning', 'quivering events', 'spawn'],
@@ -146,6 +147,39 @@ function paintBins(canvas, layers, grid, width, height) {
   ctx.putImageData(image, 0, 0);
 }
 
+// A diverging map for the signed build total, so it reads the same way as the
+// depth page: sand added one colour, sand removed the other, and nothing in
+// the middle.
+function netCell(values, grid, width, height, foot) {
+  const box = el('div');
+  const stage = el('div', 'stage');
+  const canvas = el('canvas');
+  canvas.style.imageRendering = 'pixelated';
+  canvas.width = grid.across;
+  canvas.height = grid.down;
+  stage.appendChild(canvas);
+  box.appendChild(stage);
+  const ctx = canvas.getContext('2d');
+  const image = ctx.createImageData(grid.across, grid.down);
+  let peak = 0;
+  for (let i = 0; i < values.length; i++)
+    if (Math.abs(values[i]) > peak) peak = Math.abs(values[i]);
+  for (let i = 0, p = 0; i < values.length; i++, p += 4) {
+    const v = values[i];
+    let r = 11, g = 13, b = 17;
+    if (peak && v) {
+      const fraction = Math.log1p(Math.abs(v)) / Math.log1p(peak);
+      const colour = v > 0 ? COLOURS.spit : COLOURS.scoop;
+      r += colour[0] * fraction; g += colour[1] * fraction; b += colour[2] * fraction;
+    }
+    image.data[p] = Math.min(255, r); image.data[p+1] = Math.min(255, g);
+    image.data[p+2] = Math.min(255, b); image.data[p+3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  if (foot) box.appendChild(el('div', 'cellfoot', foot));
+  return box;
+}
+
 function cell(layers, grid, width, height, foot) {
   const box = el('div');
   const stage = el('div', 'stage');
@@ -161,8 +195,11 @@ function cell(layers, grid, width, height, foot) {
 function categoriesFor(key) {
   const code = EVENTS.code;
   const ok = (bid, prob, cut, hasClip) => hasClip && prob >= cut && bid !== 255;
-  if (key === 'buildTotal')
-    return { all: (b, p, c, h) => ok(b, p, c, h) && (b === code.c || b === code.p) };
+  if (key === 'buildNet')
+    // signed: a spit puts sand down and a scoop takes it away, so summing them
+    // shows where the bower is being built against where it is being dug out
+    return { spit: (b, p, c, h) => ok(b, p, c, h) && b === code.p,
+             scoop: (b, p, c, h) => ok(b, p, c, h) && b === code.c };
   if (key === 'build')
     return { scoop: (b, p, c, h) => ok(b, p, c, h) && b === code.c,
              spit: (b, p, c, h) => ok(b, p, c, h) && b === code.p,
@@ -207,21 +244,37 @@ function renderTrial(trial, days, host) {
       block.forEach(day => {
         const slot = el('div', 'cell');
         table.appendChild(slot);
-        slots[key + ':' + day.index] = slot;
+        if (key === 'still') {
+          if (day.videoJpg) {
+            const stage = el('div', 'stage');
+            const image = el('img');
+            image.src = day.videoJpg;
+            stage.appendChild(image);
+            slot.appendChild(stage);
+          } else {
+            slot.appendChild(el('div', 'cellnote', 'no video this day'));
+          }
+        } else {
+          slots[key + ':' + day.index] = slot;
+        }
       });
       for (let i = 0; i < pad; i++) table.appendChild(el('div', 'blank'));
     });
   }
 
   ROWS.forEach(([name, hint, key]) => {
+    if (key === 'still') return;      // filled above; nothing to accumulate
     const categories = categoriesFor(key);
     const parts = Object.keys(categories);
     const running = {};
     const totals = {};
     parts.forEach(part => { running[part] = new Float32Array(cells); totals[part] = 0; });
 
-    days.forEach(day => {
-      for (const i of buckets[day.index] || []) {
+    days.forEach((day, position) => {
+      // by position within the trial, which is how the buckets were filled.
+      // Indexing by the global day index worked for trial one, whose days
+      // start at zero, and silently emptied every trial after it.
+      for (const i of buckets[position] || []) {
         const hasClip = (EVENTS.flags[i] & 1) !== 0;
         const cropped = CROPPED[i] === 1;
         const bin = Math.min(grid.down - 1, (EVENTS.y[i] / BIN) | 0) * grid.across +
@@ -236,6 +289,13 @@ function renderTrial(trial, days, host) {
       const slot = slots[key + ':' + day.index];
       if (!slot) return;
       slot.textContent = '';
+      if (key === 'buildNet') {
+        const net = new Float32Array(cells);
+        for (let i = 0; i < cells; i++) net[i] = running.spit[i] - running.scoop[i];
+        slot.appendChild(netCell(net, grid, width, height,
+          '+' + totals.spit + ' spits, \u2212' + totals.scoop + ' scoops'));
+        return;
+      }
       const layers = parts.map(part => ({
         counts: running[part].slice(), colour: LAYER_COLOUR[part] }));
       slot.appendChild(cell(layers, grid, width, height,

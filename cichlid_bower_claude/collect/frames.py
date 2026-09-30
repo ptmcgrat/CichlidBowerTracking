@@ -177,6 +177,26 @@ def registration_pairs(log: ProjectLog, trial: Trial,
     return out
 
 
+def day_stills(log: ProjectLog, days, available: Optional[List[str]] = None) -> dict:
+    """One Pi still per day, from the video that started that day.
+
+    The Pi camera writes a still when a recording starts, and recordings are
+    roughly daily, so this is the natural per-day image. A day with no video of
+    its own gets nothing rather than a neighbour's picture: showing yesterday's
+    tank under today's heading would be worse than showing none.
+    """
+    out = {}
+    for day in days:
+        date = day.first.time.date()
+        same_day = [m for m in log.movies if m.start_time.date() == date]
+        for movie in same_day:
+            still = still_for_movie(movie, available)
+            if still:
+                out[day.index] = {'file': still, 'time': str(movie.start_time)}
+                break
+    return out
+
+
 @dataclass
 class Plan:
     """Everything one project needs out of its archive."""
@@ -184,6 +204,7 @@ class Plan:
     days: List[Day] = field(default_factory=list)
     candidates: List[Candidate] = field(default_factory=list)
     pairs: List[RegistrationPair] = field(default_factory=list)
+    stills: dict = field(default_factory=dict)
 
     def day_frames(self) -> List[Frame]:
         """Endpoint frames, in order, one pair per day."""
@@ -251,4 +272,4 @@ def plan_for(log: ProjectLog, offsets=OFFSET_MINUTES,
     for trial in log.trials:
         pairs.extend(registration_pairs(log, trial, available=videos))
     return Plan(days=days, candidates=all_candidates(log, offsets=offsets),
-                pairs=pairs)
+                pairs=pairs, stills=day_stills(log, days, available=videos))

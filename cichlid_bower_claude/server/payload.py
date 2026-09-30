@@ -80,6 +80,10 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
             if still.exists():
                 shutil.copy2(still, assets / still.name)
                 day[which + 'Jpg'] = 'assets/' + still.name
+        video_still = project_paths.collected_dir / ('Video_%02d.jpg' % index)
+        if video_still.exists():
+            shutil.copy2(video_still, assets / video_still.name)
+            day['videoJpg'] = 'assets/' + video_still.name
         days.append(day)
 
     # the project-wide residual score, which is what the mask is built from

@@ -93,6 +93,7 @@ def build_manifest(log, plan, *, extracted: int, missing: List[str],
                  for d in plan.days],
         'candidates': [c.as_dict() for c in plan.candidates],
         'pairs': [p.as_dict() for p in plan.pairs],
+        'stills': {str(k): v for k, v in plan.stills.items()},
     }
 
 

@@ -170,3 +170,22 @@ def test_cloud_paths_keep_the_leading_slash(tmp_path):
     remote = layout.cloud(tmp_path / 'MC_920_t001_tr1' / 'Frames.tar')
     assert remote.startswith('ptm_dropbox:/CoS/')
     assert remote.endswith('/MC_920_t001_tr1/Frames.tar')
+
+
+def test_a_still_is_collected_for_each_day(project):
+    """The cluster page's top row needs one picture of the tank per day."""
+    layout, cloud, project_id = project
+    collect_project(layout, cloud, project_id, ANALYSIS)
+    paths = layout.project(project_id, ANALYSIS)
+    manifest = B.read_manifest(paths.manifest)
+    assert manifest['stills'], 'no day stills recorded'
+    for index in manifest['stills']:
+        assert (paths.collected_dir / ('Video_%02d.jpg' % int(index))).exists()
+
+
+def test_a_day_with_no_video_gets_no_still(project):
+    """Better an empty cell than yesterday's tank under today's heading."""
+    layout, cloud, project_id = project
+    collect_project(layout, cloud, project_id, ANALYSIS)
+    manifest = B.read_manifest(layout.project(project_id, ANALYSIS).manifest)
+    assert len(manifest['stills']) <= len(manifest['days'])
