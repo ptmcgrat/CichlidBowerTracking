@@ -14,7 +14,6 @@ let CONFIDENCE = 0.67;
 let HOUR_FROM = 0, HOUR_TO = 24;
 let BIN = 20;            // pixels per bin, in Pi coordinates
 let VIEW = 'maps';       // maps | stats
-let COMPARE = false;     // show below-the-cut events beside the kept ones
 
 const COLOURS = {
   scoop: [242, 163, 60],     // orange
@@ -351,7 +350,7 @@ function draw() {
   const body = document.getElementById('body');
   body.textContent = '';
   if (VIEW === 'stats') {
-    body.appendChild(statsView(CONFIDENCE, COMPARE));
+    body.appendChild(statsView());
     return;
   }
   computeCropped();
@@ -389,7 +388,6 @@ function build() {
     '<input type="range" id="h2" min="0" max="24" step="1" value="' + HOUR_TO + '">' +
     '<label>Bin <b id="bv">' + BIN + '</b> px</label>' +
     '<input type="range" id="br" min="5" max="80" step="5" value="' + BIN + '">' +
-    '<button class="act" id="compare" aria-pressed="false">Compare below the cut</button>' +
     '<span class="spacer"></span><span class="stat" id="note"></span>';
 
   let pending = null;
@@ -420,13 +418,6 @@ function build() {
     later();
   });
 
-  const compare = bar.querySelector('#compare');
-  compare.addEventListener('click', () => {
-    COMPARE = !COMPARE;
-    compare.setAttribute('aria-pressed', String(COMPARE));
-    draw();
-  });
-
   const tabs = document.getElementById('tabs');
   [['Maps', 'maps'], ['Statistics', 'stats']].forEach(([label, key]) => {
     const button = el('button', null, label);
@@ -436,20 +427,13 @@ function build() {
       VIEW = key;
       Array.from(tabs.children).forEach(other =>
         other.setAttribute('aria-selected', String(other === button)));
-      // the bin and compare controls belong to one view each
-      bar.querySelectorAll('label, input, button').forEach(node => {
-        const binControl = node.id === 'br' || node.id === 'bv' ||
-                           (node.textContent || '').indexOf('Bin') === 0;
-        const compareControl = node.id === 'compare';
-        if (binControl) node.style.display = key === 'maps' ? '' : 'none';
-        if (compareControl) node.style.display = key === 'stats' ? '' : 'none';
-      });
+      // the statistics split at a fixed half, so the map controls do not
+      // apply there and are hidden rather than left to mislead
+      bar.style.display = key === 'maps' ? '' : 'none';
       draw();
     });
     tabs.appendChild(button);
   });
-  compare.style.display = 'none';
-
   bar.querySelector('#note').innerHTML =
     'each map is normalised to its own peak \u2014 feeding outnumbers building ' +
     'about three to one, so a shared scale would leave the build maps empty';

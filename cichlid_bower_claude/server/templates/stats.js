@@ -57,27 +57,43 @@ function hourlyCounts(trial, codes, days, cut) {
   return { above, below };
 }
 
+// Each series is scaled to its own peak and reads against its own axis: low
+// confidence events outnumber or undercount high confidence ones by a lot, and
+// a shared axis would flatten one of them to nothing. The question here is
+// whether the two have the same *shape* across the day, which a shared axis
+// hides and separate ones show.
 function boxPlot(series, title, width, height) {
-  const pad = { left: 46, right: 10, top: 20, bottom: 28 };
-  let peak = 0;
-  series.forEach(one => one.boxes.forEach(box => {
-    if (box && box.points.length) peak = Math.max(peak, box.points[box.points.length - 1]);
-  }));
-  peak = peak || 1;
+  const pad = { left: 44, right: 44, top: 20, bottom: 28 };
   const plotWidth = width - pad.left - pad.right;
   const plotHeight = height - pad.top - pad.bottom;
   const slotWidth = plotWidth / HOURS.length;
   const boxWidth = slotWidth / (series.length + 1.2);
-  const y = value => pad.top + plotHeight - (value / peak) * plotHeight;
+
+  series.forEach(one => {
+    let peak = 0;
+    one.boxes.forEach(box => {
+      if (box && box.points.length)
+        peak = Math.max(peak, box.points[box.points.length - 1]);
+    });
+    one.peak = peak || 1;
+    one.y = value => pad.top + plotHeight - (value / one.peak) * plotHeight;
+  });
 
   let body = '';
   for (let i = 0; i <= 4; i++) {
-    const value = peak * i / 4;
-    body += '<line x1="' + pad.left + '" y1="' + y(value) + '" x2="' +
-            (width - pad.right) + '" y2="' + y(value) + '" stroke="#1d232c"/>' +
-            '<text x="' + (pad.left - 6) + '" y="' + (y(value) + 4) +
-            '" fill="#93a0b0" font-size="10" text-anchor="end">' +
-            Math.round(value) + '</text>';
+    const level = pad.top + plotHeight - (i / 4) * plotHeight;
+    body += '<line x1="' + pad.left + '" y1="' + level + '" x2="' +
+            (width - pad.right) + '" y2="' + level + '" stroke="#1d232c"/>';
+    series.forEach((one, index) => {
+      const value = Math.round(one.peak * i / 4);
+      const colour = 'rgb(' + one.colour.join(',') + ')';
+      if (index === 0)
+        body += '<text x="' + (pad.left - 6) + '" y="' + (level + 4) + '" fill="' +
+                colour + '" font-size="10" text-anchor="end">' + value + '</text>';
+      else
+        body += '<text x="' + (width - pad.right + 6) + '" y="' + (level + 4) +
+                '" fill="' + colour + '" font-size="10">' + value + '</text>';
+    });
   }
 
   HOURS.forEach((hour, column) => {
@@ -87,6 +103,7 @@ function boxPlot(series, title, width, height) {
       const centre = pad.left + slotWidth * (column + 0.5) +
                      (index - (series.length - 1) / 2) * boxWidth * 1.1;
       const colour = 'rgb(' + one.colour.join(',') + ')';
+      const y = one.y;
       body += '<line x1="' + centre + '" y1="' + y(box.low) + '" x2="' + centre +
               '" y2="' + y(box.high) + '" stroke="' + colour + '" stroke-width="1"/>';
       body += '<rect x="' + (centre - boxWidth / 2) + '" y="' + y(box.q3) +
@@ -114,6 +131,12 @@ function boxPlot(series, title, width, height) {
           '" stroke="#262d38"/>';
   body += '<text x="' + pad.left + '" y="' + (pad.top - 7) +
           '" fill="#e8ecf1" font-size="11" font-weight="600">' + title + '</text>';
+  series.forEach((one, index) => {
+    body += '<text x="' + (index === 0 ? pad.left + 70 : width - pad.right - 70) +
+            '" y="' + (pad.top - 7) + '" fill="rgb(' + one.colour.join(',') +
+            ')" font-size="10" text-anchor="' + (index === 0 ? 'start' : 'end') + '">' +
+            one.name + ' \u00b7 peak ' + Math.round(one.peak) + '</text>';
+  });
 
   const figure = el('figure');
   const holder = el('div');
@@ -123,20 +146,21 @@ function boxPlot(series, title, width, height) {
   return figure;
 }
 
-function statsView(confidence, compare) {
+const SPLIT = 0.5;      // the two populations these plots compare
+
+function statsView() {
   const box = el('div');
-  const cut = Math.round(confidence * 255);
+  const cut = Math.round(SPLIT * 255);
   const summary = EVENTS.summary || {};
 
   const note = el('p', 'sub');
   note.innerHTML = 'One box per hour over the days of that trial, with each day drawn ' +
-    'as a point. ' +
-    (compare
-      ? 'Blue is at or above the confidence cut, orange below it. If the orange boxes ' +
-        'peak at the same hours as the blue, the events the classifier was unsure ' +
-        'about are behaving like the ones it was sure about \u2014 which would mean ' +
-        'the cut is discarding real events rather than noise.'
-      : 'Only events at or above the cut are shown.') +
+    'as a point. Blue is confidence above ' + SPLIT + ', orange below it, each read ' +
+    'against its own axis \u2014 left for blue, right for orange \u2014 so the two ' +
+    'can be compared by shape rather than by height. If the orange boxes peak at the ' +
+    'same hours as the blue, the events the classifier was unsure about are behaving ' +
+    'like the ones it was sure about, which would mean the cut is discarding real ' +
+    'events rather than noise.' +
     (summary.unclustered !== undefined
       ? ' <b>' + summary.unclustered + '</b> detections never joined a cluster, ' +
         (100 * (1 - (summary.clusteredFraction || 0))).toFixed(1) +
@@ -160,11 +184,11 @@ function statsView(confidence, compare) {
     STAT_GROUPS.forEach(([name, bids]) => {
       const codes = new Set(bids.map(bid => EVENTS.code[bid]));
       const counts = hourlyCounts(+trial, codes, days, cut);
-      const series = [{ name: 'at or above the cut', colour: HIGH,
-                        boxes: counts.above.map(v => quartiles(Array.from(v))) }];
-      if (compare)
-        series.push({ name: 'below the cut', colour: LOW,
-                      boxes: counts.below.map(v => quartiles(Array.from(v))) });
+      const series = [
+        { name: 'above ' + SPLIT, colour: HIGH,
+          boxes: counts.above.map(v => quartiles(Array.from(v))) },
+        { name: 'below ' + SPLIT, colour: LOW,
+          boxes: counts.below.map(v => quartiles(Array.from(v))) }];
       grid.appendChild(boxPlot(series, name, 420, 260));
     });
   });
