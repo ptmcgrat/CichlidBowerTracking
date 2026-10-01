@@ -192,9 +192,14 @@ def cmd_serve(args) -> int:
     cloud = Cloud(layout=layout, verbose=args.verbose)
     try:
         from .server.app import run
-    except ImportError:
-        print('Flask is not installed. pip install "flask>=2.2"')
-        return 2
+    except ImportError as error:
+        # catching every ImportError and blaming Flask hid real faults in the
+        # server package: a broken module here reported as a missing dependency
+        if 'flask' in str(error).lower():
+            print('Flask is not installed. pip install "flask>=2.2"')
+            return 2
+        print('Could not load the server: ' + str(error))
+        raise
     try:
         run(layout, args.analysis_id, host=args.host, port=args.port, cloud=cloud,
             upload=not args.no_upload)
