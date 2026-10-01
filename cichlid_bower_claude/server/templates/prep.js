@@ -859,6 +859,18 @@ function flash(text, kind) {
   box.appendChild(el('div', 'msg ' + kind, text));
 }
 
+// Behind a VPN there is no authenticated identity to read, so the page asks.
+// It is remembered in the browser rather than on the server: the same person
+// usually works from the same machine, and a field that has to be retyped
+// every time ends up empty.
+function rememberedName() {
+  try { return window.localStorage.getItem('cbc-who') || ''; } catch (e) { return ''; }
+}
+
+function storeName(value) {
+  try { window.localStorage.setItem('cbc-who', value); } catch (e) { /* private mode */ }
+}
+
 function save() {
   // the fit is computed here rather than server-side: the points were picked
   // in the browser and the transform is what they mean
@@ -872,6 +884,15 @@ function save() {
       PREP.fit_rms_px = Math.sqrt(errors.reduce((s, e) => s + e*e, 0) / errors.length);
     }
   }
+  const whoField = document.getElementById('who');
+  const who = (whoField && whoField.value || '').trim();
+  if (!who) {
+    flash('Put your name in before saving, so the change can be traced back.', 'bad');
+    if (whoField) whoField.focus();
+    return;
+  }
+  storeName(who);
+  PREP.who = who;
   const button = document.getElementById('save');
   button.disabled = true;
   document.getElementById('state').textContent = 'saving\u2026';
@@ -918,6 +939,8 @@ function build() {
     tabs.appendChild(button);
   });
 
+  const whoField = document.getElementById('who');
+  if (whoField) whoField.value = PREP.who || rememberedName();
   document.getElementById('save').addEventListener('click', save);
   document.getElementById('save').disabled = true;
   document.getElementById('state').textContent = PREP.updated

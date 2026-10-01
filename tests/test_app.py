@@ -167,3 +167,23 @@ def test_the_clusters_page_is_served(client):
     assert response.status_code == 200
     assert 'clusters.js' in response.get_data(as_text=True)
     assert http.get('/' + PROJECT + '/clusters.js').status_code == 200
+
+
+def test_a_save_records_the_name_the_page_sent(client):
+    """Behind a VPN there is no authenticated identity, so the page supplies one."""
+    http, layout = client
+    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0, 'who': 'Emily Keaton'})
+    assert C.load(layout.project(PROJECT, ANALYSIS)).who == 'Emily Keaton'
+
+
+def test_an_authenticated_identity_wins_over_a_claimed_one(client):
+    http, layout = client
+    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0, 'who': 'Someone Else'},
+              headers={'Cf-Access-Authenticated-User-Email': 'ek@gatech.edu'})
+    assert C.load(layout.project(PROJECT, ANALYSIS)).who == 'ek@gatech.edu'
+
+
+def test_the_statistics_page_is_served(client):
+    http, _ = client
+    assert http.get('/' + PROJECT + '/stats').status_code == 200
+    assert http.get('/' + PROJECT + '/stats.js').status_code == 200

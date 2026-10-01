@@ -86,8 +86,10 @@
            border:2px solid var(--tray); background-repeat:no-repeat;
            pointer-events:none; display:none; box-shadow:0 4px 18px rgba(0,0,0,.6);
            image-rendering:pixelated; z-index:5; }
-  .bar select { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+  .bar select, .bar input[type=text], .bar input:not([type]) {
+                background:var(--panel); border:1px solid var(--line); color:var(--ink);
                 padding:7px 10px; border-radius:6px; font:inherit; font-size:13px; }
+  .bar input::placeholder { color:var(--dim); }
   .stage .handle { fill:var(--tray); stroke:#141414; stroke-width:1.5; cursor:grab; }
   .readout { position:absolute; left:8px; bottom:8px; background:rgba(6,9,13,.85);
              padding:3px 8px; border-radius:4px; font-size:12px; color:var(--ink);
@@ -125,10 +127,13 @@
   <div class="bar">
     <a class="back" href="depth" style="margin:0">Depth</a>
     <a class="back" href="clusters" style="margin:0">Clusters</a>
+    <a class="back" href="stats" style="margin:0">Statistics</a>
     <button class="act" id="prev">&larr; Previous</button>
     <button class="act" id="next">Next &rarr;</button>
     <span class="stat" id="position"></span>
     <span class="spacer"></span>
+    <label for="who" class="stat">Your name</label>
+    <input id="who" placeholder="e.g. Emily Keaton" autocomplete="name">
     <span class="stat" id="state"></span>
     <button class="act primary" id="save">Save</button>
   </div>

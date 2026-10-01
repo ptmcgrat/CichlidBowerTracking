@@ -48,14 +48,18 @@ def _paths(project_id: str):
     return STATE['layout'].project(project_id, STATE['analysis_id'])
 
 
-def viewer() -> str:
+def viewer(claimed: str = '') -> str:
     """Who is making the change.
 
-    Cloudflare Access puts the authenticated address in a header when it is in
-    front; behind a VPN there is nothing to read and the change is anonymous.
+    An authenticated address wins, because it cannot be mistyped. Behind a VPN
+    there is none, so the page asks and sends what it was told — trusted here
+    because everyone who can reach the server can already edit the files.
     """
-    return (request.headers.get('Cf-Access-Authenticated-User-Email')
-            or request.headers.get('X-Forwarded-User') or 'anonymous')
+    header = (request.headers.get('Cf-Access-Authenticated-User-Email')
+              or request.headers.get('X-Forwarded-User'))
+    if header:
+        return header
+    return (claimed or '').strip() or 'anonymous'
 
 
 @app.after_request
@@ -116,6 +120,15 @@ def clusters_page(project_id: str):
                                               project_id + ' \u00b7 Clusters')
 
 
+@app.route('/<project_id>/stats')
+def stats_page(project_id: str):
+    paths = _paths(project_id)
+    if PL.is_stale(paths):
+        PL.build_prep_payload(paths)
+    return _template('stats.html').replace('__TITLE__',
+                                           project_id + ' \u00b7 Statistics')
+
+
 @app.route('/<project_id>/clusters.json')
 def project_clusters(project_id: str):
     """The packed events, served on their own.
@@ -151,7 +164,7 @@ def project_payload(project_id: str):
 @app.route('/<project_id>/<path:name>')
 def project_asset(project_id: str, name: str):
     paths = _paths(project_id)
-    if name in ('prep.js', 'depth.js', 'clusters.js', 'common.js'):
+    if name in ('prep.js', 'depth.js', 'clusters.js', 'stats.js', 'common.js'):
         return send_from_directory(str(Path(__file__).parent / 'templates'), name)
     root = paths.pages_dir.resolve()
     target = (root / name).resolve()
@@ -177,7 +190,7 @@ def save(project_id: str):
         prep = C.Prep.from_dict(dict(body, project_id=project_id,
                                      analysis_id=STATE['analysis_id'],
                                      schema=C.SCHEMA))
-        C.save(paths, prep, who=viewer())
+        C.save(paths, prep, who=viewer(body.get('who', '')))
         if STATE['upload']:
             try:
                 STATE['cloud'].upload(paths.prep_json)
