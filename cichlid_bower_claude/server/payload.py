@@ -41,6 +41,23 @@ def _physical_window(first: np.ndarray) -> tuple:
     return (median - WINDOW_CM, median + WINDOW_CM)
 
 
+def is_stale(project_paths, out_dir: Optional[Path] = None) -> bool:
+    """Whether the built assets predate the collection they came from.
+
+    A recollection writes a new bundle and new stills; without this the pages
+    keep serving the assets built from the previous one, which looks like
+    nothing happened. Comparing against the manifest works because the manifest
+    is written last, after every artefact it describes.
+    """
+    out_dir = Path(out_dir or project_paths.pages_dir)
+    payload = out_dir / 'page.json'
+    if not payload.exists():
+        return True
+    if not project_paths.manifest.exists():
+        return False
+    return project_paths.manifest.stat().st_mtime > payload.stat().st_mtime
+
+
 def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
     """Assets and payload for the prep page. Returns the payload.
 

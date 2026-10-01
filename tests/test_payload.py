@@ -81,3 +81,19 @@ def test_current_corrections_ride_along(collected):
     payload = P.build_prep_payload(collected)
     assert payload['prep']['residual_k'] == 4.5
     assert payload['prep']['who'] == 'pm@gatech.edu'
+
+
+def test_a_recollection_makes_the_assets_stale(collected):
+    """Otherwise the page serves images built from the previous bundle."""
+    import os, time
+    P.build_prep_payload(collected)
+    assert not P.is_stale(collected)
+    time.sleep(0.01)
+    os.utime(collected.manifest, None)          # as a recollection would
+    assert P.is_stale(collected)
+
+
+def test_a_project_with_no_manifest_is_not_called_stale(tmp_path):
+    from cichlid_bower_claude.paths import Layout
+    paths = Layout(local_root=tmp_path).project('p', 'a')
+    assert P.is_stale(paths)                    # nothing built yet
