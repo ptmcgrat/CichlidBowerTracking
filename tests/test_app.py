@@ -190,3 +190,9 @@ def test_statistics_is_a_view_inside_the_cluster_page(client):
     page = http.get('/' + PROJECT + '/clusters').get_data(as_text=True)
     assert 'stats.js' in page and 'clusters.js' in page
     assert http.get('/' + PROJECT + '/stats.js').status_code == 200
+
+
+def test_the_summary_page_is_served(client):
+    http, _ = client
+    assert http.get('/' + PROJECT + '/summary').status_code == 200
+    assert http.get('/' + PROJECT + '/summary.js').status_code == 200

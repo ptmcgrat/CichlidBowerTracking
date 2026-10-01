@@ -111,6 +111,42 @@ function markDirty() {
 
 
 
+// ----------------------------------------------------------- the transform
+// Moved here from the prep page: the summary needs to put cluster events into
+// depth coordinates, which is the same arithmetic.
+function multiply3(A, B) {
+  const out = [[0,0,0],[0,0,0],[0,0,0]];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+    let sum = 0;
+    for (let k = 0; k < 3; k++) sum += A[i][k] * B[k][j];
+    out[i][j] = sum;
+  }
+  return out;
+}
+
+function invert3(M) {
+  const [a,b,c] = M[0], [d,e,f] = M[1], [g,h,i] = M[2];
+  const det = a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
+  if (!det) return null;
+  return [[(e*i-f*h)/det, (c*h-b*i)/det, (b*f-c*e)/det],
+          [(f*g-d*i)/det, (a*i-c*g)/det, (c*d-a*f)/det],
+          [(d*h-e*g)/det, (b*g-a*h)/det, (a*e-b*d)/det]];
+}
+
+function applyH(H, point) {
+  const w = H[2][0]*point[0] + H[2][1]*point[1] + H[2][2];
+  return [(H[0][0]*point[0] + H[0][1]*point[1] + H[0][2]) / w,
+          (H[1][0]*point[0] + H[1][1]*point[1] + H[1][2]) / w];
+}
+
+function residuals(H, from, to) {
+  return from.map((point, i) => {
+    const mapped = applyH(H, point);
+    return Math.hypot(mapped[0] - to[i][0], mapped[1] - to[i][1]);
+  });
+}
+
+
 // ----------------------------------------------------------------- the crop
 function cropMaskFor(meta) {
   // the crop is in full-resolution depth coordinates; a map may be smaller

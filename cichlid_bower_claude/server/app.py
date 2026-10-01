@@ -120,6 +120,15 @@ def clusters_page(project_id: str):
                                               project_id + ' \u00b7 Clusters')
 
 
+@app.route('/<project_id>/summary')
+def summary_page(project_id: str):
+    paths = _paths(project_id)
+    if PL.is_stale(paths):
+        PL.build_prep_payload(paths)
+    return _template('summary.html').replace('__TITLE__',
+                                             project_id + ' \u00b7 Summary')
+
+
 @app.route('/<project_id>/clusters.json')
 def project_clusters(project_id: str):
     """The packed events, served on their own.
@@ -155,7 +164,8 @@ def project_payload(project_id: str):
 @app.route('/<project_id>/<path:name>')
 def project_asset(project_id: str, name: str):
     paths = _paths(project_id)
-    if name in ('prep.js', 'depth.js', 'clusters.js', 'stats.js', 'common.js'):
+    if name in ('prep.js', 'depth.js', 'clusters.js', 'stats.js',
+                'summary.js', 'common.js'):
         return send_from_directory(str(Path(__file__).parent / 'templates'), name)
     root = paths.pages_dir.resolve()
     target = (root / name).resolve()
