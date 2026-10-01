@@ -53,7 +53,8 @@ def build(remote_root, project_id='MC_920_t001_tr1', days=6, resets=(2,4),
                          'Prediction':(None if border else bid),
                          'Probability':rng.uniform(0.3,1.0),
                          'ClipCreated':('No' if border else 'Yes'),
-                         'TrackID':n,'N':120})
+                         'TrackID':n,'N':120,
+                         'LID':(-1 if (n+k)%23==0 else n*10+k)})
     _pd.DataFrame(rows).set_index('TimeStamp').to_csv(mad/'AllLabeledClusters.csv')
 
     videos = proj/'Videos'

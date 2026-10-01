@@ -47,6 +47,8 @@
   .cols-5 { grid-template-columns:repeat(5,minmax(0,1fr)); }
   .cols-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .cols-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .cols-4 { grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+  @media (min-width:1500px) { .cols-4 { grid-template-columns:repeat(4,minmax(0,1fr)); } }
   .cols-8 { grid-template-columns:repeat(8,minmax(0,1fr)); gap:7px; }
   .lower { align-items:start; margin-top:4px; }
   .lower figure.half { max-width:100%; }
@@ -140,6 +142,7 @@
     <a class="back" href="prep" style="margin:0">&larr; Prep</a>
     <a class="back" href="depth" style="margin:0">Depth</a>
   </div>
+  <div class="tabs" id="tabs" role="tablist"></div>
   <div class="bar" id="controls"></div>
   <p class="sub">One column per day, eight to a block, each map showing everything up
      to and including that day. Counts under each cell are in the order the colours
@@ -148,6 +151,7 @@
   <p class="foot" id="foot"></p>
 </div>
 <script src="common.js"></script>
+<script src="stats.js"></script>
 <script src="clusters.js"></script>
 </body>
 </html>

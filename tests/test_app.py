@@ -183,7 +183,10 @@ def test_an_authenticated_identity_wins_over_a_claimed_one(client):
     assert C.load(layout.project(PROJECT, ANALYSIS)).who == 'ek@gatech.edu'
 
 
-def test_the_statistics_page_is_served(client):
+def test_statistics_is_a_view_inside_the_cluster_page(client):
+    """Not its own page: the two views share the same loaded events."""
     http, _ = client
-    assert http.get('/' + PROJECT + '/stats').status_code == 200
+    assert http.get('/' + PROJECT + '/stats').status_code == 404
+    page = http.get('/' + PROJECT + '/clusters').get_data(as_text=True)
+    assert 'stats.js' in page and 'clusters.js' in page
     assert http.get('/' + PROJECT + '/stats.js').status_code == 200

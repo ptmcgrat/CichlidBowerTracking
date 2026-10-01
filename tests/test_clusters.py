@@ -97,3 +97,63 @@ def test_summary_counts_without_unpacking(tmp_path):
     assert summary['n'] == 100
     assert summary['noClip'] == (table['ClipCreated'] != 'Yes').sum()
     assert sum(summary['byBehaviour'].values()) + summary['noPrediction'] == 100
+
+
+def test_unclustered_transitions_are_flagged_not_dropped(tmp_path):
+    """LID of -1 never joined a cluster: not an event, but worth counting."""
+    table = make_table(40)
+    table['LID'] = [-1 if i % 5 == 0 else i for i in range(len(table))]
+    days = [{'index': 0, 'trial': 1, 'first': str(table.index[0]),
+             'last': str(table.index[-1])}]
+    packed = C.pack(table, days)
+    flags = unpack(packed, 'flags', np.uint8)
+    clustered = (flags & C.FLAG_CLUSTERED) != 0
+    assert packed['n'] == 40                       # nothing dropped
+    assert clustered.sum() == 32                   # 8 of 40 are unclustered
+
+
+def test_a_file_without_LID_treats_everything_as_clustered(tmp_path):
+    table = make_table(20)
+    days = [{'index': 0, 'trial': 1, 'first': str(table.index[0]),
+             'last': str(table.index[-1])}]
+    flags = unpack(C.pack(table, days), 'flags', np.uint8)
+    assert ((flags & C.FLAG_CLUSTERED) != 0).all()
+
+
+def test_the_summary_counts_unclustered_transitions(tmp_path):
+    table = make_table(50)
+    table['LID'] = [-1 if i % 10 == 0 else i for i in range(len(table))]
+    summary = C.summarise(table)
+    assert summary['unclustered'] == 5
+    assert summary['clustered'] == 45
+
+
+def test_unclustered_transitions_are_flagged_not_dropped(tmp_path):
+    """LID -1 never joined a cluster: not an event, but a measure of the
+    clustering, so it is kept and marked."""
+    table = make_table(60)
+    table['LID'] = [-1 if i % 5 == 0 else i for i in range(len(table))]
+    days = [{'index': 0, 'trial': 1, 'first': str(table.index[0]),
+             'last': str(table.index[-1])}]
+    packed = C.pack(table, days)
+    flags = unpack(packed, 'flags', np.uint8)
+    clustered = (flags & C.FLAG_CLUSTERED) != 0
+    assert packed['n'] == 60
+    assert (~clustered).sum() == 12
+
+
+def test_the_clustered_fraction_is_reported(tmp_path):
+    table = make_table(50)
+    table['LID'] = [-1 if i % 10 == 0 else i for i in range(len(table))]
+    summary = C.summarise(table)
+    assert summary['unclustered'] == 5
+    assert abs(summary['clusteredFraction'] - 0.9) < 1e-9
+
+
+def test_a_file_with_no_LID_treats_everything_as_clustered(tmp_path):
+    table = make_table(20)
+    days = [{'index': 0, 'trial': 1, 'first': str(table.index[0]),
+             'last': str(table.index[-1])}]
+    packed = C.pack(table, days)
+    flags = unpack(packed, 'flags', np.uint8)
+    assert ((flags & C.FLAG_CLUSTERED) != 0).all()

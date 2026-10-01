@@ -13,6 +13,8 @@ let EVENTS = null;
 let CONFIDENCE = 0.67;
 let HOUR_FROM = 0, HOUR_TO = 24;
 let BIN = 20;            // pixels per bin, in Pi coordinates
+let VIEW = 'maps';       // maps | stats
+let COMPARE = false;     // show below-the-cut events beside the kept ones
 
 const COLOURS = {
   scoop: [242, 163, 60],     // orange
@@ -227,6 +229,8 @@ function cell(layers, grid, width, height, foot) {
 
 function categoriesFor(key) {
   const code = EVENTS.code;
+  // a real event: clipped, classified, and part of a cluster. LID -1 marks a
+  // transition that never clustered, which is not an event.
   const ok = (bid, prob, cut, hasClip) => hasClip && prob >= cut && bid !== 255;
   if (key === 'buildNet')
     // signed: a spit puts sand down and a scoop takes it away, so summing them
@@ -313,6 +317,8 @@ function renderTrial(trial, days, host) {
       // start at zero, and silently emptied every trial after it.
       for (const i of buckets[position] || []) {
         const hasClip = (EVENTS.flags[i] & 1) !== 0;
+        const clustered = (EVENTS.flags[i] & 2) !== 0;
+        if (!clustered && key !== 'aside') continue;
         const cropped = CROPPED[i] === 1;
         const bin = Math.min(grid.down - 1, (EVENTS.y[i] / BIN) | 0) * grid.across +
                     Math.min(grid.across - 1, (EVENTS.x[i] / BIN) | 0);
@@ -344,6 +350,10 @@ function renderTrial(trial, days, host) {
 function draw() {
   const body = document.getElementById('body');
   body.textContent = '';
+  if (VIEW === 'stats') {
+    body.appendChild(statsView(CONFIDENCE, COMPARE));
+    return;
+  }
   computeCropped();
   const byTrial = {};
   D.days.forEach(day => { (byTrial[day.trial] = byTrial[day.trial] || []).push(day); });
@@ -379,6 +389,7 @@ function build() {
     '<input type="range" id="h2" min="0" max="24" step="1" value="' + HOUR_TO + '">' +
     '<label>Bin <b id="bv">' + BIN + '</b> px</label>' +
     '<input type="range" id="br" min="5" max="80" step="5" value="' + BIN + '">' +
+    '<button class="act" id="compare" aria-pressed="false">Compare below the cut</button>' +
     '<span class="spacer"></span><span class="stat" id="note"></span>';
 
   let pending = null;
@@ -408,6 +419,36 @@ function build() {
     bar.querySelector('#bv').textContent = BIN;
     later();
   });
+
+  const compare = bar.querySelector('#compare');
+  compare.addEventListener('click', () => {
+    COMPARE = !COMPARE;
+    compare.setAttribute('aria-pressed', String(COMPARE));
+    draw();
+  });
+
+  const tabs = document.getElementById('tabs');
+  [['Maps', 'maps'], ['Statistics', 'stats']].forEach(([label, key]) => {
+    const button = el('button', null, label);
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', String(VIEW === key));
+    button.addEventListener('click', () => {
+      VIEW = key;
+      Array.from(tabs.children).forEach(other =>
+        other.setAttribute('aria-selected', String(other === button)));
+      // the bin and compare controls belong to one view each
+      bar.querySelectorAll('label, input, button').forEach(node => {
+        const binControl = node.id === 'br' || node.id === 'bv' ||
+                           (node.textContent || '').indexOf('Bin') === 0;
+        const compareControl = node.id === 'compare';
+        if (binControl) node.style.display = key === 'maps' ? '' : 'none';
+        if (compareControl) node.style.display = key === 'stats' ? '' : 'none';
+      });
+      draw();
+    });
+    tabs.appendChild(button);
+  });
+  compare.style.display = 'none';
 
   bar.querySelector('#note').innerHTML =
     'each map is normalised to its own peak \u2014 feeding outnumbers building ' +

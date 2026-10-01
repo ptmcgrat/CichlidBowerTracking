@@ -120,15 +120,6 @@ def clusters_page(project_id: str):
                                               project_id + ' \u00b7 Clusters')
 
 
-@app.route('/<project_id>/stats')
-def stats_page(project_id: str):
-    paths = _paths(project_id)
-    if PL.is_stale(paths):
-        PL.build_prep_payload(paths)
-    return _template('stats.html').replace('__TITLE__',
-                                           project_id + ' \u00b7 Statistics')
-
-
 @app.route('/<project_id>/clusters.json')
 def project_clusters(project_id: str):
     """The packed events, served on their own.

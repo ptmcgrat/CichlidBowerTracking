@@ -32,6 +32,8 @@ LABELS = {'c': 'bower scoop', 'p': 'bower spit', 'b': 'bower multiple',
 NO_PREDICTION = 255
 
 FLAG_CLIP = 1          # a clip was cut, so the event could be classified
+FLAG_CLUSTERED = 2     # LID is not -1: the detection joined a cluster
+FLAG_CLUSTERED = 2     # LID is not -1: the transitions grouped into an event
 
 
 class ClustersMissing(Exception):
@@ -75,6 +77,25 @@ def pack(table: pd.DataFrame, days: List[dict]) -> Dict[str, object]:
     else:
         flags |= FLAG_CLIP
 
+    # LID -1 marks a transition that never joined a cluster. Those are not
+    # events and must not be plotted as if they were — but the proportion of
+    # them is a direct measure of how well the clustering worked, so they are
+    # kept and flagged rather than dropped here.
+    if 'LID' in table.columns:
+        flags |= (table['LID'].astype('Int64') != -1).fillna(False).to_numpy(
+            dtype=bool).astype(np.uint8) * FLAG_CLUSTERED
+    else:
+        flags |= FLAG_CLUSTERED
+
+    # LID of -1 means the transition never joined a cluster. Those rows are not
+    # events and must stay out of any count of behaviour; the proportion of
+    # them is a useful measure of how well the clustering worked, so they are
+    # flagged rather than dropped.
+    if 'LID' in table.columns:
+        flags |= (table['LID'].to_numpy() != -1).astype(np.uint8) * FLAG_CLUSTERED
+    else:
+        flags |= FLAG_CLUSTERED
+
     day_index = np.full(count, 65535, np.uint16)
     trial = np.zeros(count, np.uint8)
     for day in days:
@@ -107,12 +128,20 @@ def pack(table: pd.DataFrame, days: List[dict]) -> Dict[str, object]:
 def summarise(table: pd.DataFrame) -> dict:
     """Counts worth having in the manifest without unpacking anything."""
     out = {'n': int(len(table))}
+    if 'LID' in table.columns:
+        unclustered = int((table['LID'] == -1).sum())
+        out['unclustered'] = unclustered
+        out['clustered'] = int(len(table)) - unclustered
     if 'Prediction' in table.columns:
         counts = table['Prediction'].value_counts()
         out['byBehaviour'] = {str(k): int(v) for k, v in counts.items()}
         out['noPrediction'] = int(table['Prediction'].isna().sum())
     if 'ClipCreated' in table.columns:
         out['noClip'] = int((table['ClipCreated'] != 'Yes').sum())
+    if 'LID' in table.columns:
+        unclustered = int((table['LID'].astype('Int64') == -1).sum())
+        out['unclustered'] = unclustered
+        out['clusteredFraction'] = round(1 - unclustered / max(1, len(table)), 4)
     if len(table):
         out['first'] = str(table.index.min())
         out['last'] = str(table.index.max())
