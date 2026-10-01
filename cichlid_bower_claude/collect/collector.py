@@ -40,6 +40,7 @@ class Result:
     pairs: int = 0
     extracted: int = 0
     clusters: int = 0
+    stills: int = 0
     missing: List[str] = field(default_factory=list)
     bundle_bytes: int = 0
     source_bytes: Optional[int] = None
@@ -54,6 +55,7 @@ class Result:
                 '%.1f MB bundle in %.0fs'
                 % (self.project_id, self.days, self.candidates, self.pairs,
                    self.bundle_bytes / 1e6, self.seconds))
+        text += ', %d day stills' % self.stills
         if self.clusters:
             text += ', %d clusters' % self.clusters
         if self.missing:
@@ -128,9 +130,11 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
         for index, still in plan.stills.items():
             source = paths.root / still['file']
             if not cloud.download_optional(source):
+                missing.append(still['file'])
                 continue
             (paths.collected_dir / ('Video_%02d.jpg' % index)).write_bytes(
                 source.read_bytes())
+            result.stills += 1
 
         # the Pi stills live beside the videos rather than in the archive
         for pair in plan.pairs:

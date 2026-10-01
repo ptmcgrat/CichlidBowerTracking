@@ -23,14 +23,20 @@ const COLOURS = {
   cropped: [224, 105, 63],   // red
 };
 
+// The build map accumulates, because building is rare enough that one day is
+// mostly empty tank and the question is where the bower has got to. Everything
+// below it is that day alone, drawn as points rather than binned: at a few
+// hundred events a day the individual positions are the information, and
+// binning them only throws it away.
 const ROWS = [
   ['Pi camera', 'the tank that day', 'still'],
-  ['Building', 'spits minus scoops \u2014 sand added against sand removed', 'buildNet'],
-  ['Build by type', 'scoop orange, spit blue, multiple green', 'build'],
-  ['Feed by type', 'scoop orange, spit blue, multiple green', 'feed'],
-  ['Spawning', 'quivering events', 'spawn'],
-  ['Set aside', 'no clip black, outside the crop red', 'aside'],
+  ['Building', 'cumulative \u00b7 spits minus scoops', 'buildNet'],
+  ['Build by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
+  ['Feed by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'feed'],
+  ['Spawning', 'that day \u00b7 quivering events', 'spawn'],
+  ['Set aside', 'that day \u00b7 no clip black, outside the crop red', 'aside'],
 ];
+const CUMULATIVE = new Set(['buildNet']);
 
 function unpackColumn(text, Type) {
   const binary = atob(text);
@@ -180,6 +186,33 @@ function netCell(values, grid, width, height, foot) {
   return box;
 }
 
+// Points, not bins. Drawn into a canvas sized to the bin grid would lose
+// them, so this one is drawn at a fixed working size and scaled by CSS.
+function scatterCell(groups, width, height, foot) {
+  const box = el('div');
+  const stage = el('div', 'stage');
+  const canvas = el('canvas');
+  const W = 260, H = Math.max(1, Math.round(260 * height / width));
+  canvas.width = W; canvas.height = H;
+  stage.appendChild(canvas);
+  box.appendChild(stage);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0b0d11';
+  ctx.fillRect(0, 0, W, H);
+  groups.forEach(group => {
+    ctx.fillStyle = 'rgb(' + group.colour.join(',') + ')';
+    ctx.globalAlpha = group.points.length > 400 ? 0.45 : 0.8;
+    group.points.forEach(point => {
+      ctx.beginPath();
+      ctx.arc(point[0] / width * W, point[1] / height * H, 1.6, 0, 6.2832);
+      ctx.fill();
+    });
+  });
+  ctx.globalAlpha = 1;
+  if (foot) box.appendChild(el('div', 'cellfoot', foot));
+  return box;
+}
+
 function cell(layers, grid, width, height, foot) {
   const box = el('div');
   const stage = el('div', 'stage');
@@ -269,8 +302,12 @@ function renderTrial(trial, days, host) {
     const running = {};
     const totals = {};
     parts.forEach(part => { running[part] = new Float32Array(cells); totals[part] = 0; });
+    const accumulates = CUMULATIVE.has(key);
 
     days.forEach((day, position) => {
+      const points = {};
+      parts.forEach(part => { points[part] = []; });
+      if (!accumulates) parts.forEach(part => { running[part].fill(0); totals[part] = 0; });
       // by position within the trial, which is how the buckets were filled.
       // Indexing by the global day index worked for trial one, whose days
       // start at zero, and silently emptied every trial after it.
@@ -284,6 +321,7 @@ function renderTrial(trial, days, host) {
             continue;
           running[part][bin] += 1;
           totals[part] += 1;
+          if (!accumulates) points[part].push([EVENTS.x[i], EVENTS.y[i]]);
         }
       }
       const slot = slots[key + ':' + day.index];
@@ -296,10 +334,9 @@ function renderTrial(trial, days, host) {
           '+' + totals.spit + ' spits, \u2212' + totals.scoop + ' scoops'));
         return;
       }
-      const layers = parts.map(part => ({
-        counts: running[part].slice(), colour: LAYER_COLOUR[part] }));
-      slot.appendChild(cell(layers, grid, width, height,
-                            parts.map(part => totals[part]).join(' / ')));
+      slot.appendChild(scatterCell(
+        parts.map(part => ({ points: points[part], colour: LAYER_COLOUR[part] })),
+        width, height, parts.map(part => totals[part]).join(' / ')));
     });
   });
 }
