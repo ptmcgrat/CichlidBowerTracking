@@ -29,17 +29,36 @@ ARRAY_KEYS = ('first', 'last', 'residual', 'trend', 'travel', 'valid',
               'std_mean', 'std_max')
 
 
-def write_bundle(path: Path, arrays: Dict[str, np.ndarray]) -> int:
-    """Store the per-day arrays. Returns the file size in bytes."""
+FLOAT16_MAX = 65504.0
+
+
+def write_bundle(path: Path, arrays: Dict[str, np.ndarray]) -> tuple:
+    """Store the per-day arrays. Returns (size in bytes, values clipped).
+
+    float16 tops out at 65504, and a value beyond that becomes infinity rather
+    than raising — which then propagates silently through every reduction. Raw
+    frames carry no-return pixels thousands of centimetres out, and travel
+    accumulates over a whole day, so this does happen.
+
+    Clipping rather than rejecting, because a pixel reading 70000 cm is not a
+    measurement whatever is done with it. The count is returned so it can be
+    recorded instead of vanishing into a warning nobody reads.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {}
+    clipped = 0
     for key, value in arrays.items():
         if value is None:
             continue
-        payload[key] = np.asarray(value, dtype=np.float16)
+        array = np.asarray(value, dtype=np.float64)
+        beyond = np.isfinite(array) & (np.abs(array) > FLOAT16_MAX)
+        clipped += int(np.count_nonzero(beyond))
+        if beyond.any():
+            array = np.clip(array, -FLOAT16_MAX, FLOAT16_MAX)
+        payload[key] = array.astype(np.float16)
     np.savez_compressed(path, **payload)
-    return path.stat().st_size
+    return path.stat().st_size, clipped
 
 
 def load_bundle(path: Path) -> Dict[str, np.ndarray]:
@@ -55,7 +74,7 @@ def load_bundle(path: Path) -> Dict[str, np.ndarray]:
 
 def build_manifest(log, plan, *, extracted: int, missing: List[str],
                    bundle_bytes: int, source_bytes: Optional[int] = None,
-                   branch: str = '',
+                   branch: str = '', clipped: int = 0,
                    depth_size: Optional[List[int]] = None) -> dict:
     """Describe what was collected, and under what assumptions.
 
@@ -79,6 +98,7 @@ def build_manifest(log, plan, *, extracted: int, missing: List[str],
         'nMovies': len(log.movies),
         'sourceBytes': source_bytes,
         'bundleBytes': bundle_bytes,
+        'clippedToFloat16': clipped,
         'extracted': extracted,
         'missing': missing,
         'logIssues': log.issues,

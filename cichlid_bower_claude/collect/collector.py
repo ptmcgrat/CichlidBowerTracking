@@ -41,6 +41,7 @@ class Result:
     extracted: int = 0
     clusters: int = 0
     stills: int = 0
+    clipped: int = 0
     missing: List[str] = field(default_factory=list)
     bundle_bytes: int = 0
     source_bytes: Optional[int] = None
@@ -58,6 +59,8 @@ class Result:
         text += ', %d day stills' % self.stills
         if self.clusters:
             text += ', %d clusters' % self.clusters
+        if self.clipped:
+            text += ' \u00b7 %d values beyond float16 clipped' % self.clipped
         if self.missing:
             text += ' (%d frames missing from the archive)' % len(self.missing)
         return text
@@ -162,7 +165,8 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
         stacked_arrays = {key: np.stack(value) for key, value in arrays.items() if value}
         first = stacked_arrays.get('first')
         depth_size = [int(first.shape[2]), int(first.shape[1])] if first is not None else None
-        result.bundle_bytes = B.write_bundle(paths.bundle, stacked_arrays)
+        result.bundle_bytes, result.clipped = B.write_bundle(paths.bundle,
+                                                             stacked_arrays)
         result.missing = sorted(set(missing))
 
         if upload:
@@ -173,7 +177,8 @@ def collect_project(layout: Layout, cloud, project_id: str, analysis_id: str, *,
                                     missing=result.missing,
                                     bundle_bytes=result.bundle_bytes,
                                     source_bytes=source_bytes,
-                                    branch=branch, depth_size=depth_size)
+                                    branch=branch, clipped=result.clipped,
+                                    depth_size=depth_size)
         if cluster_summary is not None:
             manifest['clusters'] = cluster_summary
             packed = pack(result._cluster_table, manifest['days'])

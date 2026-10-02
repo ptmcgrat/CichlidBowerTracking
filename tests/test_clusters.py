@@ -157,3 +157,28 @@ def test_a_file_with_no_LID_treats_everything_as_clustered(tmp_path):
     packed = C.pack(table, days)
     flags = unpack(packed, 'flags', np.uint8)
     assert ((flags & C.FLAG_CLUSTERED) != 0).all()
+
+
+def test_values_beyond_float16_are_clipped_not_turned_into_infinity(tmp_path):
+    """float16 tops out at 65504 and silently overflows to inf, which then
+    propagates through every reduction downstream."""
+    import numpy as np
+    from cichlid_bower_claude.collect import bundle as B
+    arrays = {'first': np.full((2, 4, 4), 60.0)}
+    arrays['first'][0, 0, 0] = 90000.0          # a no-return pixel
+    arrays['first'][0, 1, 1] = np.nan
+    size, clipped = B.write_bundle(tmp_path / 'b.npz', arrays)
+    assert clipped == 1
+    back = B.load_bundle(tmp_path / 'b.npz')['first']
+    assert np.isfinite(back[0, 0, 0])
+    assert back[0, 0, 0] == B.FLOAT16_MAX
+    assert np.isnan(back[0, 1, 1])
+    assert not np.isinf(back).any()
+
+
+def test_an_ordinary_bundle_reports_nothing_clipped(tmp_path):
+    import numpy as np
+    from cichlid_bower_claude.collect import bundle as B
+    size, clipped = B.write_bundle(tmp_path / 'b.npz',
+                                   {'first': np.full((2, 4, 4), 60.0)})
+    assert clipped == 0
