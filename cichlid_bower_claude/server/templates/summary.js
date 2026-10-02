@@ -62,9 +62,15 @@ function loadEvents() {
 function projectToDepth() {
   EVENTS.dx = new Float32Array(EVENTS.n);
   EVENTS.dy = new Float32Array(EVENTS.n);
-  const H = PREP.transform;
-  if (!H) { EVENTS.projected = false; return; }
+  // each event through its own trial's registration, which matters only on a
+  // project where a camera moved mid-way
+  if (!PREP.transform && !Object.keys(PREP.overrides || {}).length) {
+    EVENTS.projected = false;
+    return;
+  }
   for (let i = 0; i < EVENTS.n; i++) {
+    const H = transformFor(EVENTS.trial[i]);
+    if (!H) continue;
     const point = applyH(H, [EVENTS.x[i], EVENTS.y[i]]);
     EVENTS.dx[i] = point[0];
     EVENTS.dy[i] = point[1];
@@ -423,8 +429,7 @@ function draw() {
       'cluster events cannot be put into depth coordinates. Set one on the prep page.'));
     return;
   }
-  const byTrial = {};
-  D.days.forEach(day => { (byTrial[day.trial] = byTrial[day.trial] || []).push(day); });
+  const byTrial = daysByTrial(false);
 
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];

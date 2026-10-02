@@ -169,8 +169,7 @@ function statsView() {
       : '');
   box.appendChild(note);
 
-  const byTrial = {};
-  D.days.forEach(day => { (byTrial[day.trial] = byTrial[day.trial] || []).push(day); });
+  const byTrial = daysByTrial(false);
 
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];

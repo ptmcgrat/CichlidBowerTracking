@@ -440,6 +440,34 @@ function drawTable(slot, fit) {
 // stepping through is how that gets confirmed.
 let TRIAL_INDEX = 0;
 
+// Which trial the registration and crop tabs are editing. Changes land on the
+// project by default; "just this trial" writes an override instead.
+function currentTrial() {
+  const pair = D.pairs[TRIAL_INDEX];
+  return pair ? pair.trial : 1;
+}
+
+function editingOverride() {
+  return !!(PREP.overrides || {})[String(currentTrial())];
+}
+
+function setOverride(on) {
+  PREP.overrides = PREP.overrides || {};
+  const key = String(currentTrial());
+  if (on) {
+    PREP.overrides[key] = Object.assign({
+      transform: PREP.transform, depth_crop: PREP.depth_crop,
+      video_crop: PREP.video_crop, excluded: false, reason: '' },
+      PREP.overrides[key] || {});
+  } else if (PREP.overrides[key]) {
+    const excluded = PREP.overrides[key].excluded;
+    const reason = PREP.overrides[key].reason;
+    if (excluded) PREP.overrides[key] = { excluded: true, reason: reason };
+    else delete PREP.overrides[key];
+  }
+  markDirty();
+}
+
 function trialSelector(onChange) {
   const bar = el('div', 'bar');
   bar.appendChild(el('label', null, 'Pair'));
@@ -456,9 +484,39 @@ function trialSelector(onChange) {
     onChange();
   });
   bar.appendChild(select);
+
+  const own = el('button', 'act');
+  own.textContent = editingOverride() ? 'Using its own settings'
+                                      : 'Give this trial its own';
+  own.setAttribute('aria-pressed', String(editingOverride()));
+  own.addEventListener('click', () => {
+    setOverride(!editingOverride());
+    onChange();
+  });
+  bar.appendChild(own);
+
+  const exclude = el('button', 'act');
+  const trial = currentTrial();
+  const excluded = isExcluded(trial);
+  exclude.textContent = excluded ? 'Excluded from analysis' : 'Exclude this trial';
+  exclude.setAttribute('aria-pressed', String(excluded));
+  exclude.addEventListener('click', () => {
+    PREP.overrides = PREP.overrides || {};
+    const key = String(trial);
+    const entry = PREP.overrides[key] || {};
+    entry.excluded = !entry.excluded;
+    if (entry.excluded && !entry.reason)
+      entry.reason = window.prompt('Why is this trial excluded?', 'no building') || '';
+    PREP.overrides[key] = entry;
+    markDirty();
+    onChange();
+  });
+  bar.appendChild(exclude);
+
   if (D.pairs.length > 1)
     bar.appendChild(el('span', 'stat', 'step through these to confirm the crops and ' +
-      'registration hold across trials \u2014 the cameras do not move'));
+      'registration hold \u2014 the cameras do not move, so one setting usually ' +
+      'serves every trial'));
   return bar;
 }
 
@@ -571,8 +629,14 @@ function repaintCropChange() {
              : 'no crop set yet.');
 }
 
+function cropTarget() {
+  // where an edit lands: this trial's override if it has one, else the project
+  return editingOverride() ? PREP.overrides[String(currentTrial())] : PREP;
+}
+
 function cropPoints(which, size) {
   const key = which === 'depth' ? 'depth_crop' : 'video_crop';
+  const PREP = cropTarget();
   if (!PREP[key]) {
     const inset = 0.12;
     PREP[key] = [[inset, inset], [1-inset, inset], [1-inset, 1-inset], [inset, 1-inset]]
@@ -847,7 +911,8 @@ function save() {
     const H = homography(complete.map(p => p.pi), complete.map(p => p.depth));
     if (H) {
       const errors = residuals(H, complete.map(p => p.pi), complete.map(p => p.depth));
-      PREP.transform = H;
+      const target = cropTarget();
+      target.transform = H;
       PREP.points = complete;
       PREP.fit_rms_px = Math.sqrt(errors.reduce((s, e) => s + e*e, 0) / errors.length);
     }

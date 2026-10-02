@@ -41,15 +41,25 @@ def test_the_payload_is_small_and_the_images_are_separate(collected):
 
 
 def test_depth_values_survive_into_the_assets(collected):
+    """Maps are stored downsampled, so a value is the mean of its block —
+    the quantisation is unchanged, only the resolution."""
     payload = P.build_prep_payload(collected)
     day = payload['days'][0]
     meta = day['firstPng']
     values = decode_depth(read_png(collected.pages_dir / meta['url']), meta)
     from cichlid_bower_claude.collect import bundle as B
     original = B.load_bundle(collected.bundle)['first'][0]
-    inside = np.isfinite(original) & np.isfinite(values)
+    factor = payload['downsample']
+    assert meta['width'] == original.shape[1] // factor
+    blocks = original[:meta['height'] * factor, :meta['width'] * factor]
+    blocks = blocks.reshape(meta['height'], factor, meta['width'], factor)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=RuntimeWarning)
+        expected = np.nanmean(blocks, axis=(1, 3))
+    inside = np.isfinite(expected) & np.isfinite(values)
     assert inside.any()
-    assert np.max(np.abs(values[inside] - original[inside])) < 0.05
+    assert np.max(np.abs(values[inside] - expected[inside])) < 0.05
 
 
 def test_residual_statistics_are_full_resolution(collected):

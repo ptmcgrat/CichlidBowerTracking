@@ -203,8 +203,12 @@ function draw() {
   const body = document.getElementById('body');
   body.textContent = '';
 
-  const byTrial = {};
-  D.days.forEach(day => { (byTrial[day.trial] = byTrial[day.trial] || []).push(day); });
+  const byTrial = daysByTrial(false);
+  if (!Object.keys(byTrial).length) {
+    body.appendChild(el('div', 'note', 'Every trial in this project is excluded. ' +
+      'Unmark one on the prep page to see it here.'));
+    return;
+  }
 
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];
@@ -267,7 +271,8 @@ function build() {
 
   const note = bar.querySelector('#maskNote');
   const meta = D.days.length ? D.days[0].firstPng : null;
-  const crop = meta ? cropMaskFor(meta) : null;
+  const firstTrial = activeTrials()[0];
+  const crop = meta ? cropMaskFor(meta, firstTrial) : null;
 
   if (!D.residualScore || !meta) {
     MASKS = { crop, residual: null };

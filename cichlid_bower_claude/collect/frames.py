@@ -23,7 +23,7 @@ from typing import List, Optional
 from ..logfile.days import Day, Offsets, days_for
 from ..logfile.model import Frame, ProjectLog, Trial
 
-OFFSET_MINUTES = (0, 15, 30, 45, 60)
+OFFSET_MINUTES = (0, 30, 60)
 
 
 @dataclass(frozen=True)

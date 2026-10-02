@@ -73,8 +73,8 @@ function loadEvents() {
 // The video crop, tested in Pi coordinates. Recomputed from what is saved
 // rather than read from the cluster file's own column: the point of showing it
 // is what the crop as it stands now would discard.
-function outsideVideoCrop(x, y) {
-  const points = PREP.video_crop;
+function outsideVideoCrop(x, y, trial) {
+  const points = trial === undefined ? PREP.video_crop : videoCropFor(trial);
   if (!points || points.length < 3) return false;
   let inside = false;
   for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
@@ -98,7 +98,7 @@ let CROPPED = null;
 function computeCropped() {
   CROPPED = new Uint8Array(EVENTS.n);
   for (let i = 0; i < EVENTS.n; i++)
-    if (outsideVideoCrop(EVENTS.x[i], EVENTS.y[i])) CROPPED[i] = 1;
+    if (outsideVideoCrop(EVENTS.x[i], EVENTS.y[i], EVENTS.trial[i])) CROPPED[i] = 1;
 }
 
 // Event indices grouped by day, filtered once. The maps are cumulative, so a
@@ -354,9 +354,7 @@ function draw() {
     return;
   }
   computeCropped();
-  const byTrial = {};
-  D.days.forEach(day => { (byTrial[day.trial] = byTrial[day.trial] || []).push(day); });
-
+  const byTrial = daysByTrial(false);
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];
     const section = el('div', 'trial');

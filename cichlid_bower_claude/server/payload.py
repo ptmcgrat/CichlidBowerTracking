@@ -25,8 +25,26 @@ from ..collect import residual as R
 from . import corrections as C
 from .encode import write_depth
 
-SCHEMA = 'cichlid-page/1'
+SCHEMA = 'cichlid-page/2'
+DOWNSAMPLE = 2
 WINDOW_CM = 30.0
+
+
+def _half(array: np.ndarray, factor: int = DOWNSAMPLE) -> np.ndarray:
+    """Downsample for display, ignoring missing pixels.
+
+    A full-resolution PNG takes 74 ms to write and 236 kB to serve; at half
+    that is 17 ms and 60 kB, and a project needs about a hundred and twenty of
+    them. The quantisation is unchanged — what goes is spatial detail, on maps
+    that are drawn a few hundred pixels wide.
+    """
+    height, width = array.shape
+    h2, w2 = height // factor * factor, width // factor * factor
+    blocks = array[:h2, :w2].reshape(h2 // factor, factor, w2 // factor, factor)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', category=RuntimeWarning)
+        return np.nanmean(blocks, axis=(1, 3))
 
 
 def _physical_window(first: np.ndarray) -> tuple:
@@ -85,11 +103,11 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
         day = dict(entry)
         for key, array in (('first', first[index]), ('last', last[index])):
             name = 'day_%02d_%s.png' % (index, key)
-            day[key + 'Png'] = write_depth(assets / name, array, clip=window)
+            day[key + 'Png'] = write_depth(assets / name, _half(array), clip=window)
             day[key + 'Png']['url'] = 'assets/' + name
         if 'residual' in data:
             name = 'day_%02d_residual.png' % index
-            day['residualPng'] = write_depth(assets / name, data['residual'][index])
+            day['residualPng'] = write_depth(assets / name, _half(data['residual'][index]))
             day['residualPng']['url'] = 'assets/' + name
             day['residualStats'] = _residual_stats(data['residual'][index])
         for which in ('first', 'last'):
@@ -108,7 +126,7 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
     if 'residual' in data:
         maps = [data['residual'][i] for i in range(data['residual'].shape[0])]
         score = R.project_score(maps)
-        meta = write_depth(assets / 'residual_score.png', score)
+        meta = write_depth(assets / 'residual_score.png', _half(score))
         meta['url'] = 'assets/residual_score.png'
         score_url = meta
 
@@ -120,7 +138,7 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
         jpg = project_paths.collected_dir / (stem + '.jpg')
         if npy.exists():
             array = np.load(npy).astype(np.float64)
-            meta = write_depth(assets / (stem + '.png'), array, clip=window)
+            meta = write_depth(assets / (stem + '.png'), _half(array), clip=window)
             meta['url'] = 'assets/' + stem + '.png'
             item['depthPng'] = meta
         if jpg.exists():
@@ -139,7 +157,8 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
                 continue
             if suffix.endswith('.npy'):
                 array = np.load(source).astype(np.float64)
-                meta = write_depth(assets / (stem + '_depth.png'), array, clip=window)
+                meta = write_depth(assets / (stem + '_depth.png'), _half(array),
+                                   clip=window)
                 meta['url'] = 'assets/' + stem + '_depth.png'
                 item[key] = meta
             else:
@@ -156,6 +175,9 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
         'analysisID': manifest['analysisID'],
         'tankID': manifest.get('tankID', ''),
         'depthSize': manifest.get('depthSize'),
+        # maps are stored downsampled; anything converting between a map pixel
+        # and a depth pixel needs this
+        'downsample': DOWNSAMPLE,
         'videoSize': manifest.get('videoSize'),
         'nFrames': manifest.get('nFrames'),
         'collected': manifest.get('built'),

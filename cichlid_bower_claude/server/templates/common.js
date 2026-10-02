@@ -147,11 +147,54 @@ function residuals(H, from, to) {
 }
 
 
+// ------------------------------------------------------- per-trial values
+// One registration and one pair of crops normally serve a whole project,
+// because the cameras do not move. A trial only has its own when somebody made
+// it one, and these fall back rather than requiring every trial to be set.
+function overrideFor(trial) {
+  return (PREP.overrides || {})[String(trial)] || {};
+}
+
+function transformFor(trial) {
+  return overrideFor(trial).transform || PREP.transform;
+}
+
+function depthCropFor(trial) {
+  return overrideFor(trial).depth_crop || PREP.depth_crop;
+}
+
+function videoCropFor(trial) {
+  return overrideFor(trial).video_crop || PREP.video_crop;
+}
+
+function isExcluded(trial) {
+  return !!overrideFor(trial).excluded;
+}
+
+// Trials worth analysing. A trial with no building, or with data too poor to
+// use, is excluded rather than silently averaged in.
+function activeTrials() {
+  const seen = [];
+  D.days.forEach(day => {
+    if (seen.indexOf(day.trial) < 0 && !isExcluded(day.trial)) seen.push(day.trial);
+  });
+  return seen.sort((a, b) => a - b);
+}
+
+function daysByTrial(includeExcluded) {
+  const out = {};
+  D.days.forEach(day => {
+    if (!includeExcluded && isExcluded(day.trial)) return;
+    (out[day.trial] = out[day.trial] || []).push(day);
+  });
+  return out;
+}
+
 // ----------------------------------------------------------------- the crop
-function cropMaskFor(meta) {
+function cropMaskFor(meta, trial) {
   // the crop is in full-resolution depth coordinates; a map may be smaller
-  if (!PREP.depth_crop || PREP.depth_crop.length < 3) return null;
-  const points = PREP.depth_crop;
+  const points = trial === undefined ? PREP.depth_crop : depthCropFor(trial);
+  if (!points || points.length < 3) return null;
   const sx = D.depthSize[0] / meta.width, sy = D.depthSize[1] / meta.height;
   const mask = new Uint8Array(meta.width * meta.height);
   for (let y = 0; y < meta.height; y++) {

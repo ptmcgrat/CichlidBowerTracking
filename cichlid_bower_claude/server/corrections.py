@@ -48,6 +48,23 @@ class TrialTimes:
 
 
 @dataclass
+class TrialOverride:
+    """What one trial does differently from the rest.
+
+    Cameras are bolted in place, so one registration and one pair of crops
+    should serve a whole project — and when they do, there is nothing here.
+    This exists for the project where a camera was knocked, or where one trial
+    is not worth analysing.
+    """
+
+    transform: Optional[List[List[float]]] = None
+    depth_crop: Optional[List[List[int]]] = None
+    video_crop: Optional[List[List[int]]] = None
+    excluded: bool = False
+    reason: str = ''
+
+
+@dataclass
 class Prep:
     """Everything a person decides about a project before it is analysed."""
 
@@ -58,6 +75,7 @@ class Prep:
     depth_crop: Optional[List[List[int]]] = None       # four points, depth coordinates
     video_crop: Optional[List[List[int]]] = None       # four points, Pi coordinates
     trials: Dict[str, TrialTimes] = field(default_factory=dict)
+    overrides: Dict[str, TrialOverride] = field(default_factory=dict)
     residual_k: float = DEFAULT_K
     points: List[dict] = field(default_factory=list)   # the pairs the fit came from
     fit_rms_px: Optional[float] = None
@@ -78,6 +96,28 @@ class Prep:
         """Whether the depth tab should open for this project."""
         return self.is_registered and self.is_cropped
 
+    def override(self, trial_number: int) -> TrialOverride:
+        return self.overrides.get(str(trial_number)) or TrialOverride()
+
+    def transform_for(self, trial_number: int):
+        """This trial's registration, or the project's if it has none."""
+        return self.override(trial_number).transform or self.transform
+
+    def depth_crop_for(self, trial_number: int):
+        return self.override(trial_number).depth_crop or self.depth_crop
+
+    def video_crop_for(self, trial_number: int):
+        return self.override(trial_number).video_crop or self.video_crop
+
+    def is_excluded(self, trial_number: int) -> bool:
+        """Whether this trial should be left out of the analysis.
+
+        A trial with no building, or with data too poor to use, is better
+        marked than silently carried: every figure that averages over trials
+        would otherwise be quietly wrong.
+        """
+        return self.override(trial_number).excluded
+
     def times_for(self, trial_number: int) -> TrialTimes:
         """One trial's offsets, falling back to trial 1's.
 
@@ -92,6 +132,8 @@ class Prep:
         data = asdict(self)
         data['trials'] = {k: asdict(v) if not isinstance(v, dict) else v
                           for k, v in self.trials.items()}
+        data['overrides'] = {k: asdict(v) if not isinstance(v, dict) else v
+                             for k, v in self.overrides.items()}
         return data
 
     @classmethod
@@ -99,9 +141,18 @@ class Prep:
         trials = {}
         for key, value in (data.get('trials') or {}).items():
             trials[str(key)] = TrialTimes(**value) if isinstance(value, dict) else value
+        overrides = {}
+        for key, value in (data.get('overrides') or {}).items():
+            if not isinstance(value, dict):
+                continue
+            allowed = {f for f in TrialOverride.__dataclass_fields__}
+            overrides[str(key)] = TrialOverride(
+                **{k: v for k, v in value.items() if k in allowed})
         known = {f for f in cls.__dataclass_fields__}
-        kept = {k: v for k, v in data.items() if k in known and k != 'trials'}
+        kept = {k: v for k, v in data.items()
+                if k in known and k not in ('trials', 'overrides')}
         kept['trials'] = trials
+        kept['overrides'] = overrides
         return cls(**kept)
 
 

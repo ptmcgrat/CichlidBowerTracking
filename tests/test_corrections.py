@@ -81,3 +81,46 @@ def test_nothing_is_written_outside_corrections(paths):
     C.save(paths, prep)
     written = {p.relative_to(paths.root).parts[0] for p in paths.root.rglob('*') if p.is_file()}
     assert written == {'Corrections'}
+
+
+def test_a_trial_falls_back_to_the_project_registration(paths):
+    """One registration should serve a project; an override is the exception."""
+    prep = C.load(paths)
+    prep.transform = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    prep.depth_crop = [[0, 0], [10, 0], [10, 10], [0, 10]]
+    C.save(paths, prep, who='pm')
+    back = C.load(paths)
+    assert back.transform_for(1) == back.transform
+    assert back.transform_for(3) == back.transform
+
+
+def test_a_trial_can_override_the_registration_and_crops(paths):
+    prep = C.load(paths)
+    prep.transform = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    prep.depth_crop = [[0, 0], [10, 0], [10, 10], [0, 10]]
+    prep.overrides['2'] = C.TrialOverride(
+        transform=[[2, 0, 0], [0, 2, 0], [0, 0, 1]],
+        depth_crop=[[5, 5], [20, 5], [20, 20], [5, 20]])
+    C.save(paths, prep, who='pm')
+    back = C.load(paths)
+    assert back.transform_for(1)[0][0] == 1
+    assert back.transform_for(2)[0][0] == 2
+    assert back.depth_crop_for(2)[0] == [5, 5]
+    assert back.depth_crop_for(3) == back.depth_crop
+
+
+def test_a_trial_can_be_excluded(paths):
+    prep = C.load(paths)
+    prep.overrides['3'] = C.TrialOverride(excluded=True, reason='no building')
+    C.save(paths, prep, who='pm')
+    back = C.load(paths)
+    assert back.is_excluded(3)
+    assert not back.is_excluded(1)
+    assert back.override(3).reason == 'no building'
+
+
+def test_unknown_keys_in_an_override_are_ignored(paths):
+    paths.corrections_dir.mkdir(parents=True, exist_ok=True)
+    paths.prep_json.write_text(json.dumps(
+        {'schema': C.SCHEMA, 'overrides': {'2': {'excluded': True, 'nonsense': 1}}}))
+    assert C.load(paths).is_excluded(2)
