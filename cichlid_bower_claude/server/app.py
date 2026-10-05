@@ -85,11 +85,16 @@ def index():
             ready = prep.is_complete
             updated = prep.updated
         except C.CorrectionsError:
-            ready, updated = False, 'unreadable'
+            prep, ready, updated = C.Prep(), False, 'unreadable'
         rows.append({'projectID': project_id,
                      'category': states.category(project_id),
                      'tank': states.tank(project_id),
-                     'collected': collected, 'prepped': ready, 'updated': updated})
+                     'collected': collected, 'prepped': ready, 'updated': updated,
+                     'registered': prep.is_registered if collected else False,
+                     'cropped': prep.is_cropped if collected else False,
+                     'who': prep.who, 'excluded': len(
+                         [k for k, v in (prep.overrides or {}).items()
+                          if getattr(v, 'excluded', False)])})
     return _render_index(rows)
 
 
@@ -222,20 +227,30 @@ def _render_prep(project_id: str) -> str:
     return _template('prep.html').replace('__TITLE__', project_id + ' \u00b7 Prep')
 
 
+def _tick(done: bool) -> str:
+    return ('<span style="color:var(--ok)">yes</span>' if done
+            else '<span style="color:#6c7684">no</span>')
+
+
 def _render_index(rows) -> str:
     body = []
     for row in rows:
-        marks = []
-        marks.append('collected' if row['collected'] else 'not collected')
-        if row['prepped']:
-            marks.append('prepped')
+        note = row['updated'][:16] if row['updated'] else ''
+        if row['who']:
+            note += ' \u00b7 ' + row['who'].split('@')[0]
+        if row['excluded']:
+            note += ' \u00b7 %d trial(s) excluded' % row['excluded']
         body.append(
-            '<tr><td><a href="/%s/">%s</a></td><td>%s</td><td>%s</td><td>%s</td></tr>'
+            '<tr><td><a href="/%s/">%s</a></td><td>%s</td><td>%s</td>'
+            '<td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
             % (row['projectID'], row['projectID'], row['category'] or '-',
-               row['tank'] or '-', ', '.join(marks)))
+               row['tank'] or '-', _tick(row['collected']),
+               _tick(row['registered']), _tick(row['cropped']), note or '-'))
+    done = sum(1 for row in rows if row['prepped'])
     return _template('index.html') \
         .replace('__ANALYSIS__', STATE['analysis_id']) \
         .replace('__ROWS__', '\n'.join(body)) \
+        .replace('__DONE__', str(done)) \
         .replace('__COUNT__', str(len(rows)))
 
 

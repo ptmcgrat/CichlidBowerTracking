@@ -455,9 +455,13 @@ function setOverride(on) {
   PREP.overrides = PREP.overrides || {};
   const key = String(currentTrial());
   if (on) {
+    // deep copies: Object.assign shares the point arrays, so the override and
+    // the project would be the same object and editing either would edit both.
+    // That is why a trial's crop never looked any different from the project's.
+    const clone = value => value ? JSON.parse(JSON.stringify(value)) : value;
     PREP.overrides[key] = Object.assign({
-      transform: PREP.transform, depth_crop: PREP.depth_crop,
-      video_crop: PREP.video_crop, excluded: false, reason: '' },
+      transform: clone(PREP.transform), depth_crop: clone(PREP.depth_crop),
+      video_crop: clone(PREP.video_crop), excluded: false, reason: '' },
       PREP.overrides[key] || {});
   } else if (PREP.overrides[key]) {
     const excluded = PREP.overrides[key].excluded;
@@ -571,7 +575,7 @@ function viewCrops() {
 // The crop drawn on the trial's own total change, so what it excludes can be
 // judged against the data rather than against a photograph. Change running up
 // to the boundary means the crop is clipping part of the bower.
-let CROP_CHANGE = null;     // {values, meta, canvas, caption} once loaded
+let CROP_CHANGE = null;     // {values, meta, canvas, caption, trial} once loaded
 
 function drawCropChange(slot, trial) {
   slot.textContent = '';
@@ -602,7 +606,7 @@ function drawCropChange(slot, trial) {
     const caption = el('figcaption');
     fig.appendChild(caption);
     grid.appendChild(fig);
-    CROP_CHANGE = { values: total, meta, canvas, caption };
+    CROP_CHANGE = { values: total, meta, canvas, caption, trial };
     repaintCropChange();
   });
 }
@@ -613,8 +617,10 @@ function drawCropChange(slot, trial) {
 // second.
 function repaintCropChange() {
   if (!CROP_CHANGE) return;
-  const { values, meta, canvas, caption } = CROP_CHANGE;
-  const outside = cropMaskFor(meta);
+  const { values, meta, canvas, caption, trial } = CROP_CHANGE;
+  // with the trial, so an override is what gets drawn rather than the
+  // project default it was edited away from
+  const outside = cropMaskFor(meta, trial);
   let valid = 0, cut = 0;
   for (let i = 0; i < values.length; i++) {
     if (Number.isNaN(values[i])) continue;
@@ -623,6 +629,7 @@ function repaintCropChange() {
   }
   paintMap(canvas, values, meta, { range: 2, mark: outside });
   caption.innerHTML = '<b>What the depth crop excludes</b> \u2014 ' +
+    (editingOverride() ? 'this trial\u2019s own crop \u00b7 ' : '') +
     (outside ? 'magenta, ' + cut + ' pixels, ' +
                (100 * cut / Math.max(1, valid)).toFixed(1) + '% of the frame. Change ' +
                'running up to the boundary means the crop is clipping the bower.'
@@ -748,7 +755,7 @@ function viewQuality() {
       if (!score) return;
       const meta = D.residualScore;
       const result = scoreMask(score, PREP.residual_k);
-      const crop = cropMaskFor(meta);
+      const crop = cropMaskFor(meta, currentTrial());
       body.textContent = '';
 
       const byTrial = {};

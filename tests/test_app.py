@@ -196,3 +196,30 @@ def test_the_summary_page_is_served(client):
     http, _ = client
     assert http.get('/' + PROJECT + '/summary').status_code == 200
     assert http.get('/' + PROJECT + '/summary.js').status_code == 200
+
+
+def test_the_landing_page_reflects_a_saved_registration(client):
+    """It is read fresh on every request, so a save shows up on reload."""
+    http, _ = client
+    before = http.get('/').get_data(as_text=True)
+    assert before.count('>no<') >= 2          # not registered, not cropped
+    http.post('/' + PROJECT + '/save',
+              json={'who': 'Emily Keaton',
+                    'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                    'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]],
+                    'video_crop': [[5, 5], [30, 5], [30, 25], [5, 25]]})
+    after = http.get('/').get_data(as_text=True)
+    assert 'Emily' in after
+    assert after.count('>yes<') > before.count('>yes<')
+
+
+def test_every_page_links_to_the_other_three(client):
+    http, _ = client
+    pages = ['prep', 'depth', 'clusters', 'summary']
+    for page in pages:
+        text = http.get('/' + PROJECT + '/' + page).get_data(as_text=True)
+        for other in pages:
+            if other == page:
+                assert 'href="%s"' % other not in text, page + ' links to itself'
+            else:
+                assert 'href="%s"' % other in text, page + ' is missing ' + other

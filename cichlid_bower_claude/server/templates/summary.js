@@ -13,7 +13,8 @@
 let EVENTS = null;
 let CONFIDENCE = 0.67;
 let HOUR_FROM = 8, HOUR_TO = 18;
-let COVERAGE = 0.9;      // the share of events an ellipse should contain
+let COVERAGE = 0.68;     // the share of events an ellipse should contain
+let SPREAD = 30;         // depth pixels each scoop or spit is spread over
 let SCALE = null;        // cm of depth per net event, fitted per trial
 
 const ROWS = [
@@ -22,6 +23,7 @@ const ROWS = [
   ['From events', 'cumulative, spits minus scoops', 'fromEvents'],
   ['Building', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
   ['Spawning', 'that day', 'spawn'],
+  ['Spread', 'cumulative \u00b7 ellipse holding the chosen share', 'spread'],
 ];
 
 const COLOURS = { scoop: [242, 163, 60], spit: [111, 178, 232],
@@ -123,6 +125,28 @@ function eventsOf(trial, codes, cut, upToDay) {
 }
 
 // ------------------------------------------------------------------- panels
+// The ellipse the table measures, drawn where it belongs. A number in a table
+// says how spread out the events are; the outline says where, and whether the
+// two behaviours sit in different places.
+function drawEllipse(ctx, shape, colour, sx, sy) {
+  if (!shape) return;
+  ctx.save();
+  ctx.translate(shape.cx * sx, shape.cy * sy);
+  ctx.rotate(shape.angle);
+  ctx.strokeStyle = 'rgb(' + colour.join(',') + ')';
+  ctx.lineWidth = 1.2;
+  ctx.globalAlpha = 0.95;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, shape.major * sx, shape.minor * sy, 0, 0, 6.2832);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 2, 0, 6.2832);
+  ctx.fillStyle = 'rgb(' + colour.join(',') + ')';
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
 function scatterPanel(groups, meta, foot) {
   const box = el('div');
   const stage = el('div', 'stage');
@@ -144,6 +168,10 @@ function scatterPanel(groups, meta, foot) {
     });
   });
   ctx.globalAlpha = 1;
+  groups.forEach(group => {
+    if (group.ellipse === false) return;
+    drawEllipse(ctx, dispersion(group.points, COVERAGE), group.colour, sx, sy);
+  });
   if (foot) box.appendChild(el('div', 'cellfoot', foot));
   return box;
 }
@@ -165,27 +193,43 @@ function eventDepthMap(trial, upToDay, meta, cut) {
     if (x < 0 || y < 0 || x >= meta.width || y >= meta.height) continue;
     values[y * meta.width + x] += code === spit ? 1 : -1;
   }
-  return blur(values, meta.width, meta.height, 3);
+  // the spread is given in depth pixels, and the maps are downsampled
+  const radius = Math.max(1, Math.round(SPREAD / 2 / (D.downsample || 1)));
+  return blur(values, meta.width, meta.height, radius);
 }
 
+// A box blur done as two one-dimensional passes with a running sum, so the
+// cost does not depend on the radius. The naive version was O(radius squared)
+// per pixel, which at a thirty-pixel spread would be seventy million
+// operations for one map.
 function blur(values, width, height, radius) {
-  // events land on single pixels; without smoothing the map is dust rather
-  // than a surface, and nothing can be compared with the sensor
+  if (radius < 1) return values;
+  const pass = new Float32Array(values.length);
   const out = new Float32Array(values.length);
+  const span = 2 * radius + 1;
+
   for (let y = 0; y < height; y++) {
+    const row = y * width;
+    let sum = 0;
+    for (let x = -radius; x <= radius; x++)
+      sum += values[row + Math.min(width - 1, Math.max(0, x))];
     for (let x = 0; x < width; x++) {
-      let sum = 0, count = 0;
-      for (let dy = -radius; dy <= radius; dy++) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        for (let dx = -radius; dx <= radius; dx++) {
-          const nx = x + dx;
-          if (nx < 0 || nx >= width) continue;
-          sum += values[ny * width + nx];
-          count++;
-        }
-      }
-      out[y * width + x] = count ? sum / count : 0;
+      pass[row + x] = sum / span;
+      const leaving = row + Math.min(width - 1, Math.max(0, x - radius));
+      const entering = row + Math.min(width - 1, Math.max(0, x + radius + 1));
+      sum += values[entering] - values[leaving];
+    }
+  }
+
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    for (let y = -radius; y <= radius; y++)
+      sum += pass[Math.min(height - 1, Math.max(0, y)) * width + x];
+    for (let y = 0; y < height; y++) {
+      out[y * width + x] = sum / span;
+      const leaving = Math.min(height - 1, Math.max(0, y - radius)) * width + x;
+      const entering = Math.min(height - 1, Math.max(0, y + radius + 1)) * width + x;
+      sum += pass[entering] - pass[leaving];
     }
   }
   return out;
@@ -277,7 +321,8 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
         slot.appendChild(stage);
         paintMap(canvas, scaled, meta, { range: 4 });
         slot.appendChild(el('div', 'cellfoot',
-          scale ? scale.toFixed(3) + ' cm per net event' : 'no fit'));
+          scale ? scale.toFixed(3) + ' cm per net event, ' + SPREAD + ' px spread'
+                : 'no fit'));
       });
     return;
   }
@@ -299,6 +344,22 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
     const points = eventsOfDay(trial, new Set([EVENTS.code.s]), cut, day.index);
     slot.appendChild(scatterPanel([{ colour: COLOURS.spawn, points }], meta,
       String(points.length)));
+    return;
+  }
+
+  if (key === 'spread') {
+    // everything up to this day, so the ellipses settle as evidence builds
+    const scoops = eventsOf(trial, new Set([EVENTS.code.c]), cut, day.index);
+    const spits = eventsOf(trial, new Set([EVENTS.code.p]), cut, day.index);
+    const cm = D.pixelLength || 0.1030168618;
+    const a = dispersion(scoops, COVERAGE), b = dispersion(spits, COVERAGE);
+    const foot = (a && b)
+      ? (a.area * cm * cm).toFixed(0) + ' / ' + (b.area * cm * cm).toFixed(0) +
+        ' cm\u00b2'
+      : 'too few';
+    slot.appendChild(scatterPanel(
+      [{ colour: COLOURS.scoop, points: scoops },
+       { colour: COLOURS.spit, points: spits }], meta, foot));
   }
 }
 
@@ -465,10 +526,12 @@ function build() {
     '<label>Hours <b id="hv">' + HOUR_FROM + '\u2013' + HOUR_TO + '</b></label>' +
     '<input type="range" id="h1" min="0" max="24" step="1" value="' + HOUR_FROM + '">' +
     '<input type="range" id="h2" min="0" max="24" step="1" value="' + HOUR_TO + '">' +
-    '<label>Ellipse covers <b id="ev">' + (100 * COVERAGE).toFixed(0) +
+    '<label>Ellipse covers <b id="ev">' + Math.round(100 * COVERAGE) +
     '</b>%</label>' +
-    '<input type="range" id="er" min="50" max="99" step="5" value="' +
-      (100 * COVERAGE) + '">';
+    '<input type="range" id="er" min="50" max="99" step="1" value="' +
+      Math.round(100 * COVERAGE) + '">' +
+    '<label>Event spread <b id="sv">' + SPREAD + '</b> px</label>' +
+    '<input type="range" id="sr" min="5" max="80" step="5" value="' + SPREAD + '">';
 
   let pending = null;
   const later = () => {
@@ -491,6 +554,16 @@ function build() {
   bar.querySelector('#h2').addEventListener('input', event => {
     HOUR_TO = Math.max(parseInt(event.target.value, 10), HOUR_FROM + 1);
     hours();
+  });
+  bar.querySelector('#sr').addEventListener('input', event => {
+    SPREAD = parseInt(event.target.value, 10);
+    bar.querySelector('#sv').textContent = SPREAD;
+    later();
+  });
+  bar.querySelector('#sr').addEventListener('input', event => {
+    SPREAD = parseInt(event.target.value, 10);
+    bar.querySelector('#sv').textContent = SPREAD;
+    later();
   });
   bar.querySelector('#er').addEventListener('input', event => {
     COVERAGE = parseInt(event.target.value, 10) / 100;
