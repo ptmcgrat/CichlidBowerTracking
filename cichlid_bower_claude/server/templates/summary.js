@@ -21,6 +21,7 @@ const ROWS = [
   ['Depth camera', 'the tray that day', 'still'],
   ['Depth change', 'cumulative, from the sensor', 'depth'],
   ['From events', 'cumulative, spits minus scoops', 'fromEvents'],
+  ['24 hour change', 'this morning to the next', 'daily'],
   ['Building', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
   ['Spawning', 'that day', 'spawn'],
   ['Spread', 'cumulative \u00b7 ellipse holding the chosen share', 'spread'],
@@ -122,6 +123,18 @@ function eventsOf(trial, codes, cut, upToDay) {
     points.push([EVENTS.dx[i], EVENTS.dy[i]]);
   }
   return points;
+}
+
+// Outside the tray crop is not data: the sensor sees tank walls and floor
+// there, and leaving it in makes every map's colour scale answer to something
+// that is not sand.
+function cropped(values, meta, trial) {
+  const outside = cropMaskFor(meta, trial);
+  if (!outside) return values;
+  const out = new Float32Array(values.length);
+  for (let i = 0; i < values.length; i++)
+    out[i] = outside[i] ? NaN : values[i];
+  return out;
 }
 
 // ------------------------------------------------------------------- panels
@@ -279,14 +292,20 @@ function renderTrial(trial, days, host) {
 
 function fillCell(slot, key, trial, day, days, meta, cut) {
   if (key === 'still') {
-    if (day.firstJpg) {
+    // the depth camera's own JPEG, which comes out of the frame archive. A few
+    // frames are written without one, so fall back to that day's video still
+    // rather than leaving a hole, and say which is being shown.
+    const source = day.firstJpg || day.videoJpg;
+    if (source) {
       const stage = el('div', 'stage');
       const image = el('img');
-      image.src = day.firstJpg;
+      image.src = source;
       stage.appendChild(image);
       slot.appendChild(stage);
+      if (!day.firstJpg)
+        slot.appendChild(el('div', 'cellfoot', 'video still \u2014 no depth JPEG'));
     } else {
-      slot.appendChild(el('div', 'cellnote', 'no still'));
+      slot.appendChild(el('div', 'cellnote', 'no still in the archive'));
     }
     return;
   }
@@ -295,12 +314,34 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
     Promise.all([loadDepth(days[0].firstPng), loadDepth(day.lastPng)])
       .then(([first, last]) => {
         if (!first || !last) return;
-        const total = difference(first, last);
         const canvas = el('canvas');
         const stage = el('div', 'stage');
         stage.appendChild(canvas);
         slot.appendChild(stage);
-        paintMap(canvas, total, meta, { range: 4 });
+        paintMap(canvas, cropped(difference(first, last), meta, trial), meta,
+                 { range: 4 });
+      });
+    return;
+  }
+
+  if (key === 'daily') {
+    // this day's own morning against the next, which is the change the depth
+    // page calls 24 hour: it isolates one day from the accumulated total
+    const position = days.findIndex(d => d.index === day.index);
+    const next = days[position + 1];
+    if (!next) {
+      slot.appendChild(el('div', 'cellnote', 'no following day in this trial'));
+      return;
+    }
+    Promise.all([loadDepth(day.firstPng), loadDepth(next.firstPng)])
+      .then(([morning, nextMorning]) => {
+        if (!morning || !nextMorning) return;
+        const canvas = el('canvas');
+        const stage = el('div', 'stage');
+        stage.appendChild(canvas);
+        slot.appendChild(stage);
+        paintMap(canvas, cropped(difference(morning, nextMorning), meta, trial),
+                 meta, { range: 2 });
       });
     return;
   }
@@ -309,17 +350,18 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
     Promise.all([loadDepth(days[0].firstPng), loadDepth(day.lastPng)])
       .then(([first, last]) => {
         if (!first || !last) return;
-        const total = difference(first, last);
+        const total = cropped(difference(first, last), meta, trial);
         const events = eventDepthMap(trial, day.index, meta, cut);
         const scale = fitScale(total, events);
         SCALE = scale;
         const scaled = new Float32Array(events.length);
         for (let i = 0; i < events.length; i++) scaled[i] = events[i] * scale;
+        const shown = cropped(scaled, meta, trial);
         const canvas = el('canvas');
         const stage = el('div', 'stage');
         stage.appendChild(canvas);
         slot.appendChild(stage);
-        paintMap(canvas, scaled, meta, { range: 4 });
+        paintMap(canvas, shown, meta, { range: 4 });
         slot.appendChild(el('div', 'cellfoot',
           scale ? scale.toFixed(3) + ' cm per net event, ' + SPREAD + ' px spread'
                 : 'no fit'));
@@ -333,7 +375,9 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
         points: eventsOfDay(trial, new Set([EVENTS.code.c]), cut, day.index) },
       { colour: COLOURS.spit,
         points: eventsOfDay(trial, new Set([EVENTS.code.p]), cut, day.index) },
-      { colour: COLOURS.multiple,
+      // multiples are scoop and spit in one pass, so an ellipse over them
+      // describes neither behaviour
+      { colour: COLOURS.multiple, ellipse: false,
         points: eventsOfDay(trial, new Set([EVENTS.code.b]), cut, day.index) }];
     slot.appendChild(scatterPanel(groups, meta,
       groups.map(g => g.points.length).join(' / ')));
@@ -358,8 +402,8 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
         ' cm\u00b2'
       : 'too few';
     slot.appendChild(scatterPanel(
-      [{ colour: COLOURS.scoop, points: scoops },
-       { colour: COLOURS.spit, points: spits }], meta, foot));
+      [{ colour: COLOURS.scoop, points: scoops, ellipse: false },
+       { colour: COLOURS.spit, points: spits, ellipse: false }], meta, foot));
   }
 }
 
@@ -381,24 +425,63 @@ function eventsOfDay(trial, codes, cut, dayIndex) {
 function spawnHistogram(trial, days, meta, cut) {
   const figure = el('figure');
   figure.appendChild(el('figcaption', null, '<b>Depth under each spawn</b>'));
-  Promise.all([loadDepth(days[0].firstPng),
-               loadDepth(days[days.length - 1].lastPng)]).then(([first, last]) => {
-    if (!first || !last) return;
-    const total = difference(first, last);
-    const sx = meta.width / D.depthSize[0], sy = meta.height / D.depthSize[1];
+
+  // Spawns are gathered first so the ellipse can be fitted over all of them,
+  // then each is read against the cumulative change up to its OWN day. Using
+  // the whole trial's total would ask what the sand looked like at the end,
+  // not what the fish was spawning over at the time.
+  const spawns = [];
+  for (let i = 0; i < EVENTS.n; i++) {
+    if (EVENTS.trial[i] !== trial || !keep(i, cut)) continue;
+    if (EVENTS.bid[i] !== EVENTS.code.s) continue;
+    spawns.push({ x: EVENTS.dx[i], y: EVENTS.dy[i], day: EVENTS.day[i] });
+  }
+  if (spawns.length < 5) {
+    figure.appendChild(el('figcaption', null, 'too few spawns to plot'));
+    return figure;
+  }
+
+  // Only the spawns inside the ellipse. A spawn across the tank is a different
+  // event from one on the bower, and including it moves the distribution
+  // toward zero for a reason that has nothing to do with bower shape.
+  const shape = dispersion(spawns.map(s => [s.x, s.y]), COVERAGE);
+  const inside = shape ? spawns.filter(spawn => {
+    const dx = spawn.x - shape.cx, dy = spawn.y - shape.cy;
+    const cos = Math.cos(-shape.angle), sin = Math.sin(-shape.angle);
+    const u = (dx * cos - dy * sin) / shape.major;
+    const v = (dx * sin + dy * cos) / shape.minor;
+    return u * u + v * v <= 1;
+  }) : spawns;
+
+  const byDay = {};
+  inside.forEach(spawn => { (byDay[spawn.day] = byDay[spawn.day] || []).push(spawn); });
+  const sx = meta.width / D.depthSize[0], sy = meta.height / D.depthSize[1];
+
+  const wanted = Object.keys(byDay)
+    .map(index => days.find(day => day.index === +index))
+    .filter(Boolean);
+
+  Promise.all([loadDepth(days[0].firstPng)].concat(
+      wanted.map(day => loadDepth(day.lastPng)))).then(results => {
+    const start = results[0];
+    if (!start) return;
     const values = [];
-    for (let i = 0; i < EVENTS.n; i++) {
-      if (EVENTS.trial[i] !== trial || !keep(i, cut)) continue;
-      if (EVENTS.bid[i] !== EVENTS.code.s) continue;
-      const x = Math.round(EVENTS.dx[i] * sx), y = Math.round(EVENTS.dy[i] * sy);
-      if (x < 0 || y < 0 || x >= meta.width || y >= meta.height) continue;
-      const depth = total[y * meta.width + x];
-      if (!Number.isNaN(depth)) values.push(depth);
-    }
+    wanted.forEach((day, position) => {
+      const end = results[position + 1];
+      if (!end) return;
+      const cumulative = cropped(difference(start, end), meta, trial);
+      byDay[day.index].forEach(spawn => {
+        const x = Math.round(spawn.x * sx), y = Math.round(spawn.y * sy);
+        if (x < 0 || y < 0 || x >= meta.width || y >= meta.height) return;
+        const depth = cumulative[y * meta.width + x];
+        if (!Number.isNaN(depth)) values.push(depth);
+      });
+    });
     if (values.length < 5) {
-      figure.appendChild(el('figcaption', null, 'too few spawns to plot'));
+      figure.appendChild(el('figcaption', null, 'too few spawns on measurable sand'));
       return;
     }
+
     const bins = 24, span = 4;
     const counts = new Float32Array(bins);
     values.forEach(value => {
@@ -434,9 +517,12 @@ function spawnHistogram(trial, days, meta, cut) {
                        '" style="width:100%;display:block">' + body + '</svg>';
     figure.insertBefore(holder, figure.firstChild);
     figure.appendChild(el('figcaption', null,
-      values.length + ' spawns \u00b7 median depth ' + median.toFixed(2) + ' cm \u00b7 ' +
+      values.length + ' of ' + spawns.length + ' spawns, those inside the ' +
+      Math.round(100 * COVERAGE) + '% ellipse \u00b7 median ' +
+      median.toFixed(2) + ' cm \u00b7 ' +
       (100 * values.filter(v => v > 0).length / values.length).toFixed(0) +
-      '% over sand that was added'));
+      '% over sand that had been added by that day. Each spawn is read against ' +
+      'the change accumulated up to its own day, not the trial total.'));
   });
   return figure;
 }
