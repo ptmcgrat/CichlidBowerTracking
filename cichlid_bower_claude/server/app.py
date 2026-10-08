@@ -66,10 +66,15 @@ def viewer(claimed: str = '') -> str:
 
 @app.after_request
 def no_cache(response):
-    # pages are rebuilt in place; a cached copy is a wrong copy. Assets are
-    # content-addressed by rebuild, so they may be cached.
-    if response.content_type and ('html' in response.content_type
-                                  or 'json' in response.content_type):
+    """Pages, payloads and page scripts are rebuilt in place.
+
+    The scripts were missing from this list, so a browser kept running the
+    previous version of a page's JavaScript after an update — which looks
+    exactly like the update not working. Only the generated images may be
+    cached, and those are rewritten wholesale when a project is rebuilt.
+    """
+    kind = response.content_type or ''
+    if ('html' in kind or 'json' in kind or 'javascript' in kind):
         response.headers['Cache-Control'] = 'no-store, must-revalidate'
     return response
 

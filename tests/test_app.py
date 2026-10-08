@@ -326,3 +326,23 @@ def test_the_analysis_page_does_not_shadow_a_project_page(client):
     http, _ = client
     assert 'analysis.js' in http.get('/features').get_data(as_text=True)
     assert 'features.js' in http.get('/' + PROJECT + '/features').get_data(as_text=True)
+
+
+def test_page_scripts_are_never_cached(client):
+    """A cached script means a browser keeps running the previous version of a
+    page after an update, which looks exactly like the update not working."""
+    http, _ = client
+    for name in ('common.js', 'summary.js', 'features.js'):
+        response = http.get('/' + PROJECT + '/' + name)
+        assert response.status_code == 200
+        assert 'no-store' in response.headers.get('Cache-Control', '')
+    assert 'no-store' in http.get('/analysis.js').headers.get('Cache-Control', '')
+
+
+def test_a_page_that_fails_to_start_says_so(client):
+    """A script error renders nothing; without this the page is blank and the
+    reason is only in the console."""
+    http, _ = client
+    for page in ('prep', 'depth', 'clusters', 'summary', 'features'):
+        text = http.get('/' + PROJECT + '/' + page).get_data(as_text=True)
+        assert 'could not start' in text, page
