@@ -15,6 +15,51 @@ let CONFIDENCE = 0.67;
 let HOUR_FROM = 8, HOUR_TO = 18;
 let COVERAGE = 0.68;     // the share of events an ellipse should contain
 let SPREAD = 30;         // depth pixels each scoop or spit is spread over
+let DIRTY = false;       // day marks waiting to be saved
+
+function markOf(dayIndex) {
+  return (PREP.day_marks || {})[String(dayIndex)] || {};
+}
+
+function setMark(dayIndex, which, on) {
+  PREP.day_marks = PREP.day_marks || {};
+  const key = String(dayIndex);
+  const entry = PREP.day_marks[key] || {};
+  entry[which] = on;
+  if (!entry.new_bower && !entry.wall_building && !entry.note)
+    delete PREP.day_marks[key];
+  else PREP.day_marks[key] = entry;
+  DIRTY = true;
+  const save = document.getElementById('save');
+  if (save) save.disabled = false;
+  const state = document.getElementById('state');
+  if (state) state.textContent = 'unsaved marks';
+}
+
+// Two things a person can see and the analysis cannot: a bower restarted
+// somewhere else, which makes the cumulative map two overlapping structures,
+// and building against a wall, which is real sand movement the cluster
+// detector misses because the fish is half out of frame.
+function dayMarkControls(day) {
+  const wrap = el('div');
+  [['new_bower', 'new bower'], ['wall_building', 'wall building']]
+    .forEach(([which, label]) => {
+      const on = !!markOf(day.index)[which];
+      const box = el('label', 'daymark' + (on ? ' set' : ''));
+      const input = el('input');
+      input.type = 'checkbox';
+      input.checked = on;
+      input.addEventListener('change', event => {
+        setMark(day.index, which, event.target.checked);
+        box.className = 'daymark' + (event.target.checked ? ' set' : '');
+      });
+      box.appendChild(input);
+      box.appendChild(el('span', null, label));
+      wrap.appendChild(box);
+      wrap.appendChild(el('br'));
+    });
+  return wrap;
+}
 let SCALE = null;        // cm of depth per net event, fitted per trial
 
 const ROWS = [
@@ -65,24 +110,34 @@ function loadEvents() {
 function projectToDepth() {
   EVENTS.dx = new Float32Array(EVENTS.n);
   EVENTS.dy = new Float32Array(EVENTS.n);
-  // each event through its own trial's registration, which matters only on a
-  // project where a camera moved mid-way
+  // Which events have real coordinates. An event whose trial has no
+  // registration used to keep dx = dy = 0 and be drawn at the top-left corner
+  // while still being counted, so a trial with no transform looked like a
+  // trial with no events — except that the counts said otherwise.
+  EVENTS.placed = new Uint8Array(EVENTS.n);
+  EVENTS.unplacedTrials = {};
   if (!PREP.transform && !Object.keys(PREP.overrides || {}).length) {
     EVENTS.projected = false;
     return;
   }
   for (let i = 0; i < EVENTS.n; i++) {
-    const H = transformFor(EVENTS.trial[i]);
-    if (!H) continue;
+    const trial = EVENTS.trial[i];
+    const H = transformFor(trial);
+    if (!H) {
+      EVENTS.unplacedTrials[trial] = (EVENTS.unplacedTrials[trial] || 0) + 1;
+      continue;
+    }
     const point = applyH(H, [EVENTS.x[i], EVENTS.y[i]]);
     EVENTS.dx[i] = point[0];
     EVENTS.dy[i] = point[1];
+    EVENTS.placed[i] = 1;
   }
   EVENTS.projected = true;
 }
 
 function keep(index, cut) {
-  return (EVENTS.flags[index] & 1) && (EVENTS.flags[index] & 2) &&
+  return EVENTS.placed[index] &&
+         (EVENTS.flags[index] & 1) && (EVENTS.flags[index] & 2) &&
          EVENTS.bid[index] !== 255 && EVENTS.prob[index] >= cut &&
          EVENTS.hour[index] >= HOUR_FROM && EVENTS.hour[index] < HOUR_TO;
 }
@@ -273,8 +328,12 @@ function renderTrial(trial, days, host) {
     host.appendChild(table);
 
     table.appendChild(el('div', 'blank'));
-    block.forEach(day => table.appendChild(el('div', 'colhead',
-      '<b>' + day.date.slice(5) + '</b><span>day ' + (day.index + 1) + '</span>')));
+    block.forEach(day => {
+      const head = el('div', 'colhead',
+        '<b>' + day.date.slice(5) + '</b><span>day ' + (day.index + 1) + '</span>');
+      head.appendChild(dayMarkControls(day));
+      table.appendChild(head);
+    });
     for (let i = 0; i < pad; i++) table.appendChild(el('div', 'blank'));
 
     ROWS.forEach(([name, hint, key]) => {
@@ -576,13 +635,32 @@ function draw() {
       'cluster events cannot be put into depth coordinates. Set one on the prep page.'));
     return;
   }
+  // a trial whose events could not be placed says so, instead of drawing an
+  // empty panel beside a count of events that are really there
+  const unplaced = Object.keys(EVENTS.unplacedTrials || {});
+  if (unplaced.length) {
+    body.appendChild(el('div', 'note',
+      'Trial ' + unplaced.join(', ') + ' ' + (unplaced.length > 1 ? 'have' : 'has') +
+      ' no registration, so ' +
+      unplaced.reduce((sum, t) => sum + EVENTS.unplacedTrials[t], 0) +
+      ' events cannot be placed in depth coordinates and are left out below. ' +
+      'This happens when a trial was given its own settings before a ' +
+      'registration existed to copy. Fit it on the prep page, or remove its ' +
+      'override so it falls back to the project registration.'));
+  }
+
+  const excluded = excludedBanner();
+  if (excluded) body.appendChild(excluded);
   const byTrial = daysByTrial(false);
 
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];
     const section = el('div', 'trial');
+    const missing = (EVENTS.unplacedTrials || {})[trial];
     section.appendChild(el('h3', null, 'Trial ' + trial +
-      '<span>' + days.length + ' days</span>'));
+      '<span>' + days.length + ' days' +
+      (missing ? ' \u00b7 no registration, ' + missing + ' events unplaced' : '') +
+      '</span>'));
     body.appendChild(section);
     renderTrial(+trial, days, section);
 
@@ -592,6 +670,35 @@ function draw() {
     lower.appendChild(dispersionTable(+trial, days));
     section.appendChild(lower);
   });
+}
+
+// Only the marks are sent, merged onto what is already saved: this page has
+// no registration or crop controls, so posting the whole object would let a
+// stale copy here overwrite a change made on the prep page.
+function saveMarks(whoField) {
+  const who = (whoField && whoField.value || '').trim();
+  if (!who) {
+    window.alert('Put your name in before saving, so the change can be traced back.');
+    if (whoField) whoField.focus();
+    return;
+  }
+  try { window.localStorage.setItem('cbc-who', who); } catch (e) { /* private mode */ }
+  const button = document.getElementById('save');
+  const state = document.getElementById('state');
+  button.disabled = true;
+  state.textContent = 'saving\u2026';
+  fetch('marks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ who: who, day_marks: PREP.day_marks || {} }) })
+    .then(response => response.json().then(body => ({ ok: response.ok, body })))
+    .then(({ ok, body }) => {
+      if (!ok) throw new Error(body.error || 'the server refused the change');
+      DIRTY = false;
+      state.textContent = 'saved ' + (body.updated || '').slice(11, 16);
+    })
+    .catch(error => {
+      button.disabled = false;
+      state.textContent = 'not saved: ' + error.message;
+    });
 }
 
 function build() {
@@ -618,6 +725,11 @@ function build() {
       Math.round(100 * COVERAGE) + '">' +
     '<label>Event spread <b id="sv">' + SPREAD + '</b> px</label>' +
     '<input type="range" id="sr" min="5" max="80" step="5" value="' + SPREAD + '">';
+
+  const whoField = bar.querySelector('#who');
+  try { whoField.value = PREP.who || window.localStorage.getItem('cbc-who') || ''; }
+  catch (e) { whoField.value = PREP.who || ''; }
+  bar.querySelector('#save').addEventListener('click', () => saveMarks(whoField));
 
   let pending = null;
   const later = () => {
@@ -658,6 +770,10 @@ function build() {
   });
   draw();
 }
+
+window.addEventListener('beforeunload', event => {
+  if (DIRTY) { event.preventDefault(); event.returnValue = ''; }
+});
 
 loadPayload(() => {
   loadEvents().then(events => {

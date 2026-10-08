@@ -127,6 +127,20 @@
   .cellnote { padding:14px 8px; font-size:11px; color:var(--dim); text-align:center; }
   .cellfoot { padding:3px 6px; font-size:10px; color:var(--dim);
               border-top:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .banner { display:flex; gap:10px; align-items:center; padding:9px 13px;
+            border-radius:7px; font-size:13px; margin:0 0 14px;
+            background:rgba(224,105,63,.1); border:1px solid rgba(224,105,63,.3);
+            color:#f0c3ae; }
+  .chip { font-size:11px; padding:2px 8px; border-radius:999px;
+          border:1px solid var(--line); color:var(--dim);
+          font-variant-numeric:tabular-nums; }
+  .chip.own { border-color:var(--tray); color:var(--tray); }
+  .chip.out { border-color:var(--warn); color:var(--warn); }
+  label.daymark { display:inline-flex; align-items:center; gap:5px; font-size:11px;
+                  color:var(--dim); cursor:pointer; padding:1px 0; }
+  label.daymark input { accent-color:var(--tray); width:12px; height:12px;
+                        margin:0; flex:none; }
+  label.daymark.set { color:var(--tray); }
   .blank { }
 </style>
 </head>
@@ -140,6 +154,7 @@
     <a class="back" href="prep" style="margin:0">Prep</a>
     <a class="back" href="clusters" style="margin:0">Clusters</a>
     <a class="back" href="summary" style="margin:0">Summary</a>
+    <a class="back" href="features" style="margin:0">Features</a>
   </div>
   <div class="bar" id="controls"></div>
   <p class="sub">One column per day, eight to a block. Nothing is interpolated, so a

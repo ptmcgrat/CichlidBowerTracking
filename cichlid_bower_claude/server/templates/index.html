@@ -6,7 +6,7 @@
 <title>__ANALYSIS__</title>
 <style>
   :root { --ink:#e8ecf1; --dim:#93a0b0; --bg:#0e1116; --panel:#171c24; --line:#262d38;
-          --tray:#f2a33c; --ok:#5aa87a; }
+          --tray:#f2a33c; --ok:#5aa87a; --warn:#e0693f; }
   body { margin:0; background:var(--bg); color:var(--ink);
          font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
   .wrap { max-width:1100px; margin:0 auto; padding:28px 24px 72px; }
@@ -15,20 +15,33 @@
   a { color:var(--tray); text-decoration:none; }
   a:hover { text-decoration:underline; }
   table { width:100%; border-collapse:collapse; font-size:14px; }
-  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); }
+  th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); }
   th { color:var(--dim); font-weight:500; font-size:13px; }
-  td:last-child { color:var(--dim); font-size:13px; }
+  td:last-child { color:var(--dim); font-size:12px; }
+  /* alternating bands by category: the group's edge is visible without a
+     heading row breaking the columns */
+  tr.band0 td { background:rgba(255,255,255,.022); }
+  tr.band1 td { background:transparent; }
+  tr:hover td { background:rgba(242,163,60,.07); }
+  a.name { font-weight:500; }
+  td.links { white-space:nowrap; }
+  a.tab { display:inline-block; color:var(--dim); font-size:12px; padding:2px 7px;
+          border:1px solid var(--line); border-radius:4px; margin-right:3px; }
+  a.tab:hover { color:var(--ink); border-color:var(--tray); text-decoration:none; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>__ANALYSIS__</h1>
-  <p class="sub">__DONE__ of __COUNT__ projects have a registration and crops. Prep
+  <p class="sub">__DONE__ of __COUNT__ projects have every trial registered and
+     cropped. Prep
      sets the trial times, registration, crops and the residual filter; everything
      downstream reads what you save there.</p>
+  <p class="sub"><a href="features">Compare categories \u2192</a> \u2014 spawn
+     depth across every collected project, grouped by category.</p>
   <table>
     <tr><th>project</th><th>category</th><th>tank</th><th>collected</th>
-        <th>registered</th><th>cropped</th><th>last saved</th></tr>
+        <th>registered</th><th>cropped</th><th>go to</th><th>last saved</th></tr>
     __ROWS__
   </table>
 </div>

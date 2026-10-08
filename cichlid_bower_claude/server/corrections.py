@@ -65,6 +65,22 @@ class TrialOverride:
 
 
 @dataclass
+class DayMark:
+    """What a person noticed about one day that the analysis cannot see.
+
+    Both of these change how a day's numbers should be read, and neither is
+    recoverable from the data: a bower started in a new place makes the
+    cumulative map two overlapping structures, and building against a wall is
+    real sand movement the cluster detector misses because the fish is
+    half out of frame.
+    """
+
+    new_bower: bool = False      # the fish began building somewhere else
+    wall_building: bool = False  # building against the wall, missed by clustering
+    note: str = ''
+
+
+@dataclass
 class Prep:
     """Everything a person decides about a project before it is analysed."""
 
@@ -76,6 +92,7 @@ class Prep:
     video_crop: Optional[List[List[int]]] = None       # four points, Pi coordinates
     trials: Dict[str, TrialTimes] = field(default_factory=dict)
     overrides: Dict[str, TrialOverride] = field(default_factory=dict)
+    day_marks: Dict[str, DayMark] = field(default_factory=dict)
     residual_k: float = DEFAULT_K
     points: List[dict] = field(default_factory=list)   # the pairs the fit came from
     fit_rms_px: Optional[float] = None
@@ -85,16 +102,60 @@ class Prep:
 
     @property
     def is_registered(self) -> bool:
-        return self.transform is not None
+        """Whether a registration exists anywhere.
+
+        Counts per-trial overrides, not just the project field. A project where
+        each trial carries its own registration is registered; checking only
+        the project field reported it as having none, which is how a fully
+        registered project came to show as incomplete.
+        """
+        if self.transform is not None:
+            return True
+        return any(o.transform is not None for o in self.overrides.values())
 
     @property
     def is_cropped(self) -> bool:
-        return bool(self.depth_crop) and bool(self.video_crop)
+        if self.depth_crop and self.video_crop:
+            return True
+        return any(o.depth_crop and o.video_crop for o in self.overrides.values())
 
     @property
     def is_complete(self) -> bool:
         """Whether the depth tab should open for this project."""
         return self.is_registered and self.is_cropped
+
+    def coverage(self, trials) -> dict:
+        """Which trials are actually ready, counting overrides and exclusions.
+
+        "A registration exists" and "every trial has one" are different
+        questions, and only the second decides whether the analysis can run.
+        A trial with an override but nothing in it is the dangerous case: it
+        looks configured and has no transform, so its events cannot be placed.
+        """
+        numbers = [int(t) for t in trials]
+        active = [t for t in numbers if not self.is_excluded(t)]
+        registered = [t for t in active if self.transform_for(t) is not None]
+        cropped = [t for t in active
+                   if self.depth_crop_for(t) and self.video_crop_for(t)]
+        return {
+            'trials': len(numbers),
+            'active': len(active),
+            'excluded': sorted(set(numbers) - set(active)),
+            'registered': registered,
+            'cropped': cropped,
+            'missingRegistration': [t for t in active if t not in registered],
+            'missingCrop': [t for t in active if t not in cropped],
+            'ready': bool(active) and len(registered) == len(active)
+                     and len(cropped) == len(active),
+        }
+
+    def mark(self, day_index: int) -> DayMark:
+        return self.day_marks.get(str(day_index)) or DayMark()
+
+    def marked_days(self, which: str) -> List[int]:
+        """Days carrying a given mark, for reporting without a loop."""
+        return sorted(int(k) for k, v in self.day_marks.items()
+                      if getattr(v, which, False))
 
     def override(self, trial_number: int) -> TrialOverride:
         return self.overrides.get(str(trial_number)) or TrialOverride()
@@ -134,6 +195,8 @@ class Prep:
                           for k, v in self.trials.items()}
         data['overrides'] = {k: asdict(v) if not isinstance(v, dict) else v
                              for k, v in self.overrides.items()}
+        data['day_marks'] = {k: asdict(v) if not isinstance(v, dict) else v
+                             for k, v in self.day_marks.items()}
         return data
 
     @classmethod
@@ -148,11 +211,19 @@ class Prep:
             allowed = {f for f in TrialOverride.__dataclass_fields__}
             overrides[str(key)] = TrialOverride(
                 **{k: v for k, v in value.items() if k in allowed})
+        marks = {}
+        for key, value in (data.get('day_marks') or {}).items():
+            if not isinstance(value, dict):
+                continue
+            allowed = {f for f in DayMark.__dataclass_fields__}
+            marks[str(key)] = DayMark(
+                **{k: v for k, v in value.items() if k in allowed})
         known = {f for f in cls.__dataclass_fields__}
         kept = {k: v for k, v in data.items()
-                if k in known and k not in ('trials', 'overrides')}
+                if k in known and k not in ('trials', 'overrides', 'day_marks')}
         kept['trials'] = trials
         kept['overrides'] = overrides
+        kept['day_marks'] = marks
         return cls(**kept)
 
 

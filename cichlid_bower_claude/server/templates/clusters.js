@@ -354,6 +354,8 @@ function draw() {
     return;
   }
   computeCropped();
+  const excluded = excludedBanner();
+  if (excluded) body.appendChild(excluded);
   const byTrial = daysByTrial(false);
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];

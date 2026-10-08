@@ -144,6 +144,15 @@
                         margin:0; flex:none; }
   label.daymark.set { color:var(--tray); }
   .blank { }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+           gap:10px; margin:0 0 20px; }
+  .tile { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+          padding:12px 14px; }
+  .tile .tlabel { display:block; font-size:11px; color:var(--dim);
+                  text-transform:uppercase; letter-spacing:.04em; }
+  .tile .tvalue { display:block; font-size:21px; font-weight:600; margin:3px 0 2px;
+                  font-variant-numeric:tabular-nums; }
+  .tile .tnote { display:block; font-size:11px; color:var(--dim); }
 </style>
 </head>
 <body>
@@ -155,19 +164,14 @@
   <div class="bar">
     <a class="back" href="prep" style="margin:0">Prep</a>
     <a class="back" href="depth" style="margin:0">Depth</a>
+    <a class="back" href="clusters" style="margin:0">Clusters</a>
     <a class="back" href="summary" style="margin:0">Summary</a>
-    <a class="back" href="features" style="margin:0">Features</a>
   </div>
-  <div class="tabs" id="tabs" role="tablist"></div>
   <div class="bar" id="controls"></div>
-  <p class="sub">One column per day, eight to a block, each map showing everything up
-     to and including that day. Counts under each cell are in the order the colours
-     are listed.</p>
   <div id="body"></div>
   <p class="foot" id="foot"></p>
 </div>
 <script src="common.js"></script>
-<script src="stats.js"></script>
-<script src="clusters.js"></script>
+<script src="features.js"></script>
 </body>
 </html>

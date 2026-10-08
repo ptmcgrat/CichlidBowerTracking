@@ -489,21 +489,30 @@ function trialSelector(onChange) {
   });
   bar.appendChild(select);
 
-  const own = el('button', 'act');
-  own.textContent = editingOverride() ? 'Using its own settings'
-                                      : 'Give this trial its own';
+  const box = '<span class="box"></span>';
+
+  const own = el('button', 'toggle');
+  own.innerHTML = box + 'Own settings for trial ' + currentTrial();
   own.setAttribute('aria-pressed', String(editingOverride()));
+  own.title = editingOverride()
+    ? 'This trial has its own registration and crops. Click to drop them and ' +
+      'fall back to the project settings.'
+    : 'This trial uses the project registration and crops. Click to give it ' +
+      'its own copy to edit.';
   own.addEventListener('click', () => {
     setOverride(!editingOverride());
     onChange();
   });
   bar.appendChild(own);
 
-  const exclude = el('button', 'act');
   const trial = currentTrial();
-  const excluded = isExcluded(trial);
-  exclude.textContent = excluded ? 'Excluded from analysis' : 'Exclude this trial';
-  exclude.setAttribute('aria-pressed', String(excluded));
+  const exclude = el('button', 'toggle danger');
+  exclude.innerHTML = box + 'Excluded from analysis';
+  exclude.setAttribute('aria-pressed', String(isExcluded(trial)));
+  exclude.title = isExcluded(trial)
+    ? 'This trial is left out of the depth, cluster and summary pages.'
+    : 'Leave this trial out of the analysis \u2014 no building, or data too ' +
+      'poor to use.';
   exclude.addEventListener('click', () => {
     PREP.overrides = PREP.overrides || {};
     const key = String(trial);
@@ -516,6 +525,36 @@ function trialSelector(onChange) {
     onChange();
   });
   bar.appendChild(exclude);
+
+  // An override with nothing in it is the trap: it looks configured, has no
+  // transform, and its events cannot be placed in depth coordinates at all.
+  if (editingOverride() && !transformFor(trial)) {
+    bar.appendChild(el('span', 'stat',
+      '<span style="color:var(--warn)">No registration on this trial yet.</span> ' +
+      'Fit one here, or switch the toggle off to use the project registration.'));
+  }
+
+  // every trial's state at once, so a project where one trial differs is
+  // visible without stepping through them
+  const states = el('div', 'trialstate');
+  states.appendChild(el('span', 'stat', 'Trials:'));
+  const seen = [];
+  D.pairs.forEach(pair => {
+    if (seen.indexOf(pair.trial) >= 0) return;
+    seen.push(pair.trial);
+    const out = isExcluded(pair.trial);
+    const ownSettings = !!(PREP.overrides || {})[String(pair.trial)] &&
+                        !!(PREP.overrides[String(pair.trial)].transform ||
+                           PREP.overrides[String(pair.trial)].depth_crop ||
+                           PREP.overrides[String(pair.trial)].video_crop);
+    const chip = el('span', 'chip' + (out ? ' out' : (ownSettings ? ' own' : '')));
+    chip.textContent = pair.trial + (out ? ' excluded' : (ownSettings ? ' own' : ''));
+    chip.title = out ? 'excluded from the analysis'
+                     : (ownSettings ? 'has its own registration or crops'
+                                    : 'uses the project settings');
+    states.appendChild(chip);
+  });
+  bar.appendChild(states);
 
   if (D.pairs.length > 1)
     bar.appendChild(el('span', 'stat', 'step through these to confirm the crops and ' +

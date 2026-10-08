@@ -202,7 +202,7 @@ def test_the_landing_page_reflects_a_saved_registration(client):
     """It is read fresh on every request, so a save shows up on reload."""
     http, _ = client
     before = http.get('/').get_data(as_text=True)
-    assert before.count('>no<') >= 2          # not registered, not cropped
+    assert '0 of 1' in before                 # no trial registered or cropped
     http.post('/' + PROJECT + '/save',
               json={'who': 'Emily Keaton',
                     'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
@@ -210,12 +210,12 @@ def test_the_landing_page_reflects_a_saved_registration(client):
                     'video_crop': [[5, 5], [30, 5], [30, 25], [5, 25]]})
     after = http.get('/').get_data(as_text=True)
     assert 'Emily' in after
-    assert after.count('>yes<') > before.count('>yes<')
+    assert '1 of 1' in after
 
 
 def test_every_page_links_to_the_other_three(client):
     http, _ = client
-    pages = ['prep', 'depth', 'clusters', 'summary']
+    pages = ['prep', 'depth', 'clusters', 'summary', 'features']
     for page in pages:
         text = http.get('/' + PROJECT + '/' + page).get_data(as_text=True)
         for other in pages:
@@ -223,3 +223,106 @@ def test_every_page_links_to_the_other_three(client):
                 assert 'href="%s"' % other not in text, page + ' links to itself'
             else:
                 assert 'href="%s"' % other in text, page + ' is missing ' + other
+
+
+def test_a_project_registered_only_per_trial_counts_as_registered(client):
+    """Each trial carrying its own registration is a registered project.
+
+    Checking the project-level field alone reported such a project as having
+    no registration at all, which is what it looked like on the landing page.
+    """
+    http, layout = client
+    http.post('/' + PROJECT + '/save', json={
+        'who': 'Emily Keaton',
+        'overrides': {'1': {'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+                            'depth_crop': [[0, 0], [9, 0], [9, 9], [0, 9]],
+                            'video_crop': [[0, 0], [9, 0], [9, 9], [0, 9]]}}})
+    prep = C.load(layout.project(PROJECT, ANALYSIS))
+    assert prep.is_registered and prep.is_cropped
+    assert prep.transform is None              # nothing at the project level
+    assert '1 of 1' in http.get('/').get_data(as_text=True)
+
+
+def test_an_empty_override_is_reported_as_a_gap(client):
+    """A trial with an override but nothing in it looks configured and is not:
+    its events have no transform and cannot be placed."""
+    http, layout = client
+    http.post('/' + PROJECT + '/save', json={
+        'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        'depth_crop': [[0, 0], [9, 0], [9, 9], [0, 9]],
+        'video_crop': [[0, 0], [9, 0], [9, 9], [0, 9]],
+        'overrides': {'2': {'transform': None, 'depth_crop': None,
+                            'video_crop': None}}})
+    prep = C.load(layout.project(PROJECT, ANALYSIS))
+    # trial 2 falls back to the project, so it is covered
+    assert prep.coverage([1, 2])['ready']
+    # but a trial with nothing anywhere is not
+    bare = C.Prep(overrides={'2': C.TrialOverride()})
+    assert bare.coverage([1, 2])['missingRegistration'] == [1, 2]
+
+
+def test_day_marks_save_without_touching_the_rest(client):
+    """The summary page owns only the marks: posting from a copy loaded before
+    someone changed the crops must not undo that change."""
+    http, layout = client
+    http.post('/' + PROJECT + '/save', json={
+        'who': 'Emily Keaton',
+        'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]],
+        'video_crop': [[5, 5], [30, 5], [30, 25], [5, 25]], 'residual_k': 6.0})
+    response = http.post('/' + PROJECT + '/marks', json={
+        'who': 'Patrick', 'day_marks': {'2': {'new_bower': True},
+                                        '4': {'wall_building': True}}})
+    assert response.status_code == 200
+    prep = C.load(layout.project(PROJECT, ANALYSIS))
+    assert prep.mark(2).new_bower and prep.mark(4).wall_building
+    assert prep.transform is not None            # the registration survived
+    assert prep.depth_crop[0] == [5, 5]
+    assert prep.residual_k == 6.0
+    assert prep.who == 'Patrick'
+
+
+def test_unknown_mark_fields_are_ignored(client):
+    http, layout = client
+    http.post('/' + PROJECT + '/marks',
+              json={'who': 'pm', 'day_marks': {'1': {'new_bower': True,
+                                                     'nonsense': 'x'}}})
+    assert C.load(layout.project(PROJECT, ANALYSIS)).mark(1).new_bower
+
+
+def test_the_features_page_is_served(client):
+    http, _ = client
+    assert http.get('/' + PROJECT + '/features').status_code == 200
+    assert http.get('/' + PROJECT + '/features.js').status_code == 200
+
+
+def test_the_landing_page_groups_by_category_and_links_to_each_tab(client):
+    http, _ = client
+    page = http.get('/').get_data(as_text=True)
+    for slug in ('prep', 'depth', 'clusters', 'summary', 'features'):
+        assert 'href="/%s/%s"' % (PROJECT, slug) in page
+    assert 'band0' in page                      # category banding applied
+
+
+def test_the_category_comparison_is_served(client):
+    http, _ = client
+    assert http.get('/features').status_code == 200
+    assert http.get('/analysis.js').status_code == 200
+
+
+def test_the_comparison_data_covers_every_collected_project(client):
+    http, _ = client
+    payload = json.loads(http.get('/features.json').get_data(as_text=True))
+    assert payload['projects']
+    names = [p['projectID'] for p in payload['projects']]
+    assert PROJECT in names
+    project = [p for p in payload['projects'] if p['projectID'] == PROJECT][0]
+    assert project['category'] == 'MC'        # taken from the states file
+    assert project['trials']
+
+
+def test_the_analysis_page_does_not_shadow_a_project_page(client):
+    """/features is the comparison; /<project>/features is one project."""
+    http, _ = client
+    assert 'analysis.js' in http.get('/features').get_data(as_text=True)
+    assert 'features.js' in http.get('/' + PROJECT + '/features').get_data(as_text=True)

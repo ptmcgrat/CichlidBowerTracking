@@ -169,6 +169,8 @@ function statsView() {
       : '');
   box.appendChild(note);
 
+  const excluded = excludedBanner();
+  if (excluded) box.appendChild(excluded);
   const byTrial = daysByTrial(false);
 
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {

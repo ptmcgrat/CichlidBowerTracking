@@ -90,6 +90,38 @@
                 background:var(--panel); border:1px solid var(--line); color:var(--ink);
                 padding:7px 10px; border-radius:6px; font:inherit; font-size:13px; }
   .bar input::placeholder { color:var(--dim); }
+  /* A toggle has to read as on or off at a glance. Two buttons whose labels
+     changed were ambiguous: both wordings described a state, and neither said
+     which one you were in. Off is a dim outline; on is filled and ticked. */
+  button.toggle { background:none; border:1px solid var(--line); color:var(--dim);
+                  padding:7px 13px 7px 11px; border-radius:6px; font:inherit;
+                  font-size:13px; cursor:pointer; display:inline-flex;
+                  align-items:center; gap:7px; }
+  button.toggle:hover { border-color:var(--dim); color:var(--ink); }
+  button.toggle .box { width:13px; height:13px; border-radius:3px;
+                       border:1.5px solid currentColor; display:inline-block;
+                       position:relative; flex:none; }
+  button.toggle[aria-pressed="true"] { background:var(--tray); border-color:var(--tray);
+                                       color:#141414; font-weight:600; }
+  button.toggle[aria-pressed="true"] .box { background:#141414; border-color:#141414; }
+  button.toggle[aria-pressed="true"] .box::after {
+      content:''; position:absolute; left:3.5px; top:0.5px; width:3px; height:7px;
+      border:solid var(--tray); border-width:0 2px 2px 0; transform:rotate(45deg); }
+  button.toggle.danger[aria-pressed="true"] { background:var(--warn);
+                                              border-color:var(--warn); color:#fff; }
+  button.toggle.danger[aria-pressed="true"] .box { background:#fff; border-color:#fff; }
+  button.toggle.danger[aria-pressed="true"] .box::after { border-color:var(--warn); }
+  .trialstate { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .chip { font-size:11px; padding:2px 8px; border-radius:999px;
+          border:1px solid var(--line); color:var(--dim);
+          font-variant-numeric:tabular-nums; }
+  .chip.own { border-color:var(--tray); color:var(--tray); }
+  .chip.out { border-color:var(--warn); color:var(--warn);
+              text-decoration:line-through; }
+  .banner { display:flex; gap:10px; align-items:center; padding:9px 13px;
+            border-radius:7px; font-size:13px; margin:0 0 14px;
+            background:rgba(224,105,63,.1); border:1px solid rgba(224,105,63,.3);
+            color:#f0c3ae; }
   .stage .handle { fill:var(--tray); stroke:#141414; stroke-width:1.5; cursor:grab; }
   .readout { position:absolute; left:8px; bottom:8px; background:rgba(6,9,13,.85);
              padding:3px 8px; border-radius:4px; font-size:12px; color:var(--ink);
@@ -128,6 +160,7 @@
     <a class="back" href="depth" style="margin:0">Depth</a>
     <a class="back" href="clusters" style="margin:0">Clusters</a>
     <a class="back" href="summary" style="margin:0">Summary</a>
+    <a class="back" href="features" style="margin:0">Features</a>
     <button class="act" id="prev">&larr; Previous</button>
     <button class="act" id="next">Next &rarr;</button>
     <span class="stat" id="position"></span>

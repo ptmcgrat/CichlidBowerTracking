@@ -187,6 +187,46 @@ def cmd_build(args) -> int:
     return 0
 
 
+def cmd_features(args) -> int:
+    """Compute and cache the metrics the cross-project page compares."""
+    layout = _layout(args)
+    cloud = Cloud(layout=layout, verbose=args.verbose)
+    try:
+        states = AnalysisStates.load(layout.analysis(args.analysis_id), cloud)
+    except StatesError as error:
+        print(str(error))
+        return 1
+    from .server import features as F
+    projects = _projects(states, args.projects)
+    print('%-32s %6s %8s %8s %8s' % ('project', 'trials', 'volume', 'index', 'spawns'))
+    built = 0
+    for project_id in projects:
+        paths = layout.project(project_id, args.analysis_id)
+        if not paths.manifest.exists():
+            print('%-32s not collected' % project_id)
+            continue
+        try:
+            metrics = F.compute(paths)
+        except Exception as error:
+            print('%-32s failed: %r' % (project_id, error))
+            continue
+        F.path_for(paths).parent.mkdir(parents=True, exist_ok=True)
+        import json as _json
+        with open(F.path_for(paths), 'w') as handle:
+            _json.dump(metrics, handle)
+        active = [t for t in metrics['trials'] if not t.get('excluded')]
+        volume = sum(t.get('totalVolume', 0) for t in active)
+        indices = [t['bowerIndex'] for t in active if 'bowerIndex' in t]
+        spawns = sum(t.get('spawns', 0) for t in active)
+        print('%-32s %6d %8.0f %8s %8d'
+              % (project_id, len(active), volume,
+                 ('%.3f' % (sum(indices) / len(indices))) if indices else '-',
+                 spawns))
+        built += 1
+    print('\nComputed %d project(s).' % built)
+    return 0
+
+
 def cmd_serve(args) -> int:
     layout = _layout(args)
     cloud = Cloud(layout=layout, verbose=args.verbose)
@@ -246,6 +286,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('analysis_id')
     p.add_argument('--projects', nargs='+')
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser('features', help='compute the cross-project metrics')
+    p.add_argument('analysis_id')
+    p.add_argument('--projects', nargs='+')
+    p.set_defaults(func=cmd_features)
 
     p = sub.add_parser('serve', help='serve the pages and accept corrections')
     p.add_argument('analysis_id')

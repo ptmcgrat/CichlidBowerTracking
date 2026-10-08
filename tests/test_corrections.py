@@ -124,3 +124,17 @@ def test_unknown_keys_in_an_override_are_ignored(paths):
     paths.prep_json.write_text(json.dumps(
         {'schema': C.SCHEMA, 'overrides': {'2': {'excluded': True, 'nonsense': 1}}}))
     assert C.load(paths).is_excluded(2)
+
+
+def test_day_marks_round_trip(paths):
+    """What a person noticed about a day, which the analysis cannot see."""
+    prep = C.load(paths)
+    prep.day_marks['7'] = C.DayMark(new_bower=True, note='moved to the left wall')
+    prep.day_marks['9'] = C.DayMark(wall_building=True)
+    C.save(paths, prep, who='pm')
+    back = C.load(paths)
+    assert back.mark(7).new_bower and back.mark(7).note
+    assert back.mark(9).wall_building and not back.mark(9).new_bower
+    assert not back.mark(3).new_bower        # an unmarked day is simply clear
+    assert back.marked_days('new_bower') == [7]
+    assert back.marked_days('wall_building') == [9]

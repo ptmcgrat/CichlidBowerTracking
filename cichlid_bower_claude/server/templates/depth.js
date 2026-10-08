@@ -203,6 +203,8 @@ function draw() {
   const body = document.getElementById('body');
   body.textContent = '';
 
+  const excluded = excludedBanner();
+  if (excluded) body.appendChild(excluded);
   const byTrial = daysByTrial(false);
   if (!Object.keys(byTrial).length) {
     body.appendChild(el('div', 'note', 'Every trial in this project is excluded. ' +

@@ -190,6 +190,28 @@ function daysByTrial(includeExcluded) {
   return out;
 }
 
+// A trial left out of the analysis is invisible on every page that honours
+// the exclusion, which is indistinguishable from a trial that was never
+// recorded. This says which, and why.
+function excludedBanner() {
+  const out = [];
+  const seen = [];
+  D.days.forEach(day => {
+    if (seen.indexOf(day.trial) >= 0) return;
+    seen.push(day.trial);
+    if (isExcluded(day.trial)) out.push(day.trial);
+  });
+  if (!out.length) return null;
+  const reasons = out.map(trial => {
+    const reason = overrideFor(trial).reason;
+    return 'trial ' + trial + (reason ? ' (' + reason + ')' : '');
+  });
+  const banner = el('div', 'banner');
+  banner.innerHTML = '<span>Excluded from this page: <b>' + reasons.join(', ') +
+    '</b>. Unmark it on the prep page to bring it back.</span>';
+  return banner;
+}
+
 // ----------------------------------------------------------------- the crop
 function cropMaskFor(meta, trial) {
   // the crop is in full-resolution depth coordinates; a map may be smaller
