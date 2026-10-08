@@ -103,10 +103,14 @@ function mapFigure(values, meta, caption, opts) {
   return fig;
 }
 
+// Shared by every page, and only some of them can save, so the controls are
+// optional rather than assumed.
 function markDirty() {
   DIRTY = true;
-  document.getElementById('save').disabled = false;
-  document.getElementById('state').textContent = 'unsaved changes';
+  const save = document.getElementById('save');
+  if (save) save.disabled = false;
+  const state = document.getElementById('state');
+  if (state) state.textContent = 'unsaved changes';
 }
 
 

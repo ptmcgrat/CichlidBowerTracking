@@ -15,7 +15,8 @@ let CONFIDENCE = 0.67;
 let HOUR_FROM = 8, HOUR_TO = 18;
 let COVERAGE = 0.68;     // the share of events an ellipse should contain
 let SPREAD = 30;         // depth pixels each scoop or spit is spread over
-let DIRTY = false;       // day marks waiting to be saved
+// DIRTY and markDirty live in common.js: both scripts load into one scope, so
+// declaring it again here was a SyntaxError that stopped the whole page
 
 function markOf(dayIndex) {
   return (PREP.day_marks || {})[String(dayIndex)] || {};
@@ -29,11 +30,7 @@ function setMark(dayIndex, which, on) {
   if (!entry.new_bower && !entry.wall_building && !entry.note)
     delete PREP.day_marks[key];
   else PREP.day_marks[key] = entry;
-  DIRTY = true;
-  const save = document.getElementById('save');
-  if (save) save.disabled = false;
-  const state = document.getElementById('state');
-  if (state) state.textContent = 'unsaved marks';
+  markDirty();
 }
 
 // Two things a person can see and the analysis cannot: a bower restarted
