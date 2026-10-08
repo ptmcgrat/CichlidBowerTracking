@@ -721,12 +721,23 @@ function build() {
     '<input type="range" id="er" min="50" max="99" step="1" value="' +
       Math.round(100 * COVERAGE) + '">' +
     '<label>Event spread <b id="sv">' + SPREAD + '</b> px</label>' +
-    '<input type="range" id="sr" min="5" max="80" step="5" value="' + SPREAD + '">';
+    '<input type="range" id="sr" min="5" max="80" step="5" value="' + SPREAD + '">' +
+    '<span class="spacer"></span>' +
+    '<label for="who" class="stat">Your name</label>' +
+    '<input id="who" placeholder="e.g. Emily Keaton" autocomplete="name">' +
+    '<span class="stat" id="state"></span>' +
+    '<button class="act primary" id="save" disabled>Save marks</button>';
 
   const whoField = bar.querySelector('#who');
-  try { whoField.value = PREP.who || window.localStorage.getItem('cbc-who') || ''; }
-  catch (e) { whoField.value = PREP.who || ''; }
-  bar.querySelector('#save').addEventListener('click', () => saveMarks(whoField));
+  const saveButton = bar.querySelector('#save');
+  if (whoField) {
+    let remembered = '';
+    try { remembered = window.localStorage.getItem('cbc-who') || ''; }
+    catch (e) { remembered = ''; }          // private mode: no store to read
+    whoField.value = PREP.who || remembered;
+  }
+  if (saveButton)
+    saveButton.addEventListener('click', () => saveMarks(whoField));
 
   let pending = null;
   const later = () => {

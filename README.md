@@ -82,12 +82,20 @@ rather than against a network.
 ## Tests
 
     python -m pytest tests -q
+    npm install jsdom && python -m pytest tests -q   # includes the page renders
 
 `tests/make_log.py` writes a synthetic logfile in the real format;
 `tests/make_project.py` builds a whole fake project — logfile, `Frames.tar`
 with a growing castle and a churning patch — inside a directory standing in
 for Dropbox. `cloud.FakeCloud` moves real bytes between them, so a test can
 assert on what ended up where.
+
+`tests/test_render.py` loads every page in a real DOM and fails if it reports
+an error or renders nothing. It needs `npm install jsdom` and is skipped
+without it. Checking each script on its own catches a typo and nothing else:
+the faults that reach people need the whole page running — a name declared
+in two scripts that share a scope, or a control referenced by an id that is not
+in the markup. Both leave a blank screen.
 
 Do not hold a real `Frames.tar` in memory. The test fixture does, which is
 why it uses small frames; the collector itself streams.
