@@ -132,6 +132,31 @@ function projectToDepth() {
   EVENTS.projected = true;
 }
 
+// Events grouped by trial, day and behaviour, built once per redraw.
+//
+// Every cell used to scan the whole event array to find its own handful of
+// points, which at thirty-four days and a hundred and sixty thousand events
+// came to forty-six million iterations for one page. The events do not change
+// between cells; only the question does.
+let BUCKETS = null;
+
+function bucketEvents(cut) {
+  BUCKETS = {};
+  for (let i = 0; i < EVENTS.n; i++) {
+    if (!keep(i, cut)) continue;
+    const trial = EVENTS.trial[i], day = EVENTS.day[i], code = EVENTS.bid[i];
+    const byDay = BUCKETS[trial] || (BUCKETS[trial] = {});
+    const byCode = byDay[day] || (byDay[day] = {});
+    (byCode[code] || (byCode[code] = [])).push([EVENTS.dx[i], EVENTS.dy[i]]);
+  }
+}
+
+function bucket(trial, day, code) {
+  const byDay = BUCKETS && BUCKETS[trial];
+  const byCode = byDay && byDay[day];
+  return (byCode && byCode[code]) || [];
+}
+
 function keep(index, cut) {
   return EVENTS.placed[index] &&
          (EVENTS.flags[index] & 1) && (EVENTS.flags[index] & 2) &&
@@ -168,12 +193,14 @@ function dispersion(points, coverage) {
 
 function eventsOf(trial, codes, cut, upToDay) {
   const points = [];
-  for (let i = 0; i < EVENTS.n; i++) {
-    if (EVENTS.trial[i] !== trial || !keep(i, cut)) continue;
-    if (!codes.has(EVENTS.bid[i])) continue;
-    if (upToDay !== undefined && EVENTS.day[i] > upToDay) continue;
-    points.push([EVENTS.dx[i], EVENTS.dy[i]]);
-  }
+  const byDay = (BUCKETS && BUCKETS[trial]) || {};
+  Object.keys(byDay).forEach(day => {
+    if (upToDay !== undefined && +day > upToDay) return;
+    codes.forEach(code => {
+      const found = byDay[day][code] || [];
+      for (let i = 0; i < found.length; i++) points.push(found[i]);
+    });
+  });
   return points;
 }
 
@@ -248,16 +275,18 @@ function scatterPanel(groups, meta, foot) {
 function eventDepthMap(trial, upToDay, meta, cut) {
   const values = new Float32Array(meta.width * meta.height);
   const sx = meta.width / D.depthSize[0], sy = meta.height / D.depthSize[1];
-  const spit = EVENTS.code.p, scoop = EVENTS.code.c;
-  for (let i = 0; i < EVENTS.n; i++) {
-    if (EVENTS.trial[i] !== trial || !keep(i, cut)) continue;
-    if (EVENTS.day[i] > upToDay) continue;
-    const code = EVENTS.bid[i];
-    if (code !== spit && code !== scoop) continue;
-    const x = Math.round(EVENTS.dx[i] * sx), y = Math.round(EVENTS.dy[i] * sy);
-    if (x < 0 || y < 0 || x >= meta.width || y >= meta.height) continue;
-    values[y * meta.width + x] += code === spit ? 1 : -1;
-  }
+  const byDay = (BUCKETS && BUCKETS[trial]) || {};
+  [[EVENTS.code.p, 1], [EVENTS.code.c, -1]].forEach(([code, sign]) => {
+    Object.keys(byDay).forEach(day => {
+      if (+day > upToDay) return;
+      const found = byDay[day][code] || [];
+      for (let i = 0; i < found.length; i++) {
+        const x = Math.round(found[i][0] * sx), y = Math.round(found[i][1] * sy);
+        if (x < 0 || y < 0 || x >= meta.width || y >= meta.height) continue;
+        values[y * meta.width + x] += sign;
+      }
+    });
+  });
   // the spread is given in depth pixels, and the maps are downsampled
   const radius = Math.max(1, Math.round(SPREAD / 2 / (D.downsample || 1)));
   return blur(values, meta.width, meta.height, radius);
@@ -465,11 +494,10 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
 
 function eventsOfDay(trial, codes, cut, dayIndex) {
   const points = [];
-  for (let i = 0; i < EVENTS.n; i++) {
-    if (EVENTS.trial[i] !== trial || EVENTS.day[i] !== dayIndex) continue;
-    if (!keep(i, cut) || !codes.has(EVENTS.bid[i])) continue;
-    points.push([EVENTS.dx[i], EVENTS.dy[i]]);
-  }
+  codes.forEach(code => {
+    const found = bucket(trial, dayIndex, code);
+    for (let i = 0; i < found.length; i++) points.push(found[i]);
+  });
   return points;
 }
 
@@ -648,6 +676,8 @@ function draw() {
 
   const excluded = excludedBanner();
   if (excluded) body.appendChild(excluded);
+  bucketEvents(Math.round(CONFIDENCE * 255));
+
   const byTrial = daysByTrial(false);
 
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {

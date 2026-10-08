@@ -1,827 +1,187 @@
-/* The summary sheet.
- *
- * Where the two streams meet. Cluster events are mapped into depth coordinates
- * through the saved registration, so a spit and the sand it moved can be
- * looked at in the same frame — which is the whole reason for registering the
- * cameras in the first place.
- *
- * Six rows per trial, one column per day, plus two figures underneath that ask
- * questions the maps cannot: where spawning happens relative to the bower, and
- * how tightly scoops and spits are each confined.
- */
-
-let EVENTS = null;
-let CONFIDENCE = 0.67;
-let HOUR_FROM = 8, HOUR_TO = 18;
-let COVERAGE = 0.68;     // the share of events an ellipse should contain
-let SPREAD = 30;         // depth pixels each scoop or spit is spread over
-// DIRTY and markDirty live in common.js: both scripts load into one scope, so
-// declaring it again here was a SyntaxError that stopped the whole page
-
-function markOf(dayIndex) {
-  return (PREP.day_marks || {})[String(dayIndex)] || {};
-}
-
-function setMark(dayIndex, which, on) {
-  PREP.day_marks = PREP.day_marks || {};
-  const key = String(dayIndex);
-  const entry = PREP.day_marks[key] || {};
-  entry[which] = on;
-  if (!entry.new_bower && !entry.wall_building && !entry.note)
-    delete PREP.day_marks[key];
-  else PREP.day_marks[key] = entry;
-  markDirty();
-}
-
-// Two things a person can see and the analysis cannot: a bower restarted
-// somewhere else, which makes the cumulative map two overlapping structures,
-// and building against a wall, which is real sand movement the cluster
-// detector misses because the fish is half out of frame.
-function dayMarkControls(day) {
-  const wrap = el('div');
-  [['new_bower', 'new bower'], ['wall_building', 'wall building']]
-    .forEach(([which, label]) => {
-      const on = !!markOf(day.index)[which];
-      const box = el('label', 'daymark' + (on ? ' set' : ''));
-      const input = el('input');
-      input.type = 'checkbox';
-      input.checked = on;
-      input.addEventListener('change', event => {
-        setMark(day.index, which, event.target.checked);
-        box.className = 'daymark' + (event.target.checked ? ' set' : '');
-      });
-      box.appendChild(input);
-      box.appendChild(el('span', null, label));
-      wrap.appendChild(box);
-      wrap.appendChild(el('br'));
-    });
-  return wrap;
-}
-let SCALE = null;        // cm of depth per net event, fitted per trial
-
-const ROWS = [
-  ['Depth camera', 'the tray that day', 'still'],
-  ['Depth change', 'cumulative, from the sensor', 'depth'],
-  ['From events', 'cumulative, spits minus scoops', 'fromEvents'],
-  ['24 hour change', 'this morning to the next', 'daily'],
-  ['Building', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
-  ['Spawning', 'that day', 'spawn'],
-  ['Spread', 'cumulative \u00b7 ellipse holding the chosen share', 'spread'],
-];
-
-const COLOURS = { scoop: [242, 163, 60], spit: [111, 178, 232],
-                  multiple: [90, 168, 122], spawn: [232, 132, 168] };
-
-function unpackColumn(text, Type) {
-  const binary = atob(text);
-  const buffer = new ArrayBuffer(binary.length);
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return new Type(buffer);
-}
-
-function loadEvents() {
-  return fetch('clusters.json')
-    .then(response => response.ok ? response.json() : null)
-    .then(packed => {
-      if (!packed) return null;
-      const code = {};
-      packed.bids.forEach((bid, i) => { code[bid] = i; });
-      EVENTS = { n: packed.n, code, summary: packed.summary,
-                 x: unpackColumn(packed.x, Uint16Array),
-                 y: unpackColumn(packed.y, Uint16Array),
-                 bid: unpackColumn(packed.bid, Uint8Array),
-                 prob: unpackColumn(packed.prob, Uint8Array),
-                 flags: unpackColumn(packed.flags, Uint8Array),
-                 day: unpackColumn(packed.day, Uint16Array),
-                 trial: unpackColumn(packed.trial, Uint8Array),
-                 hour: unpackColumn(packed.hour, Uint8Array) };
-      projectToDepth();
-      return EVENTS;
-    });
-}
-
-// Every event in depth coordinates, computed once. Without a registration the
-// two streams cannot be compared at all, so the page says so rather than
-// drawing something meaningless.
-function projectToDepth() {
-  EVENTS.dx = new Float32Array(EVENTS.n);
-  EVENTS.dy = new Float32Array(EVENTS.n);
-  // Which events have real coordinates. An event whose trial has no
-  // registration used to keep dx = dy = 0 and be drawn at the top-left corner
-  // while still being counted, so a trial with no transform looked like a
-  // trial with no events — except that the counts said otherwise.
-  EVENTS.placed = new Uint8Array(EVENTS.n);
-  EVENTS.unplacedTrials = {};
-  if (!PREP.transform && !Object.keys(PREP.overrides || {}).length) {
-    EVENTS.projected = false;
-    return;
-  }
-  for (let i = 0; i < EVENTS.n; i++) {
-    const trial = EVENTS.trial[i];
-    const H = transformFor(trial);
-    if (!H) {
-      EVENTS.unplacedTrials[trial] = (EVENTS.unplacedTrials[trial] || 0) + 1;
-      continue;
-    }
-    const point = applyH(H, [EVENTS.x[i], EVENTS.y[i]]);
-    EVENTS.dx[i] = point[0];
-    EVENTS.dy[i] = point[1];
-    EVENTS.placed[i] = 1;
-  }
-  EVENTS.projected = true;
-}
-
-// Events grouped by trial, day and behaviour, built once per redraw.
-//
-// Every cell used to scan the whole event array to find its own handful of
-// points, which at thirty-four days and a hundred and sixty thousand events
-// came to forty-six million iterations for one page. The events do not change
-// between cells; only the question does.
-let BUCKETS = null;
-
-function bucketEvents(cut) {
-  BUCKETS = {};
-  for (let i = 0; i < EVENTS.n; i++) {
-    if (!keep(i, cut)) continue;
-    const trial = EVENTS.trial[i], day = EVENTS.day[i], code = EVENTS.bid[i];
-    const byDay = BUCKETS[trial] || (BUCKETS[trial] = {});
-    const byCode = byDay[day] || (byDay[day] = {});
-    (byCode[code] || (byCode[code] = [])).push([EVENTS.dx[i], EVENTS.dy[i]]);
-  }
-}
-
-function bucket(trial, day, code) {
-  const byDay = BUCKETS && BUCKETS[trial];
-  const byCode = byDay && byDay[day];
-  return (byCode && byCode[code]) || [];
-}
-
-function keep(index, cut) {
-  return EVENTS.placed[index] &&
-         (EVENTS.flags[index] & 1) && (EVENTS.flags[index] & 2) &&
-         EVENTS.bid[index] !== 255 && EVENTS.prob[index] >= cut &&
-         EVENTS.hour[index] >= HOUR_FROM && EVENTS.hour[index] < HOUR_TO;
-}
-
-// ------------------------------------------------------------------ ellipse
-// The area containing a given share of the events, from the covariance. For a
-// bivariate normal the ellipse at coverage p has area pi * k * sqrt(det), with
-// k the chi-square quantile on two degrees of freedom — which for two degrees
-// is just -2 ln(1 - p), no table needed.
-function dispersion(points, coverage) {
-  if (points.length < 10) return null;
-  let mx = 0, my = 0;
-  points.forEach(p => { mx += p[0]; my += p[1]; });
-  mx /= points.length; my /= points.length;
-  let sxx = 0, syy = 0, sxy = 0;
-  points.forEach(p => {
-    const dx = p[0] - mx, dy = p[1] - my;
-    sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
-  });
-  sxx /= points.length; syy /= points.length; sxy /= points.length;
-  const determinant = Math.max(0, sxx * syy - sxy * sxy);
-  const k = -2 * Math.log(1 - coverage);
-  const trace = sxx + syy;
-  const root = Math.sqrt(Math.max(0, trace * trace / 4 - determinant));
-  return { cx: mx, cy: my, n: points.length,
-           area: Math.PI * k * Math.sqrt(determinant),
-           major: Math.sqrt(k * Math.max(0, trace / 2 + root)),
-           minor: Math.sqrt(k * Math.max(0, trace / 2 - root)),
-           angle: 0.5 * Math.atan2(2 * sxy, sxx - syy) };
-}
-
-function eventsOf(trial, codes, cut, upToDay) {
-  const points = [];
-  const byDay = (BUCKETS && BUCKETS[trial]) || {};
-  Object.keys(byDay).forEach(day => {
-    if (upToDay !== undefined && +day > upToDay) return;
-    codes.forEach(code => {
-      const found = byDay[day][code] || [];
-      for (let i = 0; i < found.length; i++) points.push(found[i]);
-    });
-  });
-  return points;
-}
-
-// Outside the tray crop is not data: the sensor sees tank walls and floor
-// there, and leaving it in makes every map's colour scale answer to something
-// that is not sand.
-function cropped(values, meta, trial) {
-  const outside = cropMaskFor(meta, trial);
-  if (!outside) return values;
-  const out = new Float32Array(values.length);
-  for (let i = 0; i < values.length; i++)
-    out[i] = outside[i] ? NaN : values[i];
-  return out;
-}
-
-// ------------------------------------------------------------------- panels
-// The ellipse the table measures, drawn where it belongs. A number in a table
-// says how spread out the events are; the outline says where, and whether the
-// two behaviours sit in different places.
-function drawEllipse(ctx, shape, colour, sx, sy) {
-  if (!shape) return;
-  ctx.save();
-  ctx.translate(shape.cx * sx, shape.cy * sy);
-  ctx.rotate(shape.angle);
-  ctx.strokeStyle = 'rgb(' + colour.join(',') + ')';
-  ctx.lineWidth = 1.2;
-  ctx.globalAlpha = 0.95;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, shape.major * sx, shape.minor * sy, 0, 0, 6.2832);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(0, 0, 2, 0, 6.2832);
-  ctx.fillStyle = 'rgb(' + colour.join(',') + ')';
-  ctx.fill();
-  ctx.restore();
-  ctx.globalAlpha = 1;
-}
-
-function scatterPanel(groups, meta, foot) {
-  const box = el('div');
-  const stage = el('div', 'stage');
-  const canvas = el('canvas');
-  canvas.width = meta.width; canvas.height = meta.height;
-  stage.appendChild(canvas);
-  box.appendChild(stage);
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#0b0d11';
-  ctx.fillRect(0, 0, meta.width, meta.height);
-  const sx = meta.width / D.depthSize[0], sy = meta.height / D.depthSize[1];
-  groups.forEach(group => {
-    ctx.fillStyle = 'rgb(' + group.colour.join(',') + ')';
-    ctx.globalAlpha = group.points.length > 300 ? 0.4 : 0.75;
-    group.points.forEach(point => {
-      ctx.beginPath();
-      ctx.arc(point[0] * sx, point[1] * sy, 1.4, 0, 6.2832);
-      ctx.fill();
-    });
-  });
-  ctx.globalAlpha = 1;
-  groups.forEach(group => {
-    if (group.ellipse === false) return;
-    drawEllipse(ctx, dispersion(group.points, COVERAGE), group.colour, sx, sy);
-  });
-  if (foot) box.appendChild(el('div', 'cellfoot', foot));
-  return box;
-}
-
-// Depth inferred from the events: a spit puts sand down, a scoop takes it
-// away. The scale is fitted per trial so the totals match the sensor, which
-// makes the constant itself informative — it is centimetres of sand per net
-// event, and a wildly different value between trials means something changed.
-function eventDepthMap(trial, upToDay, meta, cut) {
-  const values = new Float32Array(meta.width * meta.height);
-  const sx = meta.width / D.depthSize[0], sy = meta.height / D.depthSize[1];
-  const byDay = (BUCKETS && BUCKETS[trial]) || {};
-  [[EVENTS.code.p, 1], [EVENTS.code.c, -1]].forEach(([code, sign]) => {
-    Object.keys(byDay).forEach(day => {
-      if (+day > upToDay) return;
-      const found = byDay[day][code] || [];
-      for (let i = 0; i < found.length; i++) {
-        const x = Math.round(found[i][0] * sx), y = Math.round(found[i][1] * sy);
-        if (x < 0 || y < 0 || x >= meta.width || y >= meta.height) continue;
-        values[y * meta.width + x] += sign;
-      }
-    });
-  });
-  // the spread is given in depth pixels, and the maps are downsampled
-  const radius = Math.max(1, Math.round(SPREAD / 2 / (D.downsample || 1)));
-  return blur(values, meta.width, meta.height, radius);
-}
-
-// A box blur done as two one-dimensional passes with a running sum, so the
-// cost does not depend on the radius. The naive version was O(radius squared)
-// per pixel, which at a thirty-pixel spread would be seventy million
-// operations for one map.
-function blur(values, width, height, radius) {
-  if (radius < 1) return values;
-  const pass = new Float32Array(values.length);
-  const out = new Float32Array(values.length);
-  const span = 2 * radius + 1;
-
-  for (let y = 0; y < height; y++) {
-    const row = y * width;
-    let sum = 0;
-    for (let x = -radius; x <= radius; x++)
-      sum += values[row + Math.min(width - 1, Math.max(0, x))];
-    for (let x = 0; x < width; x++) {
-      pass[row + x] = sum / span;
-      const leaving = row + Math.min(width - 1, Math.max(0, x - radius));
-      const entering = row + Math.min(width - 1, Math.max(0, x + radius + 1));
-      sum += values[entering] - values[leaving];
-    }
-  }
-
-  for (let x = 0; x < width; x++) {
-    let sum = 0;
-    for (let y = -radius; y <= radius; y++)
-      sum += pass[Math.min(height - 1, Math.max(0, y)) * width + x];
-    for (let y = 0; y < height; y++) {
-      out[y * width + x] = sum / span;
-      const leaving = Math.min(height - 1, Math.max(0, y - radius)) * width + x;
-      const entering = Math.min(height - 1, Math.max(0, y + radius + 1)) * width + x;
-      sum += pass[entering] - pass[leaving];
-    }
-  }
-  return out;
-}
-
-function fitScale(depthChange, eventMap) {
-  // one number: the ratio that makes the event map's spread match the sensor's
-  let a = 0, b = 0;
-  for (let i = 0; i < eventMap.length; i++) {
-    const measured = depthChange[i];
-    if (Number.isNaN(measured)) continue;
-    a += eventMap[i] * measured;
-    b += eventMap[i] * eventMap[i];
-  }
-  return b > 0 ? a / b : 0;
-}
-
-function renderTrial(trial, days, host) {
-  const cut = Math.round(CONFIDENCE * 255);
-  const meta = days[0].firstPng;
-  const code = EVENTS.code;
-
-  for (let offset = 0; offset < days.length; offset += 8) {
-    const block = days.slice(offset, offset + 8);
-    const pad = 8 - block.length;
-    const table = el('div', 'matrix');
-    table.style.gridTemplateColumns = '132px repeat(8, minmax(0, 1fr))';
-    host.appendChild(table);
-
-    table.appendChild(el('div', 'blank'));
-    block.forEach(day => {
-      const head = el('div', 'colhead',
-        '<b>' + day.date.slice(5) + '</b><span>day ' + (day.index + 1) + '</span>');
-      head.appendChild(dayMarkControls(day));
-      table.appendChild(head);
-    });
-    for (let i = 0; i < pad; i++) table.appendChild(el('div', 'blank'));
-
-    ROWS.forEach(([name, hint, key]) => {
-      table.appendChild(el('div', 'rowlab',
-        '<b>' + name + '</b><span>' + hint + '</span>'));
-      block.forEach(day => {
-        const slot = el('div', 'cell');
-        table.appendChild(slot);
-        fillCell(slot, key, trial, day, days, meta, cut);
-      });
-      for (let i = 0; i < pad; i++) table.appendChild(el('div', 'blank'));
-    });
-  }
-}
-
-function fillCell(slot, key, trial, day, days, meta, cut) {
-  if (key === 'still') {
-    // the depth camera's own JPEG, which comes out of the frame archive. A few
-    // frames are written without one, so fall back to that day's video still
-    // rather than leaving a hole, and say which is being shown.
-    const source = day.firstJpg || day.videoJpg;
-    if (source) {
-      const stage = el('div', 'stage');
-      const image = el('img');
-      image.src = source;
-      stage.appendChild(image);
-      slot.appendChild(stage);
-      if (!day.firstJpg)
-        slot.appendChild(el('div', 'cellfoot', 'video still \u2014 no depth JPEG'));
-    } else {
-      slot.appendChild(el('div', 'cellnote', 'no still in the archive'));
-    }
-    return;
-  }
-
-  if (key === 'depth') {
-    Promise.all([loadDepth(days[0].firstPng), loadDepth(day.lastPng)])
-      .then(([first, last]) => {
-        if (!first || !last) return;
-        const canvas = el('canvas');
-        const stage = el('div', 'stage');
-        stage.appendChild(canvas);
-        slot.appendChild(stage);
-        paintMap(canvas, cropped(difference(first, last), meta, trial), meta,
-                 { range: 4 });
-      });
-    return;
-  }
-
-  if (key === 'daily') {
-    // this day's own morning against the next, which is the change the depth
-    // page calls 24 hour: it isolates one day from the accumulated total
-    const position = days.findIndex(d => d.index === day.index);
-    const next = days[position + 1];
-    if (!next) {
-      slot.appendChild(el('div', 'cellnote', 'no following day in this trial'));
-      return;
-    }
-    Promise.all([loadDepth(day.firstPng), loadDepth(next.firstPng)])
-      .then(([morning, nextMorning]) => {
-        if (!morning || !nextMorning) return;
-        const canvas = el('canvas');
-        const stage = el('div', 'stage');
-        stage.appendChild(canvas);
-        slot.appendChild(stage);
-        paintMap(canvas, cropped(difference(morning, nextMorning), meta, trial),
-                 meta, { range: 2 });
-      });
-    return;
-  }
-
-  if (key === 'fromEvents') {
-    Promise.all([loadDepth(days[0].firstPng), loadDepth(day.lastPng)])
-      .then(([first, last]) => {
-        if (!first || !last) return;
-        const total = cropped(difference(first, last), meta, trial);
-        const events = eventDepthMap(trial, day.index, meta, cut);
-        const scale = fitScale(total, events);
-        SCALE = scale;
-        const scaled = new Float32Array(events.length);
-        for (let i = 0; i < events.length; i++) scaled[i] = events[i] * scale;
-        const shown = cropped(scaled, meta, trial);
-        const canvas = el('canvas');
-        const stage = el('div', 'stage');
-        stage.appendChild(canvas);
-        slot.appendChild(stage);
-        paintMap(canvas, shown, meta, { range: 4 });
-        slot.appendChild(el('div', 'cellfoot',
-          scale ? scale.toFixed(3) + ' cm per net event, ' + SPREAD + ' px spread'
-                : 'no fit'));
-      });
-    return;
-  }
-
-  if (key === 'build') {
-    const groups = [
-      { colour: COLOURS.scoop,
-        points: eventsOfDay(trial, new Set([EVENTS.code.c]), cut, day.index) },
-      { colour: COLOURS.spit,
-        points: eventsOfDay(trial, new Set([EVENTS.code.p]), cut, day.index) },
-      // multiples are scoop and spit in one pass, so an ellipse over them
-      // describes neither behaviour
-      { colour: COLOURS.multiple, ellipse: false,
-        points: eventsOfDay(trial, new Set([EVENTS.code.b]), cut, day.index) }];
-    slot.appendChild(scatterPanel(groups, meta,
-      groups.map(g => g.points.length).join(' / ')));
-    return;
-  }
-
-  if (key === 'spawn') {
-    const points = eventsOfDay(trial, new Set([EVENTS.code.s]), cut, day.index);
-    slot.appendChild(scatterPanel([{ colour: COLOURS.spawn, points }], meta,
-      String(points.length)));
-    return;
-  }
-
-  if (key === 'spread') {
-    // everything up to this day, so the ellipses settle as evidence builds
-    const scoops = eventsOf(trial, new Set([EVENTS.code.c]), cut, day.index);
-    const spits = eventsOf(trial, new Set([EVENTS.code.p]), cut, day.index);
-    const cm = D.pixelLength || 0.1030168618;
-    const a = dispersion(scoops, COVERAGE), b = dispersion(spits, COVERAGE);
-    const foot = (a && b)
-      ? (a.area * cm * cm).toFixed(0) + ' / ' + (b.area * cm * cm).toFixed(0) +
-        ' cm\u00b2'
-      : 'too few';
-    slot.appendChild(scatterPanel(
-      [{ colour: COLOURS.scoop, points: scoops, ellipse: false },
-       { colour: COLOURS.spit, points: spits, ellipse: false }], meta, foot));
-  }
-}
-
-function eventsOfDay(trial, codes, cut, dayIndex) {
-  const points = [];
-  codes.forEach(code => {
-    const found = bucket(trial, dayIndex, code);
-    for (let i = 0; i < found.length; i++) points.push(found[i]);
-  });
-  return points;
-}
-
-// ------------------------------------------------- where spawning happens
-// The question is whether spawning happens over the castle or the pit, so the
-// depth under each spawn is read from the trial's own total change and
-// histogrammed. A distribution centred on zero would mean spawning ignores the
-// bower entirely, which is itself an answer.
-function spawnHistogram(trial, days, meta, cut) {
-  const figure = el('figure');
-  figure.appendChild(el('figcaption', null, '<b>Depth under each spawn</b>'));
-
-  // Spawns are gathered first so the ellipse can be fitted over all of them,
-  // then each is read against the cumulative change up to its OWN day. Using
-  // the whole trial's total would ask what the sand looked like at the end,
-  // not what the fish was spawning over at the time.
-  const spawns = [];
-  for (let i = 0; i < EVENTS.n; i++) {
-    if (EVENTS.trial[i] !== trial || !keep(i, cut)) continue;
-    if (EVENTS.bid[i] !== EVENTS.code.s) continue;
-    spawns.push({ x: EVENTS.dx[i], y: EVENTS.dy[i], day: EVENTS.day[i] });
-  }
-  if (spawns.length < 5) {
-    figure.appendChild(el('figcaption', null, 'too few spawns to plot'));
-    return figure;
-  }
-
-  // Only the spawns inside the ellipse. A spawn across the tank is a different
-  // event from one on the bower, and including it moves the distribution
-  // toward zero for a reason that has nothing to do with bower shape.
-  const shape = dispersion(spawns.map(s => [s.x, s.y]), COVERAGE);
-  const inside = shape ? spawns.filter(spawn => {
-    const dx = spawn.x - shape.cx, dy = spawn.y - shape.cy;
-    const cos = Math.cos(-shape.angle), sin = Math.sin(-shape.angle);
-    const u = (dx * cos - dy * sin) / shape.major;
-    const v = (dx * sin + dy * cos) / shape.minor;
-    return u * u + v * v <= 1;
-  }) : spawns;
-
-  const byDay = {};
-  inside.forEach(spawn => { (byDay[spawn.day] = byDay[spawn.day] || []).push(spawn); });
-  const sx = meta.width / D.depthSize[0], sy = meta.height / D.depthSize[1];
-
-  const wanted = Object.keys(byDay)
-    .map(index => days.find(day => day.index === +index))
-    .filter(Boolean);
-
-  Promise.all([loadDepth(days[0].firstPng)].concat(
-      wanted.map(day => loadDepth(day.lastPng)))).then(results => {
-    const start = results[0];
-    if (!start) return;
-    const values = [];
-    wanted.forEach((day, position) => {
-      const end = results[position + 1];
-      if (!end) return;
-      const cumulative = cropped(difference(start, end), meta, trial);
-      byDay[day.index].forEach(spawn => {
-        const x = Math.round(spawn.x * sx), y = Math.round(spawn.y * sy);
-        if (x < 0 || y < 0 || x >= meta.width || y >= meta.height) return;
-        const depth = cumulative[y * meta.width + x];
-        if (!Number.isNaN(depth)) values.push(depth);
-      });
-    });
-    if (values.length < 5) {
-      figure.appendChild(el('figcaption', null, 'too few spawns on measurable sand'));
-      return;
-    }
-
-    const bins = 24, span = 4;
-    const counts = new Float32Array(bins);
-    values.forEach(value => {
-      const bin = Math.min(bins - 1, Math.max(0,
-        Math.floor((value + span) / (2 * span) * bins)));
-      counts[bin] += 1;
-    });
-    const peak = Math.max(...counts) || 1;
-    const width = 520, height = 200, pad = 36;
-    let body = '';
-    for (let i = 0; i < bins; i++) {
-      const size = (counts[i] / peak) * (height - 2 * pad);
-      const value = -span + (2 * span) * (i + 0.5) / bins;
-      body += '<rect x="' + (pad + (width - 2 * pad) / bins * i + 1) + '" y="' +
-              (height - pad - size) + '" width="' +
-              ((width - 2 * pad) / bins - 2) + '" height="' + size +
-              '" fill="' + (value >= 0 ? 'rgb(111,178,232)' : 'rgb(242,163,60)') +
-              '" opacity="0.85"><title>' + value.toFixed(1) + ' cm: ' +
-              counts[i] + ' spawns</title></rect>';
-    }
-    const zero = pad + (width - 2 * pad) * 0.5;
-    body += '<line x1="' + zero + '" y1="' + (pad - 6) + '" x2="' + zero + '" y2="' +
-            (height - pad) + '" stroke="#93a0b0" stroke-dasharray="3 3"/>';
-    body += '<text x="' + pad + '" y="' + (height - 8) +
-            '" fill="#93a0b0" font-size="10">\u2212' + span + ' cm, pit</text>' +
-            '<text x="' + (width - pad) + '" y="' + (height - 8) +
-            '" fill="#93a0b0" font-size="10" text-anchor="end">+' + span +
-            ' cm, castle</text>';
-    const sorted = values.slice().sort((a, b) => a - b);
-    const median = sorted[sorted.length >> 1];
-    const holder = el('div');
-    holder.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height +
-                       '" style="width:100%;display:block">' + body + '</svg>';
-    figure.insertBefore(holder, figure.firstChild);
-    figure.appendChild(el('figcaption', null,
-      values.length + ' of ' + spawns.length + ' spawns, those inside the ' +
-      Math.round(100 * COVERAGE) + '% ellipse \u00b7 median ' +
-      median.toFixed(2) + ' cm \u00b7 ' +
-      (100 * values.filter(v => v > 0).length / values.length).toFixed(0) +
-      '% over sand that had been added by that day. Each spawn is read against ' +
-      'the change accumulated up to its own day, not the trial total.'));
-  });
-  return figure;
-}
-
-// ------------------------------------------------- how confined each is
-function dispersionTable(trial, days) {
-  const figure = el('figure');
-  const rows = [];
-  const windows = [[8, 18, 'all day'], [8, 13, '8 to 1'], [13, 18, '1 to 6']];
-  const cuts = [0.3, 0.5, 0.67, 0.9];
-  const savedFrom = HOUR_FROM, savedTo = HOUR_TO;
-
-  cuts.forEach(confidence => {
-    windows.forEach(([from, to, label]) => {
-      HOUR_FROM = from; HOUR_TO = to;
-      const cut = Math.round(confidence * 255);
-      const scoops = eventsOf(trial, new Set([EVENTS.code.c]), cut);
-      const spits = eventsOf(trial, new Set([EVENTS.code.p]), cut);
-      const a = dispersion(scoops, COVERAGE), b = dispersion(spits, COVERAGE);
-      if (!a || !b) return;
-      const cm = D.pixelLength || 0.1030168618;
-      const separation = Math.hypot(a.cx - b.cx, a.cy - b.cy) * cm;
-      rows.push('<tr><td>' + confidence.toFixed(2) + '</td><td>' + label +
-        '</td><td>' + a.n + '</td><td>' + (a.area * cm * cm).toFixed(0) +
-        '</td><td>' + b.n + '</td><td>' + (b.area * cm * cm).toFixed(0) +
-        '</td><td>' + (b.area / a.area).toFixed(2) + '</td><td>' +
-        separation.toFixed(2) + '</td></tr>');
-    });
-  });
-  HOUR_FROM = savedFrom; HOUR_TO = savedTo;
-
-  const table = el('table', 'points');
-  table.innerHTML = '<tr><th>confidence</th><th>hours</th><th>scoops</th>' +
-    '<th>scoop area cm\u00b2</th><th>spits</th><th>spit area cm\u00b2</th>' +
-    '<th>spit / scoop</th><th>centroids apart cm</th></tr>' + rows.join('');
-  figure.appendChild(el('figcaption', null,
-    '<b>How confined scoops and spits each are.</b> The area is the ellipse ' +
-    'containing ' + (100 * COVERAGE).toFixed(0) + '% of the events, from their ' +
-    'covariance. A ratio near one means the two are equally spread; a large ' +
-    'separation means they happen in different places, which is what building a ' +
-    'bower looks like.'));
-  figure.appendChild(table);
-  return figure;
-}
-
-function draw() {
-  const body = document.getElementById('body');
-  body.textContent = '';
-  if (!EVENTS.projected) {
-    body.appendChild(el('div', 'note', 'This project has no saved registration, so ' +
-      'cluster events cannot be put into depth coordinates. Set one on the prep page.'));
-    return;
-  }
-  // a trial whose events could not be placed says so, instead of drawing an
-  // empty panel beside a count of events that are really there
-  const unplaced = Object.keys(EVENTS.unplacedTrials || {});
-  if (unplaced.length) {
-    body.appendChild(el('div', 'note',
-      'Trial ' + unplaced.join(', ') + ' ' + (unplaced.length > 1 ? 'have' : 'has') +
-      ' no registration, so ' +
-      unplaced.reduce((sum, t) => sum + EVENTS.unplacedTrials[t], 0) +
-      ' events cannot be placed in depth coordinates and are left out below. ' +
-      'This happens when a trial was given its own settings before a ' +
-      'registration existed to copy. Fit it on the prep page, or remove its ' +
-      'override so it falls back to the project registration.'));
-  }
-
-  const excluded = excludedBanner();
-  if (excluded) body.appendChild(excluded);
-  bucketEvents(Math.round(CONFIDENCE * 255));
-
-  const byTrial = daysByTrial(false);
-
-  Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
-    const days = byTrial[trial];
-    const section = el('div', 'trial');
-    const missing = (EVENTS.unplacedTrials || {})[trial];
-    section.appendChild(el('h3', null, 'Trial ' + trial +
-      '<span>' + days.length + ' days' +
-      (missing ? ' \u00b7 no registration, ' + missing + ' events unplaced' : '') +
-      '</span>'));
-    body.appendChild(section);
-    renderTrial(+trial, days, section);
-
-    const cut = Math.round(CONFIDENCE * 255);
-    const lower = el('div', 'grid cols-2');
-    lower.appendChild(spawnHistogram(+trial, days, days[0].firstPng, cut));
-    lower.appendChild(dispersionTable(+trial, days));
-    section.appendChild(lower);
-  });
-}
-
-// Only the marks are sent, merged onto what is already saved: this page has
-// no registration or crop controls, so posting the whole object would let a
-// stale copy here overwrite a change made on the prep page.
-function saveMarks(whoField) {
-  const who = (whoField && whoField.value || '').trim();
-  if (!who) {
-    window.alert('Put your name in before saving, so the change can be traced back.');
-    if (whoField) whoField.focus();
-    return;
-  }
-  try { window.localStorage.setItem('cbc-who', who); } catch (e) { /* private mode */ }
-  const button = document.getElementById('save');
-  const state = document.getElementById('state');
-  button.disabled = true;
-  state.textContent = 'saving\u2026';
-  fetch('marks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ who: who, day_marks: PREP.day_marks || {} }) })
-    .then(response => response.json().then(body => ({ ok: response.ok, body })))
-    .then(({ ok, body }) => {
-      if (!ok) throw new Error(body.error || 'the server refused the change');
-      DIRTY = false;
-      state.textContent = 'saved ' + (body.updated || '').slice(11, 16);
-    })
-    .catch(error => {
-      button.disabled = false;
-      state.textContent = 'not saved: ' + error.message;
-    });
-}
-
-function build() {
-  document.getElementById('title').textContent = D.projectID;
-  document.getElementById('subtitle').textContent =
-    'Depth and behaviour in one frame.';
-  document.getElementById('meta').innerHTML =
-    [['Tank', D.tankID], ['Events', EVENTS.n], ['Days', D.days.length],
-     ['Trials', D.trials.length],
-     ['Registered', PREP.transform ? 'yes' : 'no']]
-    .map(([k, v]) => '<div>' + k + '<b>' + v + '</b></div>').join('');
-
-  const bar = document.getElementById('controls');
-  bar.innerHTML =
-    '<label>Confidence \u2265 <b id="cv">' + CONFIDENCE.toFixed(2) + '</b></label>' +
-    '<input type="range" id="cr" min="0" max="0.99" step="0.01" value="' +
-      CONFIDENCE + '">' +
-    '<label>Hours <b id="hv">' + HOUR_FROM + '\u2013' + HOUR_TO + '</b></label>' +
-    '<input type="range" id="h1" min="0" max="24" step="1" value="' + HOUR_FROM + '">' +
-    '<input type="range" id="h2" min="0" max="24" step="1" value="' + HOUR_TO + '">' +
-    '<label>Ellipse covers <b id="ev">' + Math.round(100 * COVERAGE) +
-    '</b>%</label>' +
-    '<input type="range" id="er" min="50" max="99" step="1" value="' +
-      Math.round(100 * COVERAGE) + '">' +
-    '<label>Event spread <b id="sv">' + SPREAD + '</b> px</label>' +
-    '<input type="range" id="sr" min="5" max="80" step="5" value="' + SPREAD + '">' +
-    '<span class="spacer"></span>' +
-    '<label for="who" class="stat">Your name</label>' +
-    '<input id="who" placeholder="e.g. Emily Keaton" autocomplete="name">' +
-    '<span class="stat" id="state"></span>' +
-    '<button class="act primary" id="save" disabled>Save marks</button>';
-
-  const whoField = bar.querySelector('#who');
-  const saveButton = bar.querySelector('#save');
-  if (whoField) {
-    let remembered = '';
-    try { remembered = window.localStorage.getItem('cbc-who') || ''; }
-    catch (e) { remembered = ''; }          // private mode: no store to read
-    whoField.value = PREP.who || remembered;
-  }
-  if (saveButton)
-    saveButton.addEventListener('click', () => saveMarks(whoField));
-
-  let pending = null;
-  const later = () => {
-    if (pending) clearTimeout(pending);
-    pending = setTimeout(draw, 220);
-  };
-  bar.querySelector('#cr').addEventListener('input', event => {
-    CONFIDENCE = parseFloat(event.target.value);
-    bar.querySelector('#cv').textContent = CONFIDENCE.toFixed(2);
-    later();
-  });
-  const hours = () => {
-    bar.querySelector('#hv').textContent = HOUR_FROM + '\u2013' + HOUR_TO;
-    later();
-  };
-  bar.querySelector('#h1').addEventListener('input', event => {
-    HOUR_FROM = Math.min(parseInt(event.target.value, 10), HOUR_TO - 1);
-    hours();
-  });
-  bar.querySelector('#h2').addEventListener('input', event => {
-    HOUR_TO = Math.max(parseInt(event.target.value, 10), HOUR_FROM + 1);
-    hours();
-  });
-  bar.querySelector('#sr').addEventListener('input', event => {
-    SPREAD = parseInt(event.target.value, 10);
-    bar.querySelector('#sv').textContent = SPREAD;
-    later();
-  });
-  bar.querySelector('#sr').addEventListener('input', event => {
-    SPREAD = parseInt(event.target.value, 10);
-    bar.querySelector('#sv').textContent = SPREAD;
-    later();
-  });
-  bar.querySelector('#er').addEventListener('input', event => {
-    COVERAGE = parseInt(event.target.value, 10) / 100;
-    bar.querySelector('#ev').textContent = (100 * COVERAGE).toFixed(0);
-    later();
-  });
-  draw();
-}
-
-window.addEventListener('beforeunload', event => {
-  if (DIRTY) { event.preventDefault(); event.returnValue = ''; }
-});
-
-loadPayload(() => {
-  loadEvents().then(events => {
-    if (!events) {
-      document.getElementById('body').appendChild(el('div', 'note',
-        'No cluster data collected for this project.'));
-      return;
-    }
-    build();
-    document.getElementById('foot').textContent =
-      'Collected ' + D.collected + ' \u00b7 page built ' + D.built;
-  });
-});
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+  :root { --ink:#e8ecf1; --dim:#93a0b0; --bg:#0e1116; --panel:#171c24; --line:#262d38;
+          --tray:#f2a33c; --video:#6fb2e8; --ok:#5aa87a; --warn:#e0693f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.55 "Inter","Helvetica Neue",Arial,sans-serif; }
+  .wrap { max-width:1680px; margin:0 auto; padding:24px 22px 80px; }
+  h1 { font-size:23px; font-weight:600; margin:0 0 3px; }
+  h2 { font-size:15px; font-weight:600; margin:26px 0 12px; }
+  .sub { color:var(--dim); margin:0 0 16px; }
+  a { color:var(--tray); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .back { display:inline-block; margin-bottom:12px; font-size:13px; color:var(--dim); }
+  .meta { display:flex; flex-wrap:wrap; gap:10px 26px; padding:14px 0 16px;
+          border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
+  .meta div { font-size:13px; color:var(--dim); }
+  .meta b { display:block; color:var(--ink); font-weight:500;
+            font-variant-numeric:tabular-nums; }
+  .tabs { display:flex; gap:4px; margin:18px 0; flex-wrap:wrap; }
+  .tabs button { background:none; border:1px solid var(--line); color:var(--dim);
+                 padding:8px 17px; border-radius:999px; cursor:pointer; font:inherit;
+                 font-size:14px; }
+  .tabs button[aria-selected="true"] { background:var(--ink); color:var(--bg);
+                                       border-color:var(--ink); }
+  .bar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:12px 0;
+         border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+         margin-bottom:16px; }
+  .bar label { font-size:13px; color:var(--dim); }
+  .bar b { color:var(--ink); font-variant-numeric:tabular-nums; }
+  .bar input[type=range] { width:180px; accent-color:var(--tray); }
+  .spacer { flex:1; }
+  button.act { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+               padding:8px 15px; border-radius:6px; font:inherit; font-size:14px;
+               cursor:pointer; }
+  button.act:hover { border-color:var(--tray); }
+  button.act.primary { background:var(--tray); color:#141414; border-color:var(--tray); }
+  button.act:disabled { opacity:.45; cursor:default; }
+  .stat { font-size:13px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .stat b { color:var(--ink); font-weight:500; }
+  .grid { display:grid; gap:14px; }
+  .cols-5 { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .cols-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .cols-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .cols-4 { grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+  @media (min-width:1500px) { .cols-4 { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  .cols-8 { grid-template-columns:repeat(8,minmax(0,1fr)); gap:7px; }
+  .lower { align-items:start; margin-top:4px; }
+  .lower figure.half { max-width:100%; }
+  .threequarter figure { max-width:75%; }
+  @media (max-width:1100px) { .threequarter figure { max-width:100%; } }
+  .cols-8 figcaption { padding:5px 7px; font-size:11px; }
+  @media (max-width:1500px) { .cols-8 { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  .wipe { position:absolute; inset:0; overflow:hidden; width:50%; }
+  .wipe img { position:absolute; top:0; left:0; max-width:none; }
+  .divider { position:absolute; top:0; bottom:0; width:2px; background:var(--tray);
+             pointer-events:none; }
+  table.points { width:auto; border-collapse:collapse; font-size:13px; margin-top:8px;
+                 font-variant-numeric:tabular-nums; }
+  table.points th, table.points td { text-align:left; padding:4px 14px 4px 0;
+                                     border-bottom:1px solid var(--line); }
+  table.points th { color:var(--dim); font-weight:500; }
+  @media (max-width:1300px) { .cols-5 { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+  @media (max-width:900px) { .cols-5,.cols-3,.cols-2 { grid-template-columns:1fr; } }
+  figure { margin:0; background:var(--panel); border:1px solid var(--line);
+           border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
+  figure.picked { border-color:var(--ok); box-shadow:0 0 0 1px var(--ok) inset; }
+  figcaption { padding:9px 12px; font-size:12px; color:var(--dim); flex:1; }
+  figcaption b { color:var(--ink); font-weight:600; }
+  .stage { position:relative; line-height:0; background:#0b0d11; }
+  .stage img, .stage canvas { width:100%; display:block; }
+  .stage svg { position:absolute; inset:0; width:100%; height:100%; }
+  .stage polygon { fill:none; stroke:var(--tray); stroke-width:2.5;
+                   vector-effect:non-scaling-stroke; }
+  .stage polygon.video { stroke:var(--video); }
+  .stage polygon.derived { stroke:rgba(242,163,60,.55); stroke-width:2;
+                           stroke-dasharray:8 6; }
+  .crosshair-h, .crosshair-v { position:absolute; background:rgba(255,255,255,.85);
+                               pointer-events:none; }
+  .crosshair-h { left:0; right:0; top:50%; height:1px; margin-top:-0.5px; }
+  .crosshair-v { top:0; bottom:0; left:50%; width:1px; margin-left:-0.5px; }
+  .loupe { position:absolute; width:140px; height:140px; border-radius:50%;
+           border:2px solid var(--tray); background-repeat:no-repeat;
+           pointer-events:none; display:none; box-shadow:0 4px 18px rgba(0,0,0,.6);
+           image-rendering:pixelated; z-index:5; }
+  .bar select { background:var(--panel); border:1px solid var(--line); color:var(--ink);
+                padding:7px 10px; border-radius:6px; font:inherit; font-size:13px; }
+  .stage .handle { fill:var(--tray); stroke:#141414; stroke-width:1.5; cursor:grab; }
+  .readout { position:absolute; left:8px; bottom:8px; background:rgba(6,9,13,.85);
+             padding:3px 8px; border-radius:4px; font-size:12px; color:var(--ink);
+             font-variant-numeric:tabular-nums; pointer-events:none; opacity:0;
+             transition:opacity .12s; }
+  .stage:hover .readout { opacity:1; }
+  .pick { border:none; border-top:1px solid var(--line); background:none;
+          color:var(--ink); padding:8px; font:inherit; font-size:13px; cursor:pointer; }
+  .pick:hover { background:var(--ink); color:var(--bg); }
+  figure.picked .pick { color:var(--ok); }
+  .trial { margin-bottom:26px; }
+  .trial h3 { display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; font-size:15px;
+              border-bottom:1px solid var(--line); padding-bottom:8px; margin:0 0 10px; }
+  .trial h3 span { font-weight:400; font-size:13px; color:var(--dim);
+                   font-variant-numeric:tabular-nums; }
+  .note { background:rgba(224,105,63,.1); border:1px solid rgba(224,105,63,.35);
+          color:#f0c3ae; padding:10px 13px; border-radius:7px; font-size:13px;
+          margin:0 0 14px; }
+  .msg { padding:10px 13px; border-radius:7px; font-size:13px; margin:12px 0 0; }
+  .msg.ok { background:rgba(90,168,122,.12); border:1px solid rgba(90,168,122,.4);
+            color:#bfe3cd; }
+  .msg.bad { background:rgba(224,105,63,.12); border:1px solid rgba(224,105,63,.4);
+             color:#f0c3ae; }
+  .foot { margin-top:40px; padding-top:14px; border-top:1px solid var(--line);
+          color:var(--dim); font-size:12px; }
+  .swap { display:flex; gap:10px; align-items:center; }
+  .block { margin-bottom:24px; }
+  .matrix { display:grid; gap:6px; align-items:start; }
+  .matrix .colhead { font-size:12px; color:var(--dim); padding:0 0 4px;
+                     font-variant-numeric:tabular-nums; }
+  .matrix .colhead b { display:block; color:var(--ink); font-weight:600; font-size:13px; }
+  .rowlab { font-size:12px; color:var(--ink); padding:4px 8px 0 0; }
+  .rowlab b { display:block; font-weight:600; }
+  .rowlab span { color:var(--dim); font-size:11px; }
+  .cell { background:var(--panel); border:1px solid var(--line); border-radius:5px;
+          overflow:hidden; }
+  .cellnote { padding:14px 8px; font-size:11px; color:var(--dim); text-align:center; }
+  .cellfoot { padding:3px 6px; font-size:10px; color:var(--dim);
+              border-top:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  .banner { display:flex; gap:10px; align-items:center; padding:9px 13px;
+            border-radius:7px; font-size:13px; margin:0 0 14px;
+            background:rgba(224,105,63,.1); border:1px solid rgba(224,105,63,.3);
+            color:#f0c3ae; }
+  .chip { font-size:11px; padding:2px 8px; border-radius:999px;
+          border:1px solid var(--line); color:var(--dim);
+          font-variant-numeric:tabular-nums; }
+  .chip.own { border-color:var(--tray); color:var(--tray); }
+  .chip.out { border-color:var(--warn); color:var(--warn); }
+  label.daymark { display:inline-flex; align-items:center; gap:5px; font-size:11px;
+                  color:var(--dim); cursor:pointer; padding:1px 0; }
+  label.daymark input { accent-color:var(--tray); width:12px; height:12px;
+                        margin:0; flex:none; }
+  label.daymark.set { color:var(--tray); }
+  .blank { }
+</style>
+<script>
+// Registered before anything else loads, so a script that fails to parse --
+// which stops the page dead and renders nothing -- reports itself instead of
+// leaving a blank screen with the reason only in the console.
+window.addEventListener('error', function (event) {
+  var box = document.getElementById('body') || document.body;
+  if (!box || box.dataset.failed) return;
+  box.dataset.failed = '1';
+  var note = document.createElement('div');
+  note.className = 'note';
+  note.textContent = 'This page could not start: ' +
+    (event.message || 'unknown error') +
+    (event.filename ? ' (' + event.filename.split('/').pop() +
+     ' line ' + event.lineno + ')' : '');
+  box.insertBefore(note, box.firstChild);
+}, true);
+</script>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../">All projects</a>
+  <h1 id="title"></h1>
+  <p class="sub" id="subtitle"></p>
+  <div class="meta" id="meta"></div>
+  <div class="bar">
+    <a class="back" href="prep" style="margin:0">Prep</a>
+    <a class="back" href="depth" style="margin:0">Depth</a>
+    <a class="back" href="clusters" style="margin:0">Clusters</a>
+    <a class="back" href="features" style="margin:0">Features</a>
+  </div>
+  <div class="bar" id="controls"></div>
+  <p class="sub">Cluster events are placed in depth coordinates through the saved
+     registration, so behaviour and the sand it moved can be read in one frame.</p>
+  <div id="body"></div>
+  <p class="foot" id="foot"></p>
+</div>
+<script src="common.js"></script>
+<script src="summary.js"></script>
+</body>
+</html>
