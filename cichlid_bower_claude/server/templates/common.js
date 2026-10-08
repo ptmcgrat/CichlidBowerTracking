@@ -217,10 +217,20 @@ function excludedBanner() {
 }
 
 // ----------------------------------------------------------------- the crop
+// Which pixels fall outside the crop, remembered between calls.
+//
+// This is a point-in-polygon test per pixel, and the summary page asks for it
+// once per cell -- four times a day, thirty-four days -- for a crop that does
+// not change between them. Keyed on the points themselves, so an edit on the
+// prep page still takes effect immediately.
+const CROP_MASKS = {};
+
 function cropMaskFor(meta, trial) {
   // the crop is in full-resolution depth coordinates; a map may be smaller
   const points = trial === undefined ? PREP.depth_crop : depthCropFor(trial);
   if (!points || points.length < 3) return null;
+  const key = meta.width + 'x' + meta.height + ':' + JSON.stringify(points);
+  if (CROP_MASKS[key]) return CROP_MASKS[key];
   const sx = D.depthSize[0] / meta.width, sy = D.depthSize[1] / meta.height;
   const mask = new Uint8Array(meta.width * meta.height);
   for (let y = 0; y < meta.height; y++) {
@@ -237,6 +247,7 @@ function cropMaskFor(meta, trial) {
       if (!inside) mask[y * meta.width + x] = 1;
     }
   }
+  CROP_MASKS[key] = mask;
   return mask;
 }
 

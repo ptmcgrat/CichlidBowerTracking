@@ -72,9 +72,18 @@ const dom=new JSDOM(inlined,{runScripts:'dangerously',virtualConsole:vc,
       json:()=>Promise.resolve(u.indexOf('clusters.json')>=0?packed:
                                (u.indexOf('features.json')>=0?analysis:payload))});
     w.HTMLCanvasElement.prototype.getContext=function(){return{
-      drawImage(){},putImageData(){},fillRect(){},beginPath(){},arc(){},fill(){},
-      stroke(){},save(){},restore(){},translate(){},rotate(){},ellipse(){},
-      globalAlpha:1,fillStyle:'',strokeStyle:'',lineWidth:1,
+      // the whole 2D surface a page might touch: a stub missing one method
+      // fails the page for a reason a browser would never have
+      drawImage(){},putImageData(){},fillRect(){},clearRect(){},strokeRect(){},
+      beginPath(){},closePath(){},moveTo(){},lineTo(){},arc(){},arcTo(){},
+      ellipse(){},rect(){},bezierCurveTo(){},quadraticCurveTo(){},
+      fill(){},stroke(){},clip(){},save(){},restore(){},translate(){},
+      rotate(){},scale(){},setTransform(){},transform(){},
+      fillText(){},strokeText(){},setLineDash(){},
+      measureText(){return{width:0};},
+      createLinearGradient(){return{addColorStop(){}};},
+      globalAlpha:1,fillStyle:'',strokeStyle:'',lineWidth:1,lineCap:'',
+      lineJoin:'',font:'',textAlign:'',textBaseline:'',
       getImageData:(a,b,c,d)=>({data:new w.Uint8ClampedArray(c*d*4)}),
       createImageData:(c,d)=>({data:new w.Uint8ClampedArray(c*d*4)})};};
     // jsdom fetches no images, so a page that waits for one would look blank
