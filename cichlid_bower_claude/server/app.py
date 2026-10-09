@@ -24,7 +24,7 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 
 from ..cloud import Cloud, CloudError
 from ..paths import Layout
-from ..states import AnalysisStates
+from ..states import AnalysisStates, StatesError, list_analyses
 from ..collect import bundle as B
 from . import corrections as C
 from . import features as F
@@ -32,22 +32,41 @@ from . import payload as PL
 
 app = Flask(__name__)
 
-STATE: Dict = {'layout': None, 'cloud': None, 'analysis_id': None, 'states': None,
-               'upload': True}
+STATE: Dict = {'layout': None, 'cloud': None, 'upload': True}
+# One states table per analysis, loaded when first asked for. Loading all of
+# them at startup would read a dozen files and several hundred manifests before
+# the server could answer anything.
+TABLES: Dict[str, AnalysisStates] = {}
+TABLES_GUARD = threading.Lock()
+SUMMARIES: Dict[str, tuple] = {}      # analysis -> (fingerprint, summary)
 LOCKS: Dict[str, threading.Lock] = {}
 LOCKS_GUARD = threading.Lock()
 
 
-def _lock_for(project_id: str) -> threading.Lock:
+def _lock_for(analysis_id: str, project_id: str) -> threading.Lock:
     with LOCKS_GUARD:
-        return LOCKS.setdefault(project_id, threading.Lock())
+        return LOCKS.setdefault(analysis_id + '/' + project_id, threading.Lock())
 
 
-def _paths(project_id: str):
-    states = STATE['states']
+def _states(analysis_id: str) -> AnalysisStates:
+    with TABLES_GUARD:
+        if analysis_id in TABLES:
+            return TABLES[analysis_id]
+    try:
+        table = AnalysisStates.load(STATE['layout'].analysis(analysis_id),
+                                    STATE['cloud'])
+    except StatesError:
+        abort(404)
+    with TABLES_GUARD:
+        TABLES[analysis_id] = table
+    return table
+
+
+def _paths(analysis_id: str, project_id: str):
+    states = _states(analysis_id)
     if project_id not in states.table.index:
         abort(404)
-    return STATE['layout'].project(project_id, STATE['analysis_id'])
+    return STATE['layout'].project(project_id, analysis_id)
 
 
 def viewer(claimed: str = '') -> str:
@@ -79,13 +98,13 @@ def no_cache(response):
     return response
 
 
-@app.route('/')
-@app.route('/index.html')
-def index():
-    states = STATE['states']
+@app.route('/<analysis_id>/')
+@app.route('/<analysis_id>/index.html')
+def index(analysis_id: str):
+    states = _states(analysis_id)
     rows = []
     for project_id in states.project_ids():
-        paths = STATE['layout'].project(project_id, STATE['analysis_id'])
+        paths = STATE['layout'].project(project_id, analysis_id)
         collected = paths.manifest.exists()
         try:
             prep = C.load(paths)
@@ -106,28 +125,29 @@ def index():
                      'tank': states.tank(project_id),
                      'collected': collected, 'prepped': ready, 'updated': updated,
                      'coverage': coverage, 'who': prep.who})
-    return _render_index(rows)
+    return _render_index(analysis_id, rows)
 
 
-@app.route('/features')
-@app.route('/features.html')
-def analysis_features():
+@app.route('/<analysis_id>/features')
+@app.route('/<analysis_id>/features.html')
+def analysis_features(analysis_id: str):
     """Every project's metrics side by side, grouped by category."""
-    return _template('analysis.html').replace('__ANALYSIS__', STATE['analysis_id'])
+    _states(analysis_id)
+    return _template('analysis.html').replace('__ANALYSIS__', analysis_id)
 
 
-@app.route('/features.json')
-def analysis_features_data():
+@app.route('/<analysis_id>/features.json')
+def analysis_features_data(analysis_id: str):
     """Metrics for every collected project in this analysis.
 
     Computed per project and cached, because the alternative is asking a
     browser to carry a gigabyte of depth maps. A project whose bundle or
     corrections have changed is recomputed; the rest are read from disk.
     """
-    states = STATE['states']
+    states = _states(analysis_id)
     out = []
     for project_id in states.project_ids():
-        paths = STATE['layout'].project(project_id, STATE['analysis_id'])
+        paths = STATE['layout'].project(project_id, analysis_id)
         if not paths.manifest.exists():
             continue
         try:
@@ -140,77 +160,77 @@ def analysis_features_data():
         metrics['category'] = states.category(project_id)
         metrics['tankID'] = states.tank(project_id)
         out.append(metrics)
-    return jsonify({'analysisID': STATE['analysis_id'],
+    return jsonify({'analysisID': analysis_id,
                     'threshold': F.THRESHOLD_CM, 'coverage': F.COVERAGE,
                     'projects': out})
 
 
-@app.route('/analysis.js')
-def analysis_script():
+@app.route('/<analysis_id>/analysis.js')
+def analysis_script(analysis_id: str):
     return send_from_directory(str(Path(__file__).parent / 'templates'),
                                'analysis.js')
 
 
-@app.route('/<project_id>/')
-@app.route('/<project_id>/index.html')
-@app.route('/<project_id>/prep')
-def project_page(project_id: str):
-    paths = _paths(project_id)
+@app.route('/<analysis_id>/<project_id>/')
+@app.route('/<analysis_id>/<project_id>/index.html')
+@app.route('/<analysis_id>/<project_id>/prep')
+def project_page(analysis_id: str, project_id: str):
+    paths = _paths(analysis_id, project_id)
     if PL.is_stale(paths):
         PL.build_prep_payload(paths)
     return _render_prep(project_id)
 
 
-@app.route('/<project_id>/depth')
-def depth_page(project_id: str):
-    paths = _paths(project_id)
+@app.route('/<analysis_id>/<project_id>/depth')
+def depth_page(analysis_id: str, project_id: str):
+    paths = _paths(analysis_id, project_id)
     if PL.is_stale(paths):
         PL.build_prep_payload(paths)
     return _template('depth.html').replace('__TITLE__', project_id + ' \u00b7 Depth')
 
 
-@app.route('/<project_id>/clusters')
-def clusters_page(project_id: str):
-    paths = _paths(project_id)
+@app.route('/<analysis_id>/<project_id>/clusters')
+def clusters_page(analysis_id: str, project_id: str):
+    paths = _paths(analysis_id, project_id)
     if PL.is_stale(paths):
         PL.build_prep_payload(paths)
     return _template('clusters.html').replace('__TITLE__',
                                               project_id + ' \u00b7 Clusters')
 
 
-@app.route('/<project_id>/summary')
-def summary_page(project_id: str):
-    paths = _paths(project_id)
+@app.route('/<analysis_id>/<project_id>/summary')
+def summary_page(analysis_id: str, project_id: str):
+    paths = _paths(analysis_id, project_id)
     if PL.is_stale(paths):
         PL.build_prep_payload(paths)
     return _template('summary.html').replace('__TITLE__',
                                              project_id + ' \u00b7 Summary')
 
 
-@app.route('/<project_id>/features')
-def features_page(project_id: str):
-    paths = _paths(project_id)
+@app.route('/<analysis_id>/<project_id>/features')
+def features_page(analysis_id: str, project_id: str):
+    paths = _paths(analysis_id, project_id)
     if PL.is_stale(paths):
         PL.build_prep_payload(paths)
     return _template('features.html').replace('__TITLE__',
                                               project_id + ' \u00b7 Features')
 
 
-@app.route('/<project_id>/clusters.json')
-def project_clusters(project_id: str):
+@app.route('/<analysis_id>/<project_id>/clusters.json')
+def project_clusters(analysis_id: str, project_id: str):
     """The packed events, served on their own.
 
     Larger than every image in the page put together, and only the cluster
     view needs them, so they are not embedded in the payload.
     """
-    paths = _paths(project_id)
+    paths = _paths(analysis_id, project_id)
     if not paths.clusters_packed.exists():
         return jsonify({'error': 'no cluster data collected for this project'}), 404
     return send_from_directory(str(paths.collected_dir), 'clusters.json')
 
 
-@app.route('/<project_id>/page.json')
-def project_payload(project_id: str):
+@app.route('/<analysis_id>/<project_id>/page.json')
+def project_payload(analysis_id: str, project_id: str):
     """The built payload, with the corrections read fresh.
 
     The payload is generated once and cached, so the copy of the corrections
@@ -218,7 +238,7 @@ def project_payload(project_id: str):
     loses the save, which is exactly what happened: the file on disk was right
     and the page was reading a stale embedded copy.
     """
-    paths = _paths(project_id)
+    paths = _paths(analysis_id, project_id)
     source = paths.pages_dir / 'page.json'
     if PL.is_stale(paths):
         PL.build_prep_payload(paths)
@@ -228,9 +248,9 @@ def project_payload(project_id: str):
     return jsonify(payload)
 
 
-@app.route('/<project_id>/<path:name>')
-def project_asset(project_id: str, name: str):
-    paths = _paths(project_id)
+@app.route('/<analysis_id>/<project_id>/<path:name>')
+def project_asset(analysis_id: str, project_id: str, name: str):
+    paths = _paths(analysis_id, project_id)
     if name in ('prep.js', 'depth.js', 'clusters.js', 'stats.js',
                 'summary.js', 'features.js', 'common.js'):
         return send_from_directory(str(Path(__file__).parent / 'templates'), name)
@@ -243,20 +263,20 @@ def project_asset(project_id: str, name: str):
     return send_from_directory(str(target.parent), target.name)
 
 
-@app.route('/<project_id>/save', methods=['POST'])
-def save(project_id: str):
-    paths = _paths(project_id)
+@app.route('/<analysis_id>/<project_id>/save', methods=['POST'])
+def save(analysis_id: str, project_id: str):
+    paths = _paths(analysis_id, project_id)
     body = request.get_json(force=True, silent=True)
     if not isinstance(body, dict):
         return jsonify({'error': 'expected a JSON object'}), 400
 
-    lock = _lock_for(project_id)
+    lock = _lock_for(analysis_id, project_id)
     if not lock.acquire(blocking=False):
         return jsonify({'error': 'someone else is saving this project. '
                                  'Reload and try again.'}), 409
     try:
         prep = C.Prep.from_dict(dict(body, project_id=project_id,
-                                     analysis_id=STATE['analysis_id'],
+                                     analysis_id=analysis_id,
                                      schema=C.SCHEMA))
         C.save(paths, prep, who=viewer(body.get('who', '')))
         if STATE['upload']:
@@ -273,8 +293,8 @@ def save(project_id: str):
         lock.release()
 
 
-@app.route('/<project_id>/marks', methods=['POST'])
-def save_marks(project_id: str):
+@app.route('/<analysis_id>/<project_id>/marks', methods=['POST'])
+def save_marks(analysis_id: str, project_id: str):
     """Day marks only, merged onto what is already saved.
 
     The summary page has no registration or crop controls, so posting the whole
@@ -282,12 +302,12 @@ def save_marks(project_id: str):
     changed the crops overwrite that change. Only the field this page owns is
     touched.
     """
-    paths = _paths(project_id)
+    paths = _paths(analysis_id, project_id)
     body = request.get_json(force=True, silent=True)
     if not isinstance(body, dict):
         return jsonify({'error': 'expected a JSON object'}), 400
 
-    lock = _lock_for(project_id)
+    lock = _lock_for(analysis_id, project_id)
     if not lock.acquire(blocking=False):
         return jsonify({'error': 'someone else is saving this project. '
                                  'Reload and try again.'}), 409
@@ -316,10 +336,10 @@ def save_marks(project_id: str):
         lock.release()
 
 
-@app.route('/<project_id>/rebuild', methods=['POST'])
-def rebuild(project_id: str):
+@app.route('/<analysis_id>/<project_id>/rebuild', methods=['POST'])
+def rebuild(analysis_id: str, project_id: str):
     """Regenerate the assets, for when a project has been recollected."""
-    paths = _paths(project_id)
+    paths = _paths(analysis_id, project_id)
     PL.build_prep_payload(paths)
     return jsonify({'ok': True})
 
@@ -355,7 +375,106 @@ def _of_trials(have, coverage, missing_key) -> str:
             % (len(have), total, label))
 
 
-def _render_index(rows) -> str:
+def _analysis_summary(analysis_id: str) -> dict:
+    """What the master page shows for one analysis.
+
+    Reading every project's manifest and corrections is a few hundred small
+    file operations, so the result is kept and only rebuilt when one of those
+    files has actually moved. Stat is cheap; parsing is not.
+    """
+    layout = STATE['layout']
+    try:
+        states = AnalysisStates.load(layout.analysis(analysis_id), STATE['cloud'])
+    except StatesError:
+        return {'analysisID': analysis_id, 'unreadable': True}
+
+    projects = states.project_ids()
+    stamps = []
+    for project_id in projects:
+        paths = layout.project(project_id, analysis_id)
+        for source in (paths.manifest, paths.prep_json):
+            try:
+                stamps.append(source.stat().st_mtime_ns)
+            except OSError:
+                stamps.append(0)
+    fingerprint = (len(projects), tuple(stamps))
+    cached = SUMMARIES.get(analysis_id)
+    if cached and cached[0] == fingerprint:
+        return cached[1]
+
+    collected = ready = 0
+    categories: Dict[str, int] = {}
+    latest, latest_who = '', ''
+    for project_id in projects:
+        paths = layout.project(project_id, analysis_id)
+        category = states.category(project_id) or 'uncategorised'
+        categories[category] = categories.get(category, 0) + 1
+        if not paths.manifest.exists():
+            continue
+        collected += 1
+        try:
+            prep = C.load(paths)
+        except C.CorrectionsError:
+            continue
+        manifest = B.read_manifest(paths.manifest)
+        trials = [t['number'] for t in (manifest or {}).get('trials', [])]
+        if trials and prep.coverage(trials)['ready']:
+            ready += 1
+        if prep.updated and prep.updated > latest:
+            latest, latest_who = prep.updated, prep.who
+
+    summary = {'analysisID': analysis_id, 'projects': len(projects),
+               'collected': collected, 'ready': ready,
+               'categories': categories, 'updated': latest, 'who': latest_who}
+    SUMMARIES[analysis_id] = (fingerprint, summary)
+    return summary
+
+
+@app.route('/')
+@app.route('/index.html')
+def master():
+    """Every analysis on this machine."""
+    names = list_analyses(STATE['layout'], STATE['cloud'])
+    rows = [_analysis_summary(name) for name in names]
+    return _render_master(rows)
+
+
+def _render_master(rows) -> str:
+    body = []
+    for row in rows:
+        if row.get('unreadable'):
+            body.append(
+                '<tr><td><a class="name" href="/%s/">%s</a></td>'
+                '<td colspan="5">states file could not be read</td></tr>'
+                % (row['analysisID'], row['analysisID']))
+            continue
+        categories = ' '.join(
+            '<span class="chip">%s %d</span>' % (name, count)
+            for name, count in sorted(row['categories'].items()))
+        note = row['updated'][:16] if row['updated'] else ''
+        if row['who']:
+            note += ' \u00b7 ' + row['who'].split('@')[0]
+        body.append(
+            '<tr><td><a class="name" href="/%s/">%s</a></td><td>%d</td>'
+            '<td>%s</td><td>%s</td><td class="cats">%s</td><td>%s</td></tr>'
+            % (row['analysisID'], row['analysisID'], row['projects'],
+               _count(row['collected'], row['projects']),
+               _count(row['ready'], row['projects']),
+               categories or '\u2014', note or '\u2014'))
+    return _template('master.html') \
+        .replace('__ROWS__', '\n'.join(body)) \
+        .replace('__COUNT__', str(len(rows)))
+
+
+def _count(done: int, total: int) -> str:
+    if not total:
+        return '<span style="color:#6c7684">\u2014</span>'
+    colour = 'var(--ok)' if done == total else (
+        '#6c7684' if done == 0 else 'var(--warn)')
+    return '<span style="color:%s">%d of %d</span>' % (colour, done, total)
+
+
+def _render_index(analysis_id, rows) -> str:
     # grouped by category, because that is how projects are compared: two
     # banded colours so the eye finds a group's edge without a heading row
     rows = sorted(rows, key=lambda r: (r['category'] or '~', r['projectID']))
@@ -375,15 +494,16 @@ def _render_index(rows) -> str:
                 str(t) for t in coverage['excluded'])
         project = row['projectID']
         links = ' '.join(
-            '<a class="tab" href="/%s/%s">%s</a>' % (project, slug, label)
+            '<a class="tab" href="/%s/%s/%s">%s</a>' % (analysis_id, project,
+                                                        slug, label)
             for slug, label in (('prep', 'prep'), ('depth', 'depth'),
                                 ('clusters', 'clusters'), ('summary', 'summary'),
                                 ('features', 'features')))
         body.append(
-            '<tr class="%s"><td><a class="name" href="/%s/prep">%s</a></td>'
+            '<tr class="%s"><td><a class="name" href="/%s/%s/prep">%s</a></td>'
             '<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
             '<td class="links">%s</td><td>%s</td></tr>'
-            % (band, project, project, category, row['tank'] or '-',
+            % (band, analysis_id, project, project, category, row['tank'] or '-',
                _tick(row['collected']),
                _of_trials((coverage or {}).get('registered', []), coverage,
                           'missingRegistration'),
@@ -393,23 +513,29 @@ def _render_index(rows) -> str:
     done = sum(1 for row in rows
                if row['coverage'] and row['coverage']['ready'])
     return _template('index.html') \
-        .replace('__ANALYSIS__', STATE['analysis_id']) \
+        .replace('__ANALYSIS__', analysis_id) \
         .replace('__ROWS__', '\n'.join(body)) \
         .replace('__DONE__', str(done)) \
         .replace('__COUNT__', str(len(rows)))
 
 
-def configure(layout: Layout, analysis_id: str, cloud: Optional[Cloud] = None,
+def configure(layout: Layout, cloud: Optional[Cloud] = None,
               upload: bool = True) -> None:
+    """Point the server at a working directory.
+
+    Every analysis under it is served; none is loaded until something asks for
+    it, so starting up costs nothing however many there are.
+    """
     STATE['layout'] = layout
-    STATE['analysis_id'] = analysis_id
     STATE['cloud'] = cloud or Cloud(layout=layout)
     STATE['upload'] = upload
-    STATE['states'] = AnalysisStates.load(layout.analysis(analysis_id), STATE['cloud'])
+    TABLES.clear()
+    SUMMARIES.clear()
 
 
-def run(layout: Layout, analysis_id: str, host: str = '127.0.0.1', port: int = 8080,
+def run(layout: Layout, host: str = '127.0.0.1', port: int = 8080,
         cloud: Optional[Cloud] = None, upload: bool = True) -> None:
-    configure(layout, analysis_id, cloud=cloud, upload=upload)
-    print('Serving %s on http://%s:%d' % (analysis_id, host, port))
+    configure(layout, cloud=cloud, upload=upload)
+    print('Serving every analysis in %s on http://%s:%d'
+          % (layout.local_root, host, port))
     app.run(host=host, port=port, threaded=True)

@@ -150,4 +150,6 @@ def list_analyses(layout: Layout, cloud=None) -> List[str]:
         found.update(p.name for p in local.iterdir() if p.is_dir())
     if cloud is not None:
         found.update(cloud.listdir(local))   # raises if the remote is unreachable
-    return sorted(found)
+    # __DeletedData and its like live alongside the analyses and are not
+    # analyses; neither is a directory with no states file in it
+    return sorted(name for name in found if name and not name.startswith('__'))

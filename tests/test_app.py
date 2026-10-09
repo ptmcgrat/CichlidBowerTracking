@@ -14,6 +14,7 @@ from tests.make_project import build
 
 ANALYSIS = 'YH_MC_Parentals'
 PROJECT = 'MC_920_t001_tr1'
+ROOT = '/' + ANALYSIS + '/' + PROJECT
 
 
 @pytest.fixture
@@ -29,33 +30,47 @@ def client(tmp_path):
     layout = Layout(local_root=local)
     cloud = FakeCloud(layout=layout, remote_dir=remote)
     assert collect_project(layout, cloud, PROJECT, ANALYSIS).status == 'ok'
-    A.configure(layout, ANALYSIS, cloud=cloud, upload=False)
+    A.configure(layout, cloud=cloud, upload=False)
     A.app.config['TESTING'] = True
     return A.app.test_client(), layout
 
 
-def test_the_index_lists_the_project(client):
+def test_the_master_page_lists_the_analysis(client):
+    """The root is now every analysis on the machine, not one analysis."""
     response = client[0].get('/')
     assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert ANALYSIS in page
+    assert 'href="/%s/"' % ANALYSIS in page
+    assert PROJECT not in page          # projects live a level down
+
+
+def test_the_analysis_page_lists_its_projects(client):
+    response = client[0].get('/' + ANALYSIS + '/')
+    assert response.status_code == 200
     assert PROJECT in response.get_data(as_text=True)
+
+
+def test_an_unknown_analysis_is_refused(client):
+    assert client[0].get('/NOT_AN_ANALYSIS/').status_code == 404
 
 
 def test_the_project_page_builds_on_first_visit(client):
     http, layout = client
     paths = layout.project(PROJECT, ANALYSIS)
     assert not (paths.pages_dir / 'page.json').exists()
-    assert http.get('/' + PROJECT + '/').status_code == 200
+    assert http.get(ROOT + '/').status_code == 200
     assert (paths.pages_dir / 'page.json').exists()
 
 
 def test_the_payload_and_assets_are_served(client):
     http, _ = client
-    http.get('/' + PROJECT + '/')
-    payload = http.get('/' + PROJECT + '/page.json')
+    http.get(ROOT + '/')
+    payload = http.get(ROOT + '/page.json')
     assert payload.status_code == 200
     data = json.loads(payload.get_data(as_text=True))
     url = data['days'][0]['firstPng']['url']
-    image = http.get('/' + PROJECT + '/' + url)
+    image = http.get(ROOT + '/' + url)
     assert image.status_code == 200
     assert image.get_data()[:8] == b'\x89PNG\r\n\x1a\n'
 
@@ -64,7 +79,7 @@ def test_a_save_lands_and_reads_back(client):
     http, layout = client
     body = {'residual_k': 4.5, 'trials': {'1': {'start': 30, 'stop': 0, 'reset': 0}},
             'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]]}
-    response = http.post('/' + PROJECT + '/save', json=body)
+    response = http.post(ROOT + '/save', json=body)
     assert response.status_code == 200
     prep = C.load(layout.project(PROJECT, ANALYSIS))
     assert prep.residual_k == 4.5
@@ -73,8 +88,8 @@ def test_a_save_lands_and_reads_back(client):
 
 def test_a_save_keeps_the_previous_version(client):
     http, layout = client
-    http.post('/' + PROJECT + '/save', json={'residual_k': 3.0})
-    http.post('/' + PROJECT + '/save', json={'residual_k': 5.0})
+    http.post(ROOT + '/save', json={'residual_k': 3.0})
+    http.post(ROOT + '/save', json={'residual_k': 5.0})
     assert len(C.history(layout.project(PROJECT, ANALYSIS))) == 1
 
 
@@ -84,17 +99,17 @@ def test_an_unknown_project_is_refused(client):
 
 def test_paths_cannot_escape_the_pages_directory(client):
     http, _ = client
-    http.get('/' + PROJECT + '/')
-    assert http.get('/' + PROJECT + '/../../../etc/passwd').status_code in (403, 404)
+    http.get(ROOT + '/')
+    assert http.get(ROOT + '/../../../etc/passwd').status_code in (403, 404)
 
 
 def test_a_save_writes_nowhere_but_corrections(client):
     """Collecting reads the old pipeline's files; saving must not touch them."""
     http, layout = client
-    http.get('/' + PROJECT + '/')
+    http.get(ROOT + '/')
     paths = layout.project(PROJECT, ANALYSIS)
     before = {p: p.stat().st_mtime_ns for p in paths.root.rglob('*') if p.is_file()}
-    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0})
+    http.post(ROOT + '/save', json={'residual_k': 4.0})
     after = {p: p.stat().st_mtime_ns for p in paths.root.rglob('*') if p.is_file()}
     changed = {p for p in after if before.get(p) != after[p]}
     assert changed, 'the save wrote nothing at all'
@@ -105,14 +120,14 @@ def test_a_save_writes_nowhere_but_corrections(client):
 def test_a_save_survives_a_reload(client):
     """The payload is cached, so the corrections inside it must be read fresh."""
     http, layout = client
-    http.get('/' + PROJECT + '/')                      # builds and caches the payload
-    http.post('/' + PROJECT + '/save',
+    http.get(ROOT + '/')                      # builds and caches the payload
+    http.post(ROOT + '/save',
               json={'residual_k': 6.0,
                     'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]],
                     'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
                     'points': [{'pi': [1, 2], 'depth': [3, 4]}],
                     'trials': {'1': {'start': 45, 'stop': 0, 'reset': 0}}})
-    payload = json.loads(http.get('/' + PROJECT + '/page.json').get_data(as_text=True))
+    payload = json.loads(http.get(ROOT + '/page.json').get_data(as_text=True))
     assert payload['prep']['residual_k'] == 6.0
     assert payload['prep']['depth_crop'][0] == [5, 5]
     assert payload['prep']['transform'][0][0] == 1
@@ -123,16 +138,16 @@ def test_a_save_survives_a_reload(client):
 
 def test_the_cached_payload_is_not_rebuilt_on_every_request(client):
     http, layout = client
-    http.get('/' + PROJECT + '/')
+    http.get(ROOT + '/')
     built = (layout.project(PROJECT, ANALYSIS).pages_dir / 'page.json').stat().st_mtime
-    http.get('/' + PROJECT + '/page.json')
+    http.get(ROOT + '/page.json')
     after = (layout.project(PROJECT, ANALYSIS).pages_dir / 'page.json').stat().st_mtime
     assert built == after
 
 
 def test_the_depth_page_is_served(client):
     http, _ = client
-    response = http.get('/' + PROJECT + '/depth')
+    response = http.get(ROOT + '/depth')
     assert response.status_code == 200
     assert 'depth.js' in response.get_data(as_text=True)
 
@@ -140,45 +155,45 @@ def test_the_depth_page_is_served(client):
 def test_the_shared_and_page_scripts_are_served(client):
     http, _ = client
     for name in ('common.js', 'prep.js', 'depth.js'):
-        assert http.get('/' + PROJECT + '/' + name).status_code == 200
+        assert http.get(ROOT + '/' + name).status_code == 200
 
 
 def test_prep_and_depth_link_to_each_other(client):
     http, _ = client
-    assert 'depth' in http.get('/' + PROJECT + '/prep').get_data(as_text=True)
-    assert 'prep' in http.get('/' + PROJECT + '/depth').get_data(as_text=True)
+    assert 'depth' in http.get(ROOT + '/prep').get_data(as_text=True)
+    assert 'prep' in http.get(ROOT + '/depth').get_data(as_text=True)
 
 
 def test_cluster_events_are_served_separately(client):
     """They are larger than every image together; only one page needs them."""
     http, layout = client
-    http.get('/' + PROJECT + '/')
-    payload = json.loads(http.get('/' + PROJECT + '/page.json').get_data(as_text=True))
+    http.get(ROOT + '/')
+    payload = json.loads(http.get(ROOT + '/page.json').get_data(as_text=True))
     assert 'clusters' not in payload                 # not embedded
     assert payload['hasClusters'] is True
-    packed = http.get('/' + PROJECT + '/clusters.json')
+    packed = http.get(ROOT + '/clusters.json')
     assert packed.status_code == 200
     assert json.loads(packed.get_data(as_text=True))['n'] > 0
 
 
 def test_the_clusters_page_is_served(client):
     http, _ = client
-    response = http.get('/' + PROJECT + '/clusters')
+    response = http.get(ROOT + '/clusters')
     assert response.status_code == 200
     assert 'clusters.js' in response.get_data(as_text=True)
-    assert http.get('/' + PROJECT + '/clusters.js').status_code == 200
+    assert http.get(ROOT + '/clusters.js').status_code == 200
 
 
 def test_a_save_records_the_name_the_page_sent(client):
     """Behind a VPN there is no authenticated identity, so the page supplies one."""
     http, layout = client
-    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0, 'who': 'Emily Keaton'})
+    http.post(ROOT + '/save', json={'residual_k': 4.0, 'who': 'Emily Keaton'})
     assert C.load(layout.project(PROJECT, ANALYSIS)).who == 'Emily Keaton'
 
 
 def test_an_authenticated_identity_wins_over_a_claimed_one(client):
     http, layout = client
-    http.post('/' + PROJECT + '/save', json={'residual_k': 4.0, 'who': 'Someone Else'},
+    http.post(ROOT + '/save', json={'residual_k': 4.0, 'who': 'Someone Else'},
               headers={'Cf-Access-Authenticated-User-Email': 'ek@gatech.edu'})
     assert C.load(layout.project(PROJECT, ANALYSIS)).who == 'ek@gatech.edu'
 
@@ -186,29 +201,29 @@ def test_an_authenticated_identity_wins_over_a_claimed_one(client):
 def test_statistics_is_a_view_inside_the_cluster_page(client):
     """Not its own page: the two views share the same loaded events."""
     http, _ = client
-    assert http.get('/' + PROJECT + '/stats').status_code == 404
-    page = http.get('/' + PROJECT + '/clusters').get_data(as_text=True)
+    assert http.get(ROOT + '/stats').status_code == 404
+    page = http.get(ROOT + '/clusters').get_data(as_text=True)
     assert 'stats.js' in page and 'clusters.js' in page
-    assert http.get('/' + PROJECT + '/stats.js').status_code == 200
+    assert http.get(ROOT + '/stats.js').status_code == 200
 
 
 def test_the_summary_page_is_served(client):
     http, _ = client
-    assert http.get('/' + PROJECT + '/summary').status_code == 200
-    assert http.get('/' + PROJECT + '/summary.js').status_code == 200
+    assert http.get(ROOT + '/summary').status_code == 200
+    assert http.get(ROOT + '/summary.js').status_code == 200
 
 
 def test_the_landing_page_reflects_a_saved_registration(client):
     """It is read fresh on every request, so a save shows up on reload."""
     http, _ = client
-    before = http.get('/').get_data(as_text=True)
+    before = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
     assert '0 of 1' in before                 # no trial registered or cropped
-    http.post('/' + PROJECT + '/save',
+    http.post(ROOT + '/save',
               json={'who': 'Emily Keaton',
                     'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
                     'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]],
                     'video_crop': [[5, 5], [30, 5], [30, 25], [5, 25]]})
-    after = http.get('/').get_data(as_text=True)
+    after = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
     assert 'Emily' in after
     assert '1 of 1' in after
 
@@ -217,7 +232,7 @@ def test_every_page_links_to_the_other_three(client):
     http, _ = client
     pages = ['prep', 'depth', 'clusters', 'summary', 'features']
     for page in pages:
-        text = http.get('/' + PROJECT + '/' + page).get_data(as_text=True)
+        text = http.get(ROOT + '/' + page).get_data(as_text=True)
         for other in pages:
             if other == page:
                 assert 'href="%s"' % other not in text, page + ' links to itself'
@@ -232,7 +247,7 @@ def test_a_project_registered_only_per_trial_counts_as_registered(client):
     no registration at all, which is what it looked like on the landing page.
     """
     http, layout = client
-    http.post('/' + PROJECT + '/save', json={
+    http.post(ROOT + '/save', json={
         'who': 'Emily Keaton',
         'overrides': {'1': {'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
                             'depth_crop': [[0, 0], [9, 0], [9, 9], [0, 9]],
@@ -240,14 +255,14 @@ def test_a_project_registered_only_per_trial_counts_as_registered(client):
     prep = C.load(layout.project(PROJECT, ANALYSIS))
     assert prep.is_registered and prep.is_cropped
     assert prep.transform is None              # nothing at the project level
-    assert '1 of 1' in http.get('/').get_data(as_text=True)
+    assert '1 of 1' in http.get('/' + ANALYSIS + '/').get_data(as_text=True)
 
 
 def test_an_empty_override_is_reported_as_a_gap(client):
     """A trial with an override but nothing in it looks configured and is not:
     its events have no transform and cannot be placed."""
     http, layout = client
-    http.post('/' + PROJECT + '/save', json={
+    http.post(ROOT + '/save', json={
         'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         'depth_crop': [[0, 0], [9, 0], [9, 9], [0, 9]],
         'video_crop': [[0, 0], [9, 0], [9, 9], [0, 9]],
@@ -265,12 +280,12 @@ def test_day_marks_save_without_touching_the_rest(client):
     """The summary page owns only the marks: posting from a copy loaded before
     someone changed the crops must not undo that change."""
     http, layout = client
-    http.post('/' + PROJECT + '/save', json={
+    http.post(ROOT + '/save', json={
         'who': 'Emily Keaton',
         'transform': [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
         'depth_crop': [[5, 5], [30, 5], [30, 25], [5, 25]],
         'video_crop': [[5, 5], [30, 5], [30, 25], [5, 25]], 'residual_k': 6.0})
-    response = http.post('/' + PROJECT + '/marks', json={
+    response = http.post(ROOT + '/marks', json={
         'who': 'Patrick', 'day_marks': {'2': {'new_bower': True},
                                         '4': {'wall_building': True}}})
     assert response.status_code == 200
@@ -284,7 +299,7 @@ def test_day_marks_save_without_touching_the_rest(client):
 
 def test_unknown_mark_fields_are_ignored(client):
     http, layout = client
-    http.post('/' + PROJECT + '/marks',
+    http.post(ROOT + '/marks',
               json={'who': 'pm', 'day_marks': {'1': {'new_bower': True,
                                                      'nonsense': 'x'}}})
     assert C.load(layout.project(PROJECT, ANALYSIS)).mark(1).new_bower
@@ -292,27 +307,27 @@ def test_unknown_mark_fields_are_ignored(client):
 
 def test_the_features_page_is_served(client):
     http, _ = client
-    assert http.get('/' + PROJECT + '/features').status_code == 200
-    assert http.get('/' + PROJECT + '/features.js').status_code == 200
+    assert http.get(ROOT + '/features').status_code == 200
+    assert http.get(ROOT + '/features.js').status_code == 200
 
 
 def test_the_landing_page_groups_by_category_and_links_to_each_tab(client):
     http, _ = client
-    page = http.get('/').get_data(as_text=True)
+    page = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
     for slug in ('prep', 'depth', 'clusters', 'summary', 'features'):
-        assert 'href="/%s/%s"' % (PROJECT, slug) in page
+        assert 'href="/%s/%s/%s"' % (ANALYSIS, PROJECT, slug) in page
     assert 'band0' in page                      # category banding applied
 
 
 def test_the_category_comparison_is_served(client):
     http, _ = client
-    assert http.get('/features').status_code == 200
-    assert http.get('/analysis.js').status_code == 200
+    assert http.get('/' + ANALYSIS + '/features').status_code == 200
+    assert http.get('/' + ANALYSIS + '/analysis.js').status_code == 200
 
 
 def test_the_comparison_data_covers_every_collected_project(client):
     http, _ = client
-    payload = json.loads(http.get('/features.json').get_data(as_text=True))
+    payload = json.loads(http.get('/' + ANALYSIS + '/features.json').get_data(as_text=True))
     assert payload['projects']
     names = [p['projectID'] for p in payload['projects']]
     assert PROJECT in names
@@ -324,8 +339,8 @@ def test_the_comparison_data_covers_every_collected_project(client):
 def test_the_analysis_page_does_not_shadow_a_project_page(client):
     """/features is the comparison; /<project>/features is one project."""
     http, _ = client
-    assert 'analysis.js' in http.get('/features').get_data(as_text=True)
-    assert 'features.js' in http.get('/' + PROJECT + '/features').get_data(as_text=True)
+    assert 'analysis.js' in http.get('/' + ANALYSIS + '/features').get_data(as_text=True)
+    assert 'features.js' in http.get(ROOT + '/features').get_data(as_text=True)
 
 
 def test_page_scripts_are_never_cached(client):
@@ -333,10 +348,10 @@ def test_page_scripts_are_never_cached(client):
     page after an update, which looks exactly like the update not working."""
     http, _ = client
     for name in ('common.js', 'summary.js', 'features.js'):
-        response = http.get('/' + PROJECT + '/' + name)
+        response = http.get(ROOT + '/' + name)
         assert response.status_code == 200
         assert 'no-store' in response.headers.get('Cache-Control', '')
-    assert 'no-store' in http.get('/analysis.js').headers.get('Cache-Control', '')
+    assert 'no-store' in http.get('/' + ANALYSIS + '/analysis.js').headers.get('Cache-Control', '')
 
 
 def test_a_page_that_fails_to_start_says_so(client):
@@ -344,5 +359,50 @@ def test_a_page_that_fails_to_start_says_so(client):
     reason is only in the console."""
     http, _ = client
     for page in ('prep', 'depth', 'clusters', 'summary', 'features'):
-        text = http.get('/' + PROJECT + '/' + page).get_data(as_text=True)
+        text = http.get(ROOT + '/' + page).get_data(as_text=True)
         assert 'could not start' in text, page
+
+
+def test_two_analyses_are_served_side_by_side(tmp_path):
+    """The point of the master page: more than one analysis at a time."""
+    import pandas as pd
+    local, remote = tmp_path / 'local', tmp_path / 'remote'
+    local.mkdir(); remote.mkdir()
+    layout = Layout(local_root=local)
+    cloud = FakeCloud(layout=layout, remote_dir=remote)
+    for analysis, project, category in (('YH_MC_Parentals', 'MC_920_t001_tr1', 'MC'),
+                                        ('TI_singles', 'TI_404_t077_tr1', 'TI')):
+        build(remote, project_id=project, days=4, resets=(), H=32, W=40,
+              analysis_id=analysis)
+        states_dir = local / '__AnalysisStates' / analysis
+        states_dir.mkdir(parents=True)
+        pd.DataFrame({'projectID': [project], 'tankID': ['t'], 'Prep': [True],
+                      'RunAnalysis': [True], 'Category': [category]}
+                     ).to_csv(states_dir / (analysis + '.csv'), index=False)
+        assert collect_project(layout, cloud, project, analysis).status == 'ok'
+
+    A.configure(layout, cloud=cloud, upload=False)
+    A.app.config['TESTING'] = True
+    http = A.app.test_client()
+
+    master = http.get('/').get_data(as_text=True)
+    assert 'YH_MC_Parentals' in master and 'TI_singles' in master
+    assert 'MC 1' in master and 'TI 1' in master       # categories present
+
+    for analysis, project in (('YH_MC_Parentals', 'MC_920_t001_tr1'),
+                              ('TI_singles', 'TI_404_t077_tr1')):
+        page = http.get('/' + analysis + '/').get_data(as_text=True)
+        assert project in page
+        assert http.get('/%s/%s/summary' % (analysis, project)).status_code == 200
+
+    # and one analysis cannot reach another's project
+    assert http.get('/TI_singles/MC_920_t001_tr1/prep').status_code == 404
+
+
+def test_a_bookkeeping_directory_is_not_an_analysis(tmp_path):
+    from cichlid_bower_claude.states import list_analyses
+    local = tmp_path / 'local'
+    for name in ('YH_MC_Parentals', '__DeletedData', 'TI_singles'):
+        (local / '__AnalysisStates' / name).mkdir(parents=True)
+    assert list_analyses(Layout(local_root=local)) == ['TI_singles',
+                                                       'YH_MC_Parentals']

@@ -98,6 +98,19 @@ directory — `/data/CichlidBowerClaude` or similar. The collector uploads what
 it builds, so a project collected by one person should be downloaded once for
 everyone rather than once per account.
 
+### Updating from an archive
+
+Unpacking an archive over the clone adds and overwrites, but never deletes. A
+file removed upstream stays behind, and a template or script with nothing
+pointing at it is shipped and served for as long as nobody notices.
+
+    tar -xzf cichlid_bower_claude.tar.gz
+    python -m pytest tests -q
+
+`test_every_template_is_reachable` is the check for exactly this: it fails
+naming any template with no route in `app.py`. Delete the file it names, with
+`git rm`, and rerun. The same goes for a script no page loads.
+
 ### Updating
 
     git pull

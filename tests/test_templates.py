@@ -50,6 +50,27 @@ def test_every_script_a_page_loads_exists(page):
         assert (TEMPLATES / script).exists(), page + ' loads missing ' + script
 
 
+@pytest.mark.parametrize('page', pages())
+def test_a_template_is_html(page):
+    """A .html clobbered by a .js serves its own source as the page.
+
+    Saving a file under the wrong name is easy and the result is unmistakable
+    once you know it: the browser shows JavaScript where the page should be.
+    """
+    text = (TEMPLATES / page).read_text().lstrip()
+    assert text.lower().startswith('<!doctype html'), (
+        page + ' does not begin with a doctype; it starts: ' + text[:60])
+    assert '</html>' in text, page + ' has no closing html tag'
+
+
+@pytest.mark.parametrize('script', sorted(p.name for p in TEMPLATES.glob('*.js')))
+def test_a_script_is_not_html(script):
+    """And the reverse: a .js holding a page serves markup as a script."""
+    text = (TEMPLATES / script).read_text().lstrip()
+    assert not text.lower().startswith('<!doctype'), (
+        script + ' contains HTML, not JavaScript')
+
+
 def test_every_template_is_reachable():
     """A template with no route is dead weight that still gets shipped."""
     app = (TEMPLATES.parent / 'app.py').read_text()

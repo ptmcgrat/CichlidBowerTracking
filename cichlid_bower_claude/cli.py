@@ -241,7 +241,7 @@ def cmd_serve(args) -> int:
         print('Could not load the server: ' + str(error))
         raise
     try:
-        run(layout, args.analysis_id, host=args.host, port=args.port, cloud=cloud,
+        run(layout, host=args.host, port=args.port, cloud=cloud,
             upload=not args.no_upload)
     except StatesError as error:
         print(str(error))
@@ -292,8 +292,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--projects', nargs='+')
     p.set_defaults(func=cmd_features)
 
-    p = sub.add_parser('serve', help='serve the pages and accept corrections')
-    p.add_argument('analysis_id')
+    p = sub.add_parser('serve', help='serve every analysis in the working '
+                                     'directory, and accept corrections')
     p.add_argument('--host', default='127.0.0.1',
                    help='bind address; leave at localhost and put a tunnel in front')
     p.add_argument('--port', type=int, default=8080)
