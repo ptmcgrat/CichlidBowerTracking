@@ -24,7 +24,7 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 
 from ..cloud import Cloud, CloudError
 from ..paths import Layout
-from ..states import AnalysisStates, StatesError, list_analyses
+from ..states import AnalysisStates, StatesError, local_analyses
 from ..collect import bundle as B
 from . import corrections as C
 from . import features as F
@@ -36,9 +36,10 @@ STATE: Dict = {'layout': None, 'cloud': None, 'upload': True}
 # One states table per analysis, loaded when first asked for. Loading all of
 # them at startup would read a dozen files and several hundred manifests before
 # the server could answer anything.
-TABLES: Dict[str, AnalysisStates] = {}
+TABLES: Dict[str, tuple] = {}         # analysis -> (csv mtime, states table)
 TABLES_GUARD = threading.Lock()
 SUMMARIES: Dict[str, tuple] = {}      # analysis -> (fingerprint, summary)
+INDEX_ROWS: Dict[str, tuple] = {}     # analysis -> (fingerprint, project rows)
 LOCKS: Dict[str, threading.Lock] = {}
 LOCKS_GUARD = threading.Lock()
 
@@ -48,17 +49,34 @@ def _lock_for(analysis_id: str, project_id: str) -> threading.Lock:
         return LOCKS.setdefault(analysis_id + '/' + project_id, threading.Lock())
 
 
-def _states(analysis_id: str) -> AnalysisStates:
-    with TABLES_GUARD:
-        if analysis_id in TABLES:
-            return TABLES[analysis_id]
+def _states_or_none(analysis_id: str) -> Optional[AnalysisStates]:
+    """The states table, read once and kept until the file changes.
+
+    Keyed on the file's mtime so adding a project to the CSV shows up without
+    a restart, which it did not when the cache was keyed on the name alone.
+    """
+    paths = STATE['layout'].analysis(analysis_id)
     try:
-        table = AnalysisStates.load(STATE['layout'].analysis(analysis_id),
-                                    STATE['cloud'])
-    except StatesError:
-        abort(404)
+        stamp = paths.states_csv.stat().st_mtime_ns
+    except OSError:
+        stamp = 0
     with TABLES_GUARD:
-        TABLES[analysis_id] = table
+        cached = TABLES.get(analysis_id)
+        if cached and cached[0] == stamp:
+            return cached[1]
+    try:
+        table = AnalysisStates.load(paths, STATE['cloud'])
+    except StatesError:
+        return None
+    with TABLES_GUARD:
+        TABLES[analysis_id] = (stamp, table)
+    return table
+
+
+def _states(analysis_id: str) -> AnalysisStates:
+    table = _states_or_none(analysis_id)
+    if table is None:
+        abort(404)
     return table
 
 
@@ -98,12 +116,35 @@ def no_cache(response):
     return response
 
 
+def _fingerprint(analysis_id: str, projects) -> tuple:
+    """Cheap evidence that nothing a landing page reads has changed.
+
+    Two stats per project, against two JSON parses per project. Stat is cheap;
+    parsing is not, and a landing page reads every project in the analysis.
+    """
+    layout = STATE['layout']
+    stamps = []
+    for project_id in projects:
+        paths = layout.project(project_id, analysis_id)
+        for source in (paths.manifest, paths.prep_json):
+            try:
+                stamps.append(source.stat().st_mtime_ns)
+            except OSError:
+                stamps.append(0)
+    return (len(projects), tuple(stamps))
+
+
 @app.route('/<analysis_id>/')
 @app.route('/<analysis_id>/index.html')
 def index(analysis_id: str):
     states = _states(analysis_id)
+    projects = states.project_ids()
+    fingerprint = _fingerprint(analysis_id, projects)
+    cached = INDEX_ROWS.get(analysis_id)
+    if cached and cached[0] == fingerprint:
+        return _render_index(analysis_id, cached[1])
     rows = []
-    for project_id in states.project_ids():
+    for project_id in projects:
         paths = STATE['layout'].project(project_id, analysis_id)
         collected = paths.manifest.exists()
         try:
@@ -125,6 +166,7 @@ def index(analysis_id: str):
                      'tank': states.tank(project_id),
                      'collected': collected, 'prepped': ready, 'updated': updated,
                      'coverage': coverage, 'who': prep.who})
+    INDEX_ROWS[analysis_id] = (fingerprint, rows)
     return _render_index(analysis_id, rows)
 
 
@@ -383,21 +425,15 @@ def _analysis_summary(analysis_id: str) -> dict:
     files has actually moved. Stat is cheap; parsing is not.
     """
     layout = STATE['layout']
-    try:
-        states = AnalysisStates.load(layout.analysis(analysis_id), STATE['cloud'])
-    except StatesError:
+    # through the cache: loading the table again per request cost a CSV parse
+    # per analysis, and for an analysis absent from this machine an rclone
+    # fetch that failed slowly before the row could say so
+    states = _states_or_none(analysis_id)
+    if states is None:
         return {'analysisID': analysis_id, 'unreadable': True}
 
     projects = states.project_ids()
-    stamps = []
-    for project_id in projects:
-        paths = layout.project(project_id, analysis_id)
-        for source in (paths.manifest, paths.prep_json):
-            try:
-                stamps.append(source.stat().st_mtime_ns)
-            except OSError:
-                stamps.append(0)
-    fingerprint = (len(projects), tuple(stamps))
+    fingerprint = _fingerprint(analysis_id, projects)
     cached = SUMMARIES.get(analysis_id)
     if cached and cached[0] == fingerprint:
         return cached[1]
@@ -433,8 +469,15 @@ def _analysis_summary(analysis_id: str) -> dict:
 @app.route('/')
 @app.route('/index.html')
 def master():
-    """Every analysis on this machine."""
-    names = list_analyses(STATE['layout'], STATE['cloud'])
+    """Every analysis on this machine.
+
+    Local only, and deliberately: the page used to ask the cloud as well, so
+    loading it cost one rclone listing plus a failed fetch for every analysis
+    that is not here — tens of seconds, to show rows that cannot be opened.
+    ``python -m cichlid_bower_claude analyses`` is where to look for what else
+    exists in the cloud.
+    """
+    names = local_analyses(STATE['layout'])
     rows = [_analysis_summary(name) for name in names]
     return _render_master(rows)
 
@@ -531,6 +574,7 @@ def configure(layout: Layout, cloud: Optional[Cloud] = None,
     STATE['upload'] = upload
     TABLES.clear()
     SUMMARIES.clear()
+    INDEX_ROWS.clear()
 
 
 def run(layout: Layout, host: str = '127.0.0.1', port: int = 8080,

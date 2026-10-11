@@ -399,10 +399,79 @@ def test_two_analyses_are_served_side_by_side(tmp_path):
     assert http.get('/TI_singles/MC_920_t001_tr1/prep').status_code == 404
 
 
-def test_a_bookkeeping_directory_is_not_an_analysis(tmp_path):
-    from cichlid_bower_claude.states import list_analyses
+def _states_dir(local, name, with_csv=True):
+    directory = local / '__AnalysisStates' / name
+    directory.mkdir(parents=True)
+    if with_csv:
+        (directory / (name + '.csv')).write_text('projectID\n')
+    return directory
+
+
+def test_an_analysis_is_a_directory_with_a_states_file_in_it(tmp_path):
+    """Everything under __AnalysisStates was taken for an analysis, so loose
+    files and leftover directories showed up on the master page as analyses
+    that do not exist."""
+    from cichlid_bower_claude.states import local_analyses
     local = tmp_path / 'local'
-    for name in ('YH_MC_Parentals', '__DeletedData', 'TI_singles'):
-        (local / '__AnalysisStates' / name).mkdir(parents=True)
-    assert list_analyses(Layout(local_root=local)) == ['TI_singles',
-                                                       'YH_MC_Parentals']
+    _states_dir(local, 'YH_MC_Parentals')
+    _states_dir(local, 'TI_singles')
+    _states_dir(local, '__DeletedData')             # bookkeeping
+    _states_dir(local, 'LeftOver', with_csv=False)  # directory, no states file
+    (local / '__AnalysisStates' / 'notes.csv').write_text('x\n')   # loose file
+    assert local_analyses(Layout(local_root=local)) == ['TI_singles',
+                                                        'YH_MC_Parentals']
+
+
+def test_cloud_discovery_counts_only_names_with_their_own_states_file(tmp_path):
+    """``analyses`` still reaches the cloud, and applies the same rule there:
+    lsf lists files as well as directories, so a CSV lying beside the analyses
+    came back looking like one."""
+    from cichlid_bower_claude.states import list_analyses
+    local, remote = tmp_path / 'local', tmp_path / 'remote'
+    local.mkdir()
+    cloud_states = remote / '__AnalysisStates'
+    for name in ('YH_MC_Parentals', 'TI_singles'):
+        (cloud_states / name).mkdir(parents=True)
+        (cloud_states / name / (name + '.csv')).write_text('projectID\n')
+    (cloud_states / 'Scratch').mkdir()                       # no states file
+    (cloud_states / 'Scratch' / 'something.csv').write_text('x\n')  # wrong name
+    cloud_states.joinpath('notes.csv').write_text('x\n')     # loose file
+    layout = Layout(local_root=local)
+    cloud = FakeCloud(layout=layout, remote_dir=remote)
+    assert list_analyses(layout, cloud) == ['TI_singles', 'YH_MC_Parentals']
+
+
+def test_the_master_page_asks_the_cloud_nothing(client):
+    """It used to cost an rclone listing plus a failed fetch per absent
+    analysis, which is tens of seconds to render rows nobody can open."""
+    http, layout = client
+    cloud = A.STATE['cloud']
+    before = len(cloud.downloaded)
+    calls = []
+    cloud.listdir = lambda *a, **k: calls.append(a) or []
+    assert http.get('/').status_code == 200
+    assert calls == []
+    assert len(cloud.downloaded) == before
+
+
+def test_a_landing_page_reparses_only_what_changed(client):
+    """Both landing pages read every project in the analysis, so each one is
+    cached against the mtimes of the files it reads."""
+    http, layout = client
+    assert http.get('/').status_code == 200
+    assert http.get('/' + ANALYSIS + '/').status_code == 200
+    paths = layout.project(PROJECT, ANALYSIS)
+    reads = []
+    real = C.load
+    C.load = lambda p: reads.append(str(p.root)) or real(p)
+    try:
+        http.get('/')
+        http.get('/' + ANALYSIS + '/')
+        assert reads == []                       # nothing re-read
+        prep = real(paths)
+        C.save(paths, prep, who='tester')        # a save moves prep.json
+        http.get('/')
+        http.get('/' + ANALYSIS + '/')
+        assert len(reads) == 2                   # both pages notice, once each
+    finally:
+        C.load = real

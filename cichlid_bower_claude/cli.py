@@ -75,7 +75,8 @@ def cmd_analyses(args) -> int:
             count = len(states.project_ids())
             print('%-28s %3d projects' % (name, count))
         except StatesError:
-            print('%-28s   (no states file locally)' % name)
+            # the server shows only what is here, so say which these are
+            print('%-28s   in the cloud, not collected here' % name)
     return 0
 
 
