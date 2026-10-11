@@ -52,15 +52,31 @@ class Cloud:
         result = self._run(['lsf', remote], check=False)
         return result.returncode == 0 and bool(result.stdout.strip())
 
-    def listdir(self, local_dir: Path) -> List[str]:
+    def listdir(self, local_dir: Path, dirs_only: bool = False,
+                files_only: bool = False, max_depth: Optional[int] = None) -> List[str]:
         """Names in a cloud directory.
+
+        ``dirs_only`` matters where the caller means subdirectories: lsf lists
+        files too, so a loose CSV sitting beside the real directories came back
+        looking like one of them.
+
+        ``max_depth`` above 1 recurses, and names then carry their subdirectory
+        ('YH_MC/YH_MC.csv'), which lets one round trip answer a question that
+        would otherwise cost one call per name.
 
         Raises on failure rather than returning nothing. Swallowing the error
         made a misconfigured remote indistinguishable from an empty directory,
         which is the difference between a five-second fix and an afternoon.
         """
         remote = self.layout.cloud(local_dir)
-        result = self._run(['lsf', remote], check=False)
+        args = ['lsf', remote]
+        if dirs_only:
+            args.append('--dirs-only')
+        if files_only:
+            args.append('--files-only')
+        if max_depth is not None and max_depth > 1:
+            args += ['-R', '--max-depth', str(max_depth)]
+        result = self._run(args, check=False)
         if result.returncode != 0:
             raise CloudError('rclone lsf ' + remote + ' failed: ' +
                              ((result.stderr or '').strip() or
@@ -168,9 +184,31 @@ class FakeCloud:
     def exists(self, local: Path) -> bool:
         return self._remote_path(local).exists()
 
-    def listdir(self, local_dir: Path):
+    def listdir(self, local_dir: Path, dirs_only: bool = False,
+                files_only: bool = False, max_depth: Optional[int] = None):
         remote = self._remote_path(local_dir)
-        return sorted(p.name for p in remote.iterdir()) if remote.is_dir() else []
+        if not remote.is_dir():
+            return []
+        if max_depth is not None and max_depth > 1:
+            names = []
+            for item in sorted(remote.rglob('*')):
+                depth = len(item.relative_to(remote).parts)
+                if depth > max_depth:
+                    continue
+                if dirs_only and not item.is_dir():
+                    continue
+                if files_only and not item.is_file():
+                    continue
+                names.append(str(item.relative_to(remote)))
+            return names
+        out = []
+        for item in sorted(remote.iterdir()):
+            if dirs_only and not item.is_dir():
+                continue
+            if files_only and not item.is_file():
+                continue
+            out.append(item.name)
+        return out
 
     def size(self, local: Path):
         remote = self._remote_path(local)

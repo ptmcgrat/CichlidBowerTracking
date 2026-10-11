@@ -138,18 +138,47 @@ def _cloud_analyses(paths: AnalysisPaths, cloud) -> List[str]:
         return []
 
 
-def list_analyses(layout: Layout, cloud=None) -> List[str]:
-    """Every analysisID, for the master page.
+def local_analyses(layout: Layout) -> List[str]:
+    """AnalysisIDs this machine can actually open, by reading no further than
+    its own disk.
 
-    Local first, then the cloud if one is given — a machine that has never run
-    a sweep has nothing locally and would otherwise show an empty master page.
+    The one the server wants. Discovery is a different question from service:
+    asking the cloud what exists costs a round trip per name and then lists
+    analyses whose states file is not here, which the master page can only
+    render as a row saying it could not read them. Collecting an analysis
+    downloads its states file first, so anything worth serving is already here.
     """
-    found = set()
     local = layout.local_root / '__AnalysisStates'
-    if local.is_dir():
-        found.update(p.name for p in local.iterdir() if p.is_dir())
+    if not local.is_dir():
+        return []
+    names = []
+    for child in sorted(local.iterdir()):
+        if not child.is_dir() or child.name.startswith('__'):
+            continue
+        if (child / (child.name + '.csv')).is_file():
+            names.append(child.name)
+    return names
+
+
+def list_analyses(layout: Layout, cloud=None) -> List[str]:
+    """Every analysisID, including ones not yet on this machine.
+
+    For discovery — the ``analyses`` command — not for serving; see
+    ``local_analyses``.
+
+    An analysis is a directory holding a states file named after it. Listing
+    directory names alone invented analyses out of whatever else sits under
+    __AnalysisStates: a loose CSV came back as a name, because lsf lists files
+    too, and a stray directory came back as an empty analysis. One recursive
+    listing answers it exactly, and still in a single round trip.
+    """
+    found = set(local_analyses(layout))
+    local = layout.local_root / '__AnalysisStates'
     if cloud is not None:
-        found.update(cloud.listdir(local))   # raises if the remote is unreachable
-    # __DeletedData and its like live alongside the analyses and are not
-    # analyses; neither is a directory with no states file in it
+        # raises if the remote is unreachable, rather than reporting nothing
+        for entry in cloud.listdir(local, files_only=True, max_depth=2):
+            parts = entry.replace('\\', '/').strip('/').split('/')
+            if len(parts) == 2 and parts[1] == parts[0] + '.csv':
+                found.add(parts[0])
+    # __DeletedData and its like live alongside the analyses and are not ones
     return sorted(name for name in found if name and not name.startswith('__'))
