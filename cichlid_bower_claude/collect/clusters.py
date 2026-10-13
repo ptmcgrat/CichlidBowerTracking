@@ -87,15 +87,6 @@ def pack(table: pd.DataFrame, days: List[dict]) -> Dict[str, object]:
     else:
         flags |= FLAG_CLUSTERED
 
-    # LID of -1 means the transition never joined a cluster. Those rows are not
-    # events and must stay out of any count of behaviour; the proportion of
-    # them is a useful measure of how well the clustering worked, so they are
-    # flagged rather than dropped.
-    if 'LID' in table.columns:
-        flags |= (table['LID'].to_numpy() != -1).astype(np.uint8) * FLAG_CLUSTERED
-    else:
-        flags |= FLAG_CLUSTERED
-
     day_index = np.full(count, 65535, np.uint16)
     trial = np.zeros(count, np.uint8)
     for day in days:
@@ -128,10 +119,6 @@ def pack(table: pd.DataFrame, days: List[dict]) -> Dict[str, object]:
 def summarise(table: pd.DataFrame) -> dict:
     """Counts worth having in the manifest without unpacking anything."""
     out = {'n': int(len(table))}
-    if 'LID' in table.columns:
-        unclustered = int((table['LID'] == -1).sum())
-        out['unclustered'] = unclustered
-        out['clustered'] = int(len(table)) - unclustered
     if 'Prediction' in table.columns:
         counts = table['Prediction'].value_counts()
         out['byBehaviour'] = {str(k): int(v) for k, v in counts.items()}
@@ -141,6 +128,7 @@ def summarise(table: pd.DataFrame) -> dict:
     if 'LID' in table.columns:
         unclustered = int((table['LID'].astype('Int64') == -1).sum())
         out['unclustered'] = unclustered
+        out['clustered'] = int(len(table)) - unclustered
         out['clusteredFraction'] = round(1 - unclustered / max(1, len(table)), 4)
     if len(table):
         out['first'] = str(table.index.min())
