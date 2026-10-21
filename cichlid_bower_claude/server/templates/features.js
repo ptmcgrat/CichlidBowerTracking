@@ -483,7 +483,14 @@ function draw() {
     table.appendChild(el('div', 'colhead',
       '<b>' + name + '</b><span>' + hint + '</span>'));
   });
-  trials.forEach(trial => renderTrial(+trial, byTrial[trial], table));
+  buildCodeSets();
+  // the confidence slider changes which events exist, so the last redraw's
+  // volumes and ellipses are not this redraw's
+  VOLUME_CACHE = {};
+  trials.forEach(trial => {
+    renderTrial(+trial, byTrial[trial], table);
+    renderTrialDetail(+trial, byTrial[trial], table);
+  });
 }
 
 function build() {
@@ -543,3 +550,606 @@ loadPayload(() => {
       'Collected ' + D.collected + ' · page built ' + D.built;
   });
 });
+
+// =====================================================================
+// The second row per trial: five more columns under the first five.
+//
+// These answer questions about the trial as a whole rather than about one
+// day, so they do not belong in the matrix above, whose columns are days.
+// =====================================================================
+
+const SPLIT_AT = 0.5;        // the share of total sand moved that ends half one
+const MIN_FOR_SHAPE = 25;    // events before an ellipse's shape is reported
+const SPAWN_REF = 10;        // the legend dot's spawn count
+
+// Bucket keys are the numeric behaviour codes, not the letters. Built lazily
+// because EVENTS is not loaded when this file is evaluated. 'b', bower
+// multiple, is deliberately in neither: it is both a scoop and a spit, so it
+// would have to be counted twice or not at all, and counting it twice makes
+// the two clouds artificially alike.
+let SCOOP_CODE = null, SPIT_CODE = null;
+
+function buildCodeSets() {
+  SCOOP_CODE = EVENTS.code.c;
+  SPIT_CODE = EVENTS.code.p;
+}
+
+// Sand moved between the endpoints the bundle already holds. The day's own
+// window is first to last; the night is the previous day's last to this
+// day's first — so overnight building is in the collected data already, and
+// needed no new collection to get at.
+let VOLUME_CACHE = {};
+
+// Three panels want these numbers and the arithmetic is a pass over every
+// pixel of every endpoint, so it happens once per trial and threshold.
+function volumesFor(trial, days, meta) {
+  const key = trial + ':' + THRESHOLD;
+  if (!VOLUME_CACHE[key]) VOLUME_CACHE[key] = perDayVolumes(trial, days, meta);
+  return VOLUME_CACHE[key];
+}
+
+function perDayVolumes(trial, days, meta) {
+  return Promise.all(days.map(d =>
+    Promise.all([loadDepth(d.firstPng), loadDepth(d.lastPng)])))
+    .then(pairs => days.map((d, i) => {
+      const [first, last] = pairs[i];
+      const prevLast = i > 0 ? pairs[i - 1][1] : null;
+      return {
+        index: d.index, date: d.date, day: d,
+        light: (first && last)
+          ? volumes(cropped(difference(first, last), meta, trial), THRESHOLD)
+          : null,
+        dark: (prevLast && first)
+          ? volumes(cropped(difference(prevLast, first), meta, trial), THRESHOLD)
+          : null,
+      };
+    }));
+}
+
+// The day at which half the trial's sand has moved. Snapped to a day
+// boundary, because days are the unit everywhere else; the fraction actually
+// reached is reported rather than assumed to be a half.
+function splitPoint(perDay) {
+  const moved = perDay.map(v => (v.light ? v.light.total : 0) +
+                                (v.dark ? v.dark.total : 0));
+  const final = moved.reduce((a, b) => a + b, 0);
+  if (!final) return null;
+  let running = 0;
+  for (let i = 0; i < moved.length; i++) {
+    running += moved[i];
+    if (running >= SPLIT_AT * final)
+      return { at: i, fraction: running / final, total: final };
+  }
+  return { at: moved.length - 1, fraction: 1, total: final };
+}
+
+function hoursBetween(a, b) {
+  const t0 = Date.parse(a), t1 = Date.parse(b);
+  if (!isFinite(t0) || !isFinite(t1)) return null;
+  const hours = (t1 - t0) / 3600000;
+  // A negative span means the days are out of order or a clock moved, and a
+  // span over two days is not a night. Either way it is not a measurement:
+  // summing it blindly printed '-39.9 h dark' as though it were one.
+  return (hours > 0 && hours < 48) ? hours : null;
+}
+
+// --------------------------------------------------------------- plotting
+// A plotting frame, not a chart library: four small pictures do not justify
+// the dependency, and every one of them is dots or bars against a day axis.
+function frame(width, height, xLo, xHi, yLo, yHi) {
+  const pad = { l: 46, r: 8, t: 8, b: 22 };
+  const canvas = el('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.style.width = '100%';
+  const ctx = canvas.getContext('2d');
+  const X = v => pad.l + (v - xLo) / (xHi - xLo || 1) * (width - pad.l - pad.r);
+  const Y = v => height - pad.b - (v - yLo) / (yHi - yLo || 1) * (height - pad.t - pad.b);
+
+  ctx.fillStyle = '#0b0d11';
+  ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = '#262d38';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, height - pad.b);
+  ctx.lineTo(width - pad.r, height - pad.b);
+  ctx.stroke();
+
+  return {
+    canvas, ctx, X, Y, pad, width, height,
+    ticks(values, format) {
+      ctx.fillStyle = '#93a0b0';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      values.forEach(v => {
+        const y = Y(v);
+        ctx.fillText(format ? format(v) : String(v), pad.l - 5, y + 3);
+        ctx.strokeStyle = 'rgba(147,160,176,.16)';
+        ctx.beginPath();
+        ctx.moveTo(pad.l, y); ctx.lineTo(width - pad.r, y);
+        ctx.stroke();
+      });
+    },
+    xLabel(v, text) {
+      ctx.fillStyle = '#93a0b0';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, X(v), height - pad.b + 13);
+    },
+    zero(v) {
+      ctx.strokeStyle = 'rgba(147,160,176,.45)';
+      ctx.beginPath();
+      ctx.moveTo(pad.l, Y(v)); ctx.lineTo(width - pad.r, Y(v));
+      ctx.stroke();
+    },
+    dot(x, y, colour, radius) {
+      ctx.fillStyle = 'rgb(' + colour.join(',') + ')';
+      ctx.beginPath();
+      ctx.arc(X(x), Y(y), radius === undefined ? 2.6 : radius, 0, Math.PI * 2);
+      ctx.fill();
+    },
+    line(points, colour) {
+      if (points.length < 2) return;
+      ctx.strokeStyle = 'rgba(' + colour.join(',') + ',.55)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      points.forEach(([x, y], i) => {
+        const px = X(x), py = Y(y);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+    },
+    tick(x, y, colour) {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(X(x) - 4, Y(y)); ctx.lineTo(X(x) + 4, Y(y));
+      ctx.stroke();
+    },
+  };
+}
+
+function stripPanel(title, hint) {
+  const box = el('figure');
+  const caption = el('figcaption',
+    null, '<b>' + title + '</b><br>' + (hint || ''));
+  box._caption = caption;
+  box._stage = el('div', 'stage');
+  box.appendChild(box._stage);
+  box.appendChild(caption);
+  return box;
+}
+
+function nice(value, digits) {
+  return (value === null || value === undefined || !isFinite(value))
+    ? '—' : value.toFixed(digits === undefined ? 0 : digits);
+}
+
+// ------------------------------------------------- 1 and 2: volume halves
+// Half of the sand moved, then the other half. Splitting on volume rather
+// than on time compares two males at equal work done instead of equal
+// elapsed time, which is the point: it takes the building rate out.
+//
+// The two indices do not average to the trial's index. Each describes the
+// sand moved inside its own window, so they are not a decomposition of the
+// finished bower and should not be read as one.
+function halfPanels(trial, days, meta) {
+  const first = stripPanel('First half of the volume', 'cumulative change');
+  const second = stripPanel('Second half of the volume', 'cumulative change');
+  [first, second].forEach(p => p._stage.appendChild(el('div', 'cellnote', 'measuring…')));
+
+  volumesFor(trial, days, meta).then(perDay => {
+    const split = splitPoint(perDay);
+    if (!split) {
+      [first, second].forEach(p => {
+        p._stage.textContent = '';
+        p._stage.appendChild(el('div', 'cellnote', 'no sand moved above the threshold'));
+      });
+      return;
+    }
+    const cut = days[split.at];
+    return Promise.all([loadDepth(days[0].firstPng), loadDepth(cut.lastPng),
+                        loadDepth(days[days.length - 1].lastPng)])
+      .then(([start, middle, end]) => {
+        if (!start || !middle || !end) return;
+        const early = cropped(difference(start, middle), meta, trial);
+        const late = cropped(difference(middle, end), meta, trial);
+
+        // one colour scale across both, so the halves can be compared by eye;
+        // independent scales would make a quiet half look like a busy one
+        let span = 0;
+        [early, late].forEach(map => {
+          for (let i = 0; i < map.length; i++) {
+            const v = Math.abs(map[i]);
+            if (!Number.isNaN(v) && v > span) span = v;
+          }
+        });
+        span = Math.max(0.5, span);
+
+        [[first, early, 0, split.at, split.fraction],
+         [second, late, split.at, days.length - 1, 1 - split.fraction]]
+          .forEach(([box, map, fromDay, toDay, share]) => {
+            box._stage.textContent = '';
+            const canvas = el('canvas');
+            box._stage.appendChild(canvas);
+            paintMap(canvas, map, meta, { range: span });
+            const v = volumes(map, THRESHOLD);
+            const spanDays = toDay - fromDay + (box === first ? 1 : 0);
+            box._caption.innerHTML =
+              '<b>' + (box === first ? 'First' : 'Second') + ' half of the volume</b><br>' +
+              'net volume <b>' + nice(v.total) + '</b> cm³ · ' +
+              'index <b>' + nice(v.index, 3) + '</b><br>' +
+              'days ' + (days[fromDay].index + 1) + '–' +
+              (days[toDay].index + 1) + ' · ' + spanDays + ' days · ' +
+              nice(share * 100) + '% of gross sand moved<br>' +
+              '<span style="color:#6c7684">net is across the window, gross is ' +
+              'day by day — they part where sand went back</span><br>' +
+              '<span style="color:#6c7684">scale ±' + nice(span, 1) +
+              ' cm, shared</span>';
+          });
+      });
+  });
+  return [first, second];
+}
+
+// ------------------------------------------- 3: how big the clouds are
+// Ellipse area per day, scoops against spits, with the pooled half-trial and
+// whole-trial figures to the right of a gap. The pooled number is not the
+// mean of the days: pooling adds the day-to-day wandering of the centre, so
+// a male who works one spot a day but moves about over the trial pools much
+// wider than he scatters. That gap is the interesting part.
+function areaPanel(trial, days, split) {
+  const box = stripPanel('Cloud size by day', 'ellipse area · scoop orange, spit blue');
+  const perDay = days.map(d => ({
+    index: d.index,
+    scoop: dispersion(pointsOnDay(trial, SCOOP_CODE, d.index), COVERAGE),
+    spit: dispersion(pointsOnDay(trial, SPIT_CODE, d.index), COVERAGE),
+  }));
+  const values = [];
+  perDay.forEach(r => ['scoop', 'spit'].forEach(k => {
+    if (r[k]) values.push(r[k].area);
+  }));
+
+  const pooled = {};
+  const ranges = { H1: [0, split ? split.at : days.length - 1],
+                   H2: [split ? split.at : 0, days.length - 1],
+                   All: [0, days.length - 1] };
+  Object.keys(ranges).forEach(label => {
+    const [lo, hi] = ranges[label];
+    pooled[label] = {};
+    ['scoop', 'spit'].forEach(k => {
+      const codes = k === 'scoop' ? SCOOP_CODE : SPIT_CODE;
+      const points = [];
+      for (let i = lo; i <= hi; i++)
+        pointsOnDay(trial, codes, days[i].index).forEach(p => points.push(p));
+      const shape = dispersion(points, COVERAGE);
+      pooled[label][k] = shape;
+      if (shape) values.push(shape.area);
+    });
+  });
+
+  if (!values.length) {
+    box._stage.appendChild(el('div', 'cellnote',
+      'no day has ' + 10 + ' or more events of either kind'));
+    return box;
+  }
+  const top = Math.max.apply(null, values) * 1.1;
+  const slots = days.length + 4;
+  const f = frame(420, 180, -0.5, slots - 0.5, 0, top);
+  const step = top / 4;
+  f.ticks([step, 2 * step, 3 * step, 4 * step], v => nice(v));
+  ['scoop', 'spit'].forEach(k => {
+    const colour = k === 'scoop' ? SCOOP : SPIT;
+    const path = [];
+    perDay.forEach((r, i) => {
+      if (!r[k]) return;
+      const y = r[k].area;
+      f.dot(i, y, colour);
+      path.push([i, y]);
+    });
+    f.line(path, colour);
+    ['H1', 'H2', 'All'].forEach((label, j) => {
+      const shape = pooled[label][k];
+      if (shape) f.dot(days.length + 1 + j, shape.area, colour, 3.4);
+    });
+  });
+  f.xLabel(0, '1');
+  f.xLabel(days.length - 1, String(days.length));
+  ['H1', 'H2', 'All'].forEach((label, j) =>
+    f.xLabel(days.length + 1 + j, label));
+  box._stage.appendChild(f.canvas);
+  box._caption.innerHTML =
+    '<b>Cloud size by day</b><br>ellipse area, cm² · ' +
+    'scoop orange, spit blue<br>' +
+    '<span style="color:#6c7684">H1, H2 and All pool their events, which is ' +
+    'wider than the daily mean whenever the centre moves between days</span>';
+  return box;
+}
+
+// This page's dispersion() returns area in cm2 already, unlike the summary
+// sheet's, which returns pixels squared. Converting a second time here
+// overstated every cloud by about ninety-four.
+function pointsOnDay(trial, code, dayIndex) {
+  const byDay = (BUCKETS && BUCKETS[trial]) || {};
+  return (byDay[dayIndex] && byDay[dayIndex][code]) || [];
+}
+
+// --------------------------------------- 4: what shape the clouds are
+// Aspect ratio of the same ellipses, which is the elongation question. Note
+// this is NOT the correlation of x with y: a cloud stretched along the tank
+// axis has zero x-y correlation and an aspect ratio of five, so correlating
+// the coordinates would miss exactly the elongation it was meant to find.
+//
+// The grey ticks are the median aspect ratio a perfectly circular cloud of
+// that day's event count would produce. Anything near its own tick is a
+// count, not a shape.
+function aspectPanel(trial, days, split) {
+  const box = stripPanel('Cloud shape by day', 'aspect ratio · grey = circular at that n');
+  const shapeOf = points => {
+    const d = dispersion(points, COVERAGE);
+    if (!d || d.n < MIN_FOR_SHAPE || d.minor <= 0) return null;
+    return { ratio: d.major / d.minor, n: d.n,
+             angle: d.angle * 180 / Math.PI };
+  };
+  const perDay = days.map(d => ({
+    scoop: shapeOf(pointsOnDay(trial, SCOOP_CODE, d.index)),
+    spit: shapeOf(pointsOnDay(trial, SPIT_CODE, d.index)),
+  }));
+
+  const pooled = {};
+  const ranges = { H1: [0, split ? split.at : days.length - 1],
+                   H2: [split ? split.at : 0, days.length - 1],
+                   All: [0, days.length - 1] };
+  Object.keys(ranges).forEach(label => {
+    const [lo, hi] = ranges[label];
+    pooled[label] = {};
+    ['scoop', 'spit'].forEach(k => {
+      const codes = k === 'scoop' ? SCOOP_CODE : SPIT_CODE;
+      const points = [];
+      for (let i = lo; i <= hi; i++)
+        pointsOnDay(trial, codes, days[i].index).forEach(p => points.push(p));
+      pooled[label][k] = shapeOf(points);
+    });
+  });
+
+  const values = [];
+  perDay.forEach(r => ['scoop', 'spit'].forEach(k => {
+    if (r[k]) { values.push(r[k].ratio); values.push(nullAspect(r[k].n)); }
+  }));
+  Object.keys(pooled).forEach(label => ['scoop', 'spit'].forEach(k => {
+    if (pooled[label][k]) values.push(pooled[label][k].ratio);
+  }));
+  if (!values.length) {
+    box._stage.appendChild(el('div', 'cellnote',
+      'no day reaches ' + MIN_FOR_SHAPE + ' events of either kind'));
+    return box;
+  }
+
+  const top = Math.max(2, Math.max.apply(null, values) * 1.08);
+  const slots = days.length + 4;
+  const f = frame(420, 180, -0.5, slots - 0.5, 1, top);
+  f.ticks([1.5, 2, 3, 4].filter(v => v < top), v => v.toFixed(1));
+  f.zero(1);
+  ['scoop', 'spit'].forEach(k => {
+    const colour = k === 'scoop' ? SCOOP : SPIT;
+    const path = [];
+    perDay.forEach((r, i) => {
+      if (!r[k]) return;
+      f.tick(i, nullAspect(r[k].n), 'rgba(147,160,176,.5)');
+      f.dot(i, r[k].ratio, colour);
+      path.push([i, r[k].ratio]);
+    });
+    f.line(path, colour);
+    ['H1', 'H2', 'All'].forEach((label, j) => {
+      const shape = pooled[label][k];
+      if (!shape) return;
+      f.tick(days.length + 1 + j, nullAspect(shape.n), 'rgba(147,160,176,.5)');
+      f.dot(days.length + 1 + j, shape.ratio, colour, 3.4);
+    });
+  });
+  f.xLabel(0, '1');
+  f.xLabel(days.length - 1, String(days.length));
+  ['H1', 'H2', 'All'].forEach((label, j) => f.xLabel(days.length + 1 + j, label));
+  box._stage.appendChild(f.canvas);
+
+  const all = pooled.All;
+  box._caption.innerHTML =
+    '<b>Cloud shape by day</b><br>aspect ratio of the same ellipses · ' +
+    'at least ' + MIN_FOR_SHAPE + ' events<br>' +
+    'whole trial: scoop <b>' + (all.scoop ? nice(all.scoop.ratio, 2) : '—') +
+    '</b> (circular would be ' +
+    (all.scoop ? nice(nullAspect(all.scoop.n), 2) : '—') + ') · ' +
+    'spit <b>' + (all.spit ? nice(all.spit.ratio, 2) : '—') + '</b> (' +
+    (all.spit ? nice(nullAspect(all.spit.n), 2) : '—') + ')<br>' +
+    'angle to the tray’s x axis: scoop ' +
+    (all.scoop ? nice(all.scoop.angle) + '°' : '—') + ' · spit ' +
+    (all.spit ? nice(all.spit.angle) + '°' : '—');
+  return box;
+}
+
+// ----------------------------------------- 5: spawn depth, sized by count
+// A day with no spawns is absent, not plotted at zero: zero spawns has no
+// depth, and a dot at zero sits exactly where "spawned on flat sand" lives.
+function spawnDepthPanel(trial, days, meta) {
+  const box = stripPanel('Spawn depth by day', 'dot area = spawns that day');
+  box._stage.appendChild(el('div', 'cellnote', 'measuring…'));
+  const spawnCode = EVENTS.code.s;
+
+  Promise.all(days.map(d => Promise.all([loadDepth(days[0].firstPng),
+                                         loadDepth(d.lastPng)])))
+    .then(pairs => {
+      const rows = [];
+      days.forEach((d, i) => {
+        const points = pointsOnDay(trial, spawnCode, d.index);
+        if (!points.length) return;
+        const [start, end] = pairs[i];
+        if (!start || !end) return;
+        // against the sand as it stood that day, never the finished bower
+        const map = cropped(difference(start, end), meta, trial);
+        const depths = [];
+        points.forEach(([x, y]) => {
+          const px = Math.round(x / (D.downsample || 1));
+          const py = Math.round(y / (D.downsample || 1));
+          if (px < 0 || py < 0 || px >= meta.width || py >= meta.height) return;
+          const v = map[py * meta.width + px];
+          if (!Number.isNaN(v)) depths.push(v);
+        });
+        if (!depths.length) return;
+        const mean = depths.reduce((a, b) => a + b, 0) / depths.length;
+        let lo = depths[0], hi = depths[0];
+        depths.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; });
+        rows.push({ at: i, mean, lo, hi, n: points.length, used: depths.length });
+      });
+
+      box._stage.textContent = '';
+      if (!rows.length) {
+        box._stage.appendChild(el('div', 'cellnote', 'no spawns in this trial'));
+        box._caption.innerHTML = '<b>Spawn depth by day</b><br>no spawns above the ' +
+          'confidence threshold';
+        return;
+      }
+      let lo = 0, hi = 0;
+      rows.forEach(r => { if (r.lo < lo) lo = r.lo; if (r.hi > hi) hi = r.hi; });
+      const pad = Math.max(0.4, (hi - lo) * 0.12);
+      const f = frame(420, 180, -0.5, days.length - 0.5, lo - pad, hi + pad);
+      const step = (hi - lo + 2 * pad) / 4;
+      f.ticks([lo - pad + step, lo - pad + 2 * step, lo - pad + 3 * step],
+              v => v.toFixed(1));
+      f.zero(0);
+      const biggest = Math.max.apply(null, rows.map(r => r.n));
+      rows.forEach(r => {
+        f.ctx.strokeStyle = 'rgba(232,132,168,.4)';
+        f.ctx.lineWidth = 1;
+        f.ctx.beginPath();
+        f.ctx.moveTo(f.X(r.at), f.Y(r.lo));
+        f.ctx.lineTo(f.X(r.at), f.Y(r.hi));
+        f.ctx.stroke();
+        // area proportional to the count, so radius goes as its square root
+        f.dot(r.at, r.mean, SPAWN,
+              Math.max(2, 3.2 * Math.sqrt(r.n / SPAWN_REF)));
+      });
+      // the legend dot, without which the areas mean nothing on their own
+      f.ctx.fillStyle = 'rgba(232,132,168,.85)';
+      f.ctx.beginPath();
+      f.ctx.arc(f.width - 42, 22, 3.2, 0, Math.PI * 2);
+      f.ctx.fill();
+      f.ctx.fillStyle = '#93a0b0';
+      f.ctx.font = '10px sans-serif';
+      f.ctx.textAlign = 'left';
+      f.ctx.fillText('= ' + SPAWN_REF + ' spawns', f.width - 34, 25);
+      f.xLabel(0, '1');
+      f.xLabel(days.length - 1, String(days.length));
+      box._stage.appendChild(f.canvas);
+
+      const spawns = rows.reduce((sum, r) => sum + r.n, 0);
+      const weighted = rows.reduce((sum, r) => sum + r.mean * r.n, 0) / spawns;
+      box._caption.innerHTML =
+        '<b>Spawn depth by day</b><br>cumulative depth under each spawn, that ' +
+        'day · whisker is the day’s range<br>' +
+        spawns + ' spawns over ' + rows.length + ' days · ' +
+        'mean <b>' + nice(weighted, 2) + '</b> cm<br>' +
+        '<span style="color:#6c7684">dot area is the count; days with no ' +
+        'spawns are absent, not zero</span>';
+    });
+  return box;
+}
+
+// -------------------------------------------- 6: how much is built at night
+// The depth sensor is infrared and sees in the dark; the video does not, so
+// this is the one build measure that can only come from depth and will never
+// have events beside it.
+function nightStrip(trial, days, meta) {
+  const box = stripPanel('Built overnight', 'share of the day’s sand');
+  box._stage.appendChild(el('div', 'cellnote', 'measuring…'));
+
+  volumesFor(trial, days, meta).then(perDay => {
+    const rows = [];
+    let darkTotal = 0, lightTotal = 0, darkHours = 0, lightHours = 0;
+    let litDays = 0, darkNights = 0;
+    perDay.forEach((v, i) => {
+      if (!v.light) return;
+      lightTotal += v.light.total;
+      const lit = hoursBetween(v.day.first, v.day.last);
+      if (lit) { lightHours += lit; litDays++; }
+      if (!v.dark) return;        // day one has no night before it
+      darkTotal += v.dark.total;
+      const dark = hoursBetween(days[i - 1].last, v.day.first);
+      if (dark) { darkHours += dark; darkNights++; }
+      const both = v.dark.total + v.light.total;
+      if (both > 0) rows.push({ at: i, share: v.dark.total / both });
+    });
+
+    box._stage.textContent = '';
+    if (!rows.length) {
+      box._stage.appendChild(el('div', 'cellnote', 'no overnight pair to compare'));
+      return;
+    }
+    const f = frame(420, 96, -0.5, days.length - 0.5, 0, 1);
+    f.ticks([0.25, 0.5, 0.75, 1], v => v.toFixed(2));
+    rows.forEach(r => {
+      f.ctx.fillStyle = 'rgba(111,178,232,.5)';
+      const x = f.X(r.at), base = f.Y(0);
+      f.ctx.fillRect(x - 3, f.Y(r.share), 6, base - f.Y(r.share));
+    });
+    f.xLabel(0, '1');
+    f.xLabel(days.length - 1, String(days.length));
+    box._stage.appendChild(f.canvas);
+
+    const share = darkTotal / (darkTotal + lightTotal || 1);
+    // a 14 hour night against a 10 hour day makes a half share mean the night
+    // rate is lower, so the rate ratio is given beside the raw share
+    const rate = (darkHours > 0 && lightHours > 0)
+      ? (darkTotal / darkHours) / (lightTotal / lightHours) : null;
+    box._caption.innerHTML =
+      '<b>Built overnight</b><br>overnight sand as a share of the day’s total<br>' +
+      'trial <b>' + nice(share * 100, 1) + '%</b> of ' +
+      nice(darkTotal + lightTotal) + ' cm³<br>' +
+      'rate <b>' + (rate === null ? '—' : nice(rate, 2) + '×') +
+      '</b> the daytime rate · ' + nice(darkHours / rows.length, 1) +
+      ' h dark vs ' + nice(lightHours / perDay.length, 1) + ' h light<br>' +
+      '<span style="color:#6c7684">depth only — the cameras cannot see ' +
+      'in the dark, so no events accompany this</span>';
+  });
+  return box;
+}
+
+// Five more cells in the same matrix, so they line up under the first five.
+// Each carries its own heading in its caption: the matrix has one header row
+// and these columns do not mean what that row says.
+//
+// Six measurements in five columns -- the overnight share rides under the
+// second half, which is the other volume panel, rather than taking a column
+// of its own and breaking the alignment with the row above.
+function renderTrialDetail(trial, days, table) {
+  const meta = days[0].firstPng;
+  table.appendChild(el('div', 'rowlab', '<b>Trial ' + trial +
+    '</b><span>halves by volume,<br>clouds, spawn depth</span>'));
+
+  const slots = [];
+  for (let i = 0; i < 5; i++) {
+    const slot = el('div', 'cell');
+    table.appendChild(slot);
+    slots.push(slot);
+  }
+
+  const halves = halfPanels(trial, days, meta);
+  slots[0].appendChild(halves[0]);
+  slots[1].appendChild(halves[1]);
+  slots[1].appendChild(nightStrip(trial, days, meta));
+  slots[4].appendChild(spawnDepthPanel(trial, days, meta));
+
+  // The ellipse panels need the volume split, which is asynchronous.
+  // Appending them when their promise settles put the columns in a different
+  // order on every reload, so their places are held now.
+  [2, 3].forEach(i => {
+    const holding = stripPanel('\u2026', 'waiting for the volume split');
+    holding._stage.appendChild(el('div', 'cellnote', 'measuring\u2026'));
+    slots[i].appendChild(holding);
+  });
+  volumesFor(trial, days, meta).then(perDay => {
+    const split = splitPoint(perDay);
+    slots[2].textContent = '';
+    slots[3].textContent = '';
+    slots[2].appendChild(areaPanel(trial, days, split));
+    slots[3].appendChild(aspectPanel(trial, days, split));
+  });
+}

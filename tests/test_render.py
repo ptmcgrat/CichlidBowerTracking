@@ -53,10 +53,10 @@ def _render(page):
 
 
 @needs_jsdom
-def test_the_summary_strip_draws_its_panels():
+def test_the_features_second_row_draws_its_panels():
     """Rendering without an error is not the same as rendering the panels: a
     panel whose promise rejects silently leaves the page looking fine."""
-    text = _render('summary')
+    text = _render('features')
     for label in ('First half of the volume', 'Second half of the volume',
                   'Cloud size by day', 'Cloud shape by day',
                   'Spawn depth by day', 'Built overnight'):
@@ -69,7 +69,7 @@ def test_the_volume_split_reaches_about_half():
     than on it -- but a split reporting 0% or 100% means the running total
     was never accumulated."""
     import re
-    text = _render('summary')
+    text = _render('features')
     shares = [float(m) for m in re.findall(r'(\d+)% of gross sand moved', text)]
     assert shares, text[:400]
     assert any(20 <= s <= 80 for s in shares), shares
@@ -79,5 +79,5 @@ def test_the_volume_split_reaches_about_half():
 def test_the_aspect_panel_reports_its_null():
     """An aspect ratio without the circular baseline beside it is the thing
     this panel exists to avoid."""
-    text = _render('summary')
+    text = _render('features')
     assert 'circular would be' in text
