@@ -560,7 +560,14 @@ loadPayload(() => {
 
 const SPLIT_AT = 0.5;        // the share of total sand moved that ends half one
 const MIN_FOR_SHAPE = 25;    // events before an ellipse's shape is reported
-const SPAWN_REF = 10;        // the legend dot's spawn count
+// Dot sizes. The radius was a fixed multiple of sqrt(count), which put a
+// busy day at eighteen pixels and swallowed its neighbours. Normalising to
+// the trial's busiest day keeps area proportional to count within the panel
+// and bounds the result; the floor keeps a one-spawn day visible instead of
+// vanishing into the axis.
+const DOT_MIN = 1.7;
+const DOT_MAX = 5.5;
+const SCALE_PERCENTILE = 0.985;   // of the depth magnitudes, for the halves
 
 // Bucket keys are the numeric behaviour codes, not the letters. Built lazily
 // because EVENTS is not loaded when this file is evaluated. 'b', bower
@@ -754,16 +761,28 @@ function halfPanels(trial, days, meta) {
         const early = cropped(difference(start, middle), meta, trial);
         const late = cropped(difference(middle, end), meta, trial);
 
-        // one colour scale across both, so the halves can be compared by eye;
-        // independent scales would make a quiet half look like a busy one
-        let span = 0;
+        // One colour scale across both, so the halves can be compared by eye;
+        // independent scales would make a quiet half look like a busy one.
+        //
+        // Not the largest pixel, though: a single spike sets the scale and
+        // flattens everything real into the middle of the ramp. The high
+        // percentile of the two halves together keeps them comparable while
+        // leaving the structure visible, and the few pixels past it clip,
+        // which is the right trade for a map read by eye.
+        const magnitudes = [];
         [early, late].forEach(map => {
           for (let i = 0; i < map.length; i++) {
             const v = Math.abs(map[i]);
-            if (!Number.isNaN(v) && v > span) span = v;
+            if (!Number.isNaN(v) && v > 0) magnitudes.push(v);
           }
         });
-        span = Math.max(0.5, span);
+        let span = 0.5, clipped = 0;
+        if (magnitudes.length) {
+          magnitudes.sort((a, b) => a - b);
+          const at = Math.floor(magnitudes.length * SCALE_PERCENTILE);
+          span = Math.max(0.5, magnitudes[Math.min(at, magnitudes.length - 1)]);
+          clipped = magnitudes.length - at;
+        }
 
         [[first, early, 0, split.at, split.fraction],
          [second, late, split.at, days.length - 1, 1 - split.fraction]]
@@ -783,8 +802,9 @@ function halfPanels(trial, days, meta) {
               nice(share * 100) + '% of gross sand moved<br>' +
               '<span style="color:#6c7684">net is across the window, gross is ' +
               'day by day — they part where sand went back</span><br>' +
-              '<span style="color:#6c7684">scale ±' + nice(span, 1) +
-              ' cm, shared</span>';
+              '<span style="color:#6c7684">scale ±' + nice(span, 2) +
+              ' cm, shared' + (clipped ? ' · ' + clipped + ' px clipped' : '') +
+              '</span>';
           });
       });
   });
@@ -1025,17 +1045,22 @@ function spawnDepthPanel(trial, days, meta) {
         f.ctx.stroke();
         // area proportional to the count, so radius goes as its square root
         f.dot(r.at, r.mean, SPAWN,
-              Math.max(2, 3.2 * Math.sqrt(r.n / SPAWN_REF)));
+              Math.max(DOT_MIN, DOT_MAX * Math.sqrt(r.n / biggest)));
       });
-      // the legend dot, without which the areas mean nothing on their own
-      f.ctx.fillStyle = 'rgba(232,132,168,.85)';
-      f.ctx.beginPath();
-      f.ctx.arc(f.width - 42, 22, 3.2, 0, Math.PI * 2);
-      f.ctx.fill();
-      f.ctx.fillStyle = '#93a0b0';
+      // Two legend dots, because one tells you nothing about the mapping:
+      // the largest day and a quarter of it, which is half the radius.
       f.ctx.font = '10px sans-serif';
       f.ctx.textAlign = 'left';
-      f.ctx.fillText('= ' + SPAWN_REF + ' spawns', f.width - 34, 25);
+      [[biggest, DOT_MAX], [Math.round(biggest / 4), DOT_MAX / 2]]
+        .forEach(([count, radius], i) => {
+          const cx = f.pad.l + 10 + i * 56;
+          f.ctx.fillStyle = 'rgba(232,132,168,.85)';
+          f.ctx.beginPath();
+          f.ctx.arc(cx, 16, radius, 0, Math.PI * 2);
+          f.ctx.fill();
+          f.ctx.fillStyle = '#93a0b0';
+          f.ctx.fillText(String(count), cx + DOT_MAX + 4, 19);
+        });
       f.xLabel(0, '1');
       f.xLabel(days.length - 1, String(days.length));
       box._stage.appendChild(f.canvas);
@@ -1047,8 +1072,9 @@ function spawnDepthPanel(trial, days, meta) {
         'day · whisker is the day’s range<br>' +
         spawns + ' spawns over ' + rows.length + ' days · ' +
         'mean <b>' + nice(weighted, 2) + '</b> cm<br>' +
-        '<span style="color:#6c7684">dot area is the count; days with no ' +
-        'spawns are absent, not zero</span>';
+        '<span style="color:#6c7684">dot area is the count, scaled to this ' +
+        'trial’s busiest day, so sizes compare within the panel and not ' +
+        'between trials; days with no spawns are absent, not zero</span>';
     });
   return box;
 }
@@ -1074,8 +1100,11 @@ function nightStrip(trial, days, meta) {
       darkTotal += v.dark.total;
       const dark = hoursBetween(days[i - 1].last, v.day.first);
       if (dark) { darkHours += dark; darkNights++; }
+      // the 24 hour window for this day is the previous evening through to
+      // this evening, which is exactly the night plus the day
       const both = v.dark.total + v.light.total;
-      if (both > 0) rows.push({ at: i, share: v.dark.total / both });
+      if (both > 0) rows.push({ at: i, share: v.dark.total / both,
+                                night: v.dark.total, total: both });
     });
 
     box._stage.textContent = '';
@@ -1083,13 +1112,33 @@ function nightStrip(trial, days, meta) {
       box._stage.appendChild(el('div', 'cellnote', 'no overnight pair to compare'));
       return;
     }
-    const f = frame(420, 96, -0.5, days.length - 0.5, 0, 1);
-    f.ticks([0.25, 0.5, 0.75, 1], v => v.toFixed(2));
+    // Volume, not the share. A share on its own cannot tell a real night of
+    // digging from a day where almost nothing moved and the little that did
+    // happened to be at night — those look identical at 80%. Stacking the
+    // night inside the 24 hour total shows both at once: how much moved, and
+    // how much of it was dark.
+    const top = Math.max.apply(null, rows.map(r => r.total)) * 1.08 || 1;
+    const f = frame(420, 118, -0.5, days.length - 0.5, 0, top);
+    const step = top / 3;
+    f.ticks([step, 2 * step, 3 * step], v => nice(v));
+    const width = Math.max(2, Math.min(9, 300 / days.length));
     rows.forEach(r => {
-      f.ctx.fillStyle = 'rgba(111,178,232,.5)';
       const x = f.X(r.at), base = f.Y(0);
-      f.ctx.fillRect(x - 3, f.Y(r.share), 6, base - f.Y(r.share));
+      f.ctx.fillStyle = 'rgba(147,160,176,.26)';
+      f.ctx.fillRect(x - width / 2, f.Y(r.total), width, base - f.Y(r.total));
+      f.ctx.fillStyle = 'rgba(111,178,232,.8)';
+      f.ctx.fillRect(x - width / 2, f.Y(r.night), width, base - f.Y(r.night));
     });
+    f.ctx.font = '10px sans-serif';
+    f.ctx.textAlign = 'left';
+    f.ctx.fillStyle = 'rgba(111,178,232,.9)';
+    f.ctx.fillRect(f.pad.l + 4, 10, 7, 7);
+    f.ctx.fillStyle = '#93a0b0';
+    f.ctx.fillText('night', f.pad.l + 15, 17);
+    f.ctx.fillStyle = 'rgba(147,160,176,.4)';
+    f.ctx.fillRect(f.pad.l + 48, 10, 7, 7);
+    f.ctx.fillStyle = '#93a0b0';
+    f.ctx.fillText('24 h', f.pad.l + 59, 17);
     f.xLabel(0, '1');
     f.xLabel(days.length - 1, String(days.length));
     box._stage.appendChild(f.canvas);
@@ -1100,12 +1149,14 @@ function nightStrip(trial, days, meta) {
     const rate = (darkHours > 0 && lightHours > 0)
       ? (darkTotal / darkHours) / (lightTotal / lightHours) : null;
     box._caption.innerHTML =
-      '<b>Built overnight</b><br>overnight sand as a share of the day’s total<br>' +
+      '<b>Built overnight</b><br>night inside the 24 hour total, cm³<br>' +
       'trial <b>' + nice(share * 100, 1) + '%</b> of ' +
       nice(darkTotal + lightTotal) + ' cm³<br>' +
       'rate <b>' + (rate === null ? '—' : nice(rate, 2) + '×') +
-      '</b> the daytime rate · ' + nice(darkHours / rows.length, 1) +
-      ' h dark vs ' + nice(lightHours / perDay.length, 1) + ' h light<br>' +
+      '</b> the daytime rate · ' +
+      (darkNights ? nice(darkHours / darkNights, 1) + ' h dark' : 'dark span unknown') +
+      ' vs ' + (litDays ? nice(lightHours / litDays, 1) + ' h light'
+                        : 'light span unknown') + '<br>' +
       '<span style="color:#6c7684">depth only — the cameras cannot see ' +
       'in the dark, so no events accompany this</span>';
   });
