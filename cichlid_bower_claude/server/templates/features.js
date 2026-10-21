@@ -107,28 +107,6 @@ function pointsUpTo(trial, code, upToDay) {
 }
 
 // ---------------------------------------------------------------- geometry
-function pixelArea() {
-  // a map pixel covers more than a sensor pixel: the maps are downsampled for
-  // the browser, and forgetting that understates volume by the square
-  const cm = D.pixelLength || 0.1030168618;
-  const factor = D.downsample || 1;
-  return (cm * factor) * (cm * factor);
-}
-
-function volumes(values, threshold) {
-  const area = pixelArea();
-  let castle = 0, pit = 0;
-  for (let i = 0; i < values.length; i++) {
-    const v = values[i];
-    if (Number.isNaN(v)) continue;
-    if (v >= threshold) castle += v * area;
-    else if (v <= -threshold) pit += -v * area;
-  }
-  const total = castle + pit;
-  return { castle, pit, total,
-           index: total > 0 ? (castle - pit) / total : 0 };
-}
-
 function dispersion(points, coverage) {
   if (points.length < 10) return null;
   let mx = 0, my = 0;

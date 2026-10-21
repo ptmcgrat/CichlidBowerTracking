@@ -305,3 +305,83 @@ def test_the_index_records_the_spawn_times(analysis, monkeypatch, tmp_path):
     mine = [r for r in rows if r['projectID'] == 'MC_920_t001_tr1']
     assert mine and mine[0]['spawns'] == '3'
     assert len(mine[0]['spawnTimes'].split()) == 3
+
+
+def _log_with(movies, frames_end):
+    """A stand-in log: only what _videos_for reads."""
+    from cichlid_bower_claude.logfile.model import Frame, Movie, ProjectLog
+    log = ProjectLog()
+    for index, (start, stop) in enumerate(movies, 1):
+        log.movies.append(Movie(start_time=start, stop_time=stop,
+                                h264_file='Videos/%04d_vid.h264' % index,
+                                pic_file='', framerate=30,
+                                width=1296, height=972))
+    log.frames.append(Frame(npy_file='Frames/Frame_000001.npy',
+                            pic_file='Frames/Frame_000001.jpg',
+                            time=frames_end, median=60.0, std=0.1,
+                            good_pixels=1.0, lights_on=True))
+    return log
+
+
+def _day(first, last):
+    return S.Day(project_id='p', category='c', index=38, trial=1,
+                 first=first, last=last)
+
+
+def test_a_recording_with_no_logged_end_does_not_claim_every_later_day():
+    """The real failure: a video truncated in week one was offered as material
+    for day 38, because an unknown end was treated as 'still recording'.
+
+    Videos 1 and 2 died early and logged no stop; video 3 is the day's own.
+    """
+    base = dt.datetime(2025, 1, 1, 8)
+    movies = [
+        (base, None),                                        # died, no stop
+        (base + dt.timedelta(days=7), None),                 # died, no stop
+        (base + dt.timedelta(days=37), base + dt.timedelta(days=37, hours=10)),
+    ]
+    log = _log_with(movies, base + dt.timedelta(days=40))
+    day = _day(base + dt.timedelta(days=37, hours=1),
+               base + dt.timedelta(days=37, hours=9))
+
+    assert S._videos_for(log, day) == ['Videos/0003_vid.mp4']
+
+
+def test_an_unlogged_end_is_taken_as_the_next_recording_start():
+    """Not dropped: the recording is real and does cover its own window."""
+    base = dt.datetime(2025, 1, 1, 8)
+    movies = [(base, None), (base + dt.timedelta(hours=6), None)]
+    log = _log_with(movies, base + dt.timedelta(hours=12))
+
+    early = _day(base + dt.timedelta(hours=1), base + dt.timedelta(hours=2))
+    assert S._videos_for(log, early) == ['Videos/0001_vid.mp4']
+
+    later = _day(base + dt.timedelta(hours=7), base + dt.timedelta(hours=8))
+    assert S._videos_for(log, later) == ['Videos/0002_vid.mp4']
+
+
+def test_the_last_recording_without_a_stop_ends_with_the_project():
+    base = dt.datetime(2025, 1, 1, 8)
+    log = _log_with([(base, None)], base + dt.timedelta(hours=10))
+    day = _day(base + dt.timedelta(hours=8), base + dt.timedelta(hours=9))
+    assert S._videos_for(log, day) == ['Videos/0001_vid.mp4']
+    # but not a day after the project ended
+    after = _day(base + dt.timedelta(days=5), base + dt.timedelta(days=5, hours=1))
+    assert S._videos_for(log, after) == []
+
+
+def test_a_recording_straddling_midnight_still_counts_for_the_day():
+    """Overlap, not 'started inside' -- the point of the original choice."""
+    base = dt.datetime(2025, 1, 1, 20)
+    log = _log_with([(base, base + dt.timedelta(hours=14))],
+                    base + dt.timedelta(hours=20))
+    day = _day(dt.datetime(2025, 1, 2, 8), dt.datetime(2025, 1, 2, 9))
+    assert S._videos_for(log, day) == ['Videos/0001_vid.mp4']
+
+
+def test_inferred_ends_are_reported():
+    base = dt.datetime(2025, 1, 1, 8)
+    log = _log_with([(base, None), (base + dt.timedelta(hours=6),
+                                    base + dt.timedelta(hours=9))],
+                    base + dt.timedelta(hours=12))
+    assert S._inferred(log) == ['Videos/0001_vid.mp4']

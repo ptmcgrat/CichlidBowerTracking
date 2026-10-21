@@ -475,3 +475,57 @@ def test_a_landing_page_reparses_only_what_changed(client):
         assert len(reads) == 2                   # both pages notice, once each
     finally:
         C.load = real
+
+
+def test_a_save_waits_briefly_for_the_one_ahead_of_it(client, monkeypatch):
+    """Two people saving within a second of each other is ordinary, and used
+    to fail outright with 'someone else is saving this project'."""
+    import threading
+    import time as _time
+    http, layout = client
+    monkeypatch.setattr(A, 'LOCK_WAIT', 5.0)
+
+    holder = A._lock_for(ANALYSIS, PROJECT)
+    holder.acquire()
+    A.HELD[ANALYSIS + '/' + PROJECT] = _time.time()
+
+    def let_go():
+        _time.sleep(0.4)
+        A.HELD.pop(ANALYSIS + '/' + PROJECT, None)
+        holder.release()
+
+    threading.Thread(target=let_go).start()
+    response = http.post(ROOT + '/save', json={'who': 'tester'})
+    assert response.status_code == 200, response.get_json()
+
+
+def test_a_lock_held_too_long_says_the_server_is_stuck(client, monkeypatch):
+    """A wedged lock and a busy colleague are different problems, and the
+    message has to tell them apart or the advice is useless."""
+    import time as _time
+    http, layout = client
+    monkeypatch.setattr(A, 'LOCK_WAIT', 0.1)
+
+    stuck = A._lock_for(ANALYSIS, PROJECT)
+    stuck.acquire()
+    A.HELD[ANALYSIS + '/' + PROJECT] = _time.time() - 600
+    try:
+        response = http.post(ROOT + '/save', json={'who': 'tester'})
+        assert response.status_code == 409
+        error = response.get_json()['error']
+        assert 'stuck' in error and 'restart' in error
+        assert 'do not reload' in error    # their edits are still on screen
+    finally:
+        A.HELD.pop(ANALYSIS + '/' + PROJECT, None)
+        stuck.release()
+
+
+def test_the_lock_is_given_back_when_a_save_fails(client):
+    """Whatever goes wrong inside, the next save must still be possible."""
+    http, layout = client
+    assert http.post(ROOT + '/save', data='not json').status_code == 400
+    assert http.post(ROOT + '/save', json={'trial_times': 'nonsense'}
+                     ).status_code in (200, 500)
+    # and the project is not left locked by either
+    assert http.post(ROOT + '/save', json={'who': 'tester'}).status_code == 200
+    assert A.HELD.get(ANALYSIS + '/' + PROJECT) is None

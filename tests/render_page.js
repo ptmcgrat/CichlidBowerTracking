@@ -32,6 +32,8 @@ const packed={n:N,bids:BIDS,labels:{},x:enc(x,Uint16Array),y:enc(y,Uint16Array),
 const png=u=>({url:u,width:64,height:48,scale:0.01,offset:0});
 const days=[...Array(ND)].map((_,i)=>({index:i,trial:i<5?1:2,
   date:'2025-08-0'+((i%9)+1),hours:9.6,
+  first:'2025-08-0'+((i%9)+1)+'T08:00:00',
+  last:'2025-08-0'+((i%9)+1)+'T17:55:00',
   firstPng:png('f'+i),lastPng:png('l'+i),residualPng:png('r'+i),
   firstJpg:'j'+i+'.jpg',videoJpg:'v'+i+'.jpg',
   residualStats:{median:0.02,madFactor:1.2,n:900}}));
@@ -53,6 +55,7 @@ const analysis={analysisID:'A',threshold:0.6,coverage:0.68,projects:[
     {trial:1,excluded:false,spawnDepthHistogram:new Array(64).fill(3),
      spawnsMeasured:192,spawnDepthMedian:1.5,spawnOverCastle:80}]}]};
 
+let lastDrawn='';
 const problems=[];
 const vc=new VirtualConsole();
 vc.on('jsdomError', e => problems.push('ERROR  ' + (e.detail||e.message)));
@@ -74,7 +77,8 @@ const dom=new JSDOM(inlined,{runScripts:'dangerously',virtualConsole:vc,
     w.HTMLCanvasElement.prototype.getContext=function(){return{
       // the whole 2D surface a page might touch: a stub missing one method
       // fails the page for a reason a browser would never have
-      drawImage(){},putImageData(){},fillRect(){},clearRect(){},strokeRect(){},
+      drawImage(img){ lastDrawn = (img && img.src) || ''; },
+      putImageData(){},fillRect(){},clearRect(){},strokeRect(){},
       beginPath(){},closePath(){},moveTo(){},lineTo(){},arc(){},arcTo(){},
       ellipse(){},rect(){},bezierCurveTo(){},quadraticCurveTo(){},
       fill(){},stroke(){},clip(){},save(){},restore(){},translate(){},
@@ -84,7 +88,25 @@ const dom=new JSDOM(inlined,{runScripts:'dangerously',virtualConsole:vc,
       createLinearGradient(){return{addColorStop(){}};},
       globalAlpha:1,fillStyle:'',strokeStyle:'',lineWidth:1,lineCap:'',
       lineJoin:'',font:'',textAlign:'',textBaseline:'',
-      getImageData:(a,b,c,d)=>({data:new w.Uint8ClampedArray(c*d*4)}),
+      // A depth PNG that decodes to NaN everywhere leaves every map empty, so
+      // the arithmetic the pages exist for never runs and the test only proves
+      // they can render nothing. Synthesise a surface instead, keyed on which
+      // image was drawn, so that successive endpoints differ and a difference
+      // between them is not identically zero.
+      getImageData:(a,b,c,d)=>{
+        const out=new w.Uint8ClampedArray(c*d*4);
+        let seed=0;
+        for(let i=0;i<lastDrawn.length;i++) seed=(seed*31+lastDrawn.charCodeAt(i))%997;
+        for(let i=0,pi=0;i<c*d;i++,pi+=4){
+          const row=Math.floor(i/c), col=i%c;
+          // a mound that grows with the seed, over a flat base, in the units
+          // loadDepth expects: (R<<8|G)*scale + offset
+          const bump=Math.exp(-(((col-c*0.6)/(c*0.2))**2+((row-d*0.5)/(d*0.25))**2));
+          const value=Math.round(400+seed*0.12+bump*seed*0.5);
+          out[pi]=(value>>8)&255; out[pi+1]=value&255; out[pi+2]=255; out[pi+3]=255;
+        }
+        return {data:out};
+      },
       createImageData:(c,d)=>({data:new w.Uint8ClampedArray(c*d*4)})};};
     // jsdom fetches no images, so a page that waits for one would look blank
     // for a reason a browser would never have
@@ -111,6 +133,10 @@ setTimeout(()=>{
   console.log((failed?'FAIL  ':'ok    ')+page+
               '  ('+visible+' nodes) '+(text?text.slice(0,60):'(empty)'));
   problems.slice(0,6).forEach(p=>console.log('      '+p));
+  // the whole rendered text, so a caller can assert a panel really appeared
+  // rather than only that nothing threw
+  if (process.argv[3] === '--text')
+    console.log('TEXT  ' + (body ? body.textContent.replace(/\s+/g,' ') : ''));
   if (!problems.length && visible < 1)
     console.log('      rendered nothing into #body');
   process.exit(failed?1:0);

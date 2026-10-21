@@ -138,3 +138,46 @@ def test_day_marks_round_trip(paths):
     assert not back.mark(3).new_bower        # an unmarked day is simply clear
     assert back.marked_days('new_bower') == [7]
     assert back.marked_days('wall_building') == [9]
+
+
+def test_a_hung_upload_cannot_wedge_a_project_forever(tmp_path, monkeypatch):
+    """The real failure: rclone has no timeout of its own, so an upload that
+    stalled held the project's lock for the life of the server, and every
+    later save was told someone else was saving."""
+    import subprocess
+    from cichlid_bower_claude import cloud as CL
+    from cichlid_bower_claude.paths import Layout
+
+    def never_returns(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs.get('timeout', 0))
+
+    monkeypatch.setattr(CL.subprocess, 'run', never_returns)
+    sky = CL.Cloud(layout=Layout(local_root=tmp_path))
+    target = tmp_path / 'prep.json'
+    target.write_text('{}')
+
+    with pytest.raises(CL.CloudError) as caught:
+        sky.upload(target, timeout=CL.QUICK_TIMEOUT)
+    assert 'gave up' in str(caught.value)
+
+
+def test_metadata_calls_get_the_short_timeout(tmp_path, monkeypatch):
+    """A listing that takes two minutes is broken, not slow; a transfer of
+    gigabytes is not."""
+    import subprocess
+    from cichlid_bower_claude import cloud as CL
+    from cichlid_bower_claude.paths import Layout
+
+    seen = {}
+
+    def record(args, **kwargs):
+        seen[args[1]] = kwargs.get('timeout')
+        return subprocess.CompletedProcess(args, 0, '', '')
+
+    monkeypatch.setattr(CL.subprocess, 'run', record)
+    sky = CL.Cloud(layout=Layout(local_root=tmp_path))
+    (tmp_path / 'a.txt').write_text('x')
+    sky.listdir(tmp_path)
+    sky.upload(tmp_path / 'a.txt')
+    assert seen['lsf'] == CL.METADATA_TIMEOUT
+    assert seen['copyto'] == CL.TRANSFER_TIMEOUT

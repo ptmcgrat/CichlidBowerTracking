@@ -154,6 +154,32 @@ def _choose(days: List[Day], per_category: int,
     return chosen
 
 
+def _stops(log) -> Dict[str, dt.datetime]:
+    """When each recording actually ended.
+
+    The log has no PiCameraStopped line for a recording that died -- a crash, a
+    power cut, a Pi restart -- so Movie.stop_time is None for it. Treating an
+    unknown end as 'still going' makes that recording overlap every later day:
+    a video truncated in week one was being offered as material for day 38.
+
+    The Pi records sequentially, so the next recording's start is when this one
+    stopped, give or take the gap. The last one falls back to the end of the
+    project.
+    """
+    stops: Dict[str, dt.datetime] = {}
+    movies = sorted(log.movies, key=lambda m: m.start_time)
+    for position, movie in enumerate(movies):
+        if movie.stop_time is not None:
+            stops[movie.h264_file] = movie.stop_time
+        elif position + 1 < len(movies):
+            stops[movie.h264_file] = movies[position + 1].start_time
+        elif log.frames:
+            stops[movie.h264_file] = log.frames[-1].time
+        else:
+            stops[movie.h264_file] = movie.start_time
+    return stops
+
+
 def _videos_for(log, day: Day) -> List[str]:
     """Project-relative mp4 names overlapping the day's window.
 
@@ -161,12 +187,17 @@ def _videos_for(log, day: Day) -> List[str]:
     still holds the first part of the day. The log's own movies_between is
     deliberately stricter, for a different question.
     """
+    stops = _stops(log)
     out = []
-    for movie in log.movies:
-        stop = movie.stop_time or day.last
-        if movie.start_time <= day.last and stop >= day.first:
+    for movie in sorted(log.movies, key=lambda m: m.start_time):
+        if movie.start_time <= day.last and stops[movie.h264_file] >= day.first:
             out.append(movie.mp4_file)
     return out
+
+
+def _inferred(log) -> List[str]:
+    """Recordings whose end had to be guessed, worth saying out loud."""
+    return [m.mp4_file for m in log.movies if m.stop_time is None]
 
 
 def _pose_dirs(layout: Layout, paths, analysis_id: str,
@@ -315,6 +346,11 @@ def main(argv=None) -> int:
             print('  %s  ->  %s' % (day.label, target))
             if not videos:
                 print('      no video overlaps this day in the logfile')
+            guessed = [g for g in _inferred(log)
+                       if g in {str(v.relative_to(paths.root)) for v in videos}]
+            if guessed:
+                print('      end time not logged, inferred from the next '
+                      'recording: ' + ', '.join(Path(g).name for g in guessed))
             if not parquet:
                 print('      no parquet matched; looked in:')
                 for place in (searched or ['nothing readable']):

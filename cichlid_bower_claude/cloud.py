@@ -24,6 +24,17 @@ class CloudError(Exception):
     """An rclone command failed."""
 
 
+# rclone has no timeout of its own, so a stalled transfer waits forever. That
+# is not merely slow: the server holds a project's lock across its upload, so
+# one hung rclone made that project permanently unsaveable until a restart,
+# reported to whoever tried next as 'someone else is saving this project'.
+METADATA_TIMEOUT = 120      # lsf, size: a listing that takes two minutes is broken
+TRANSFER_TIMEOUT = 3600     # a Frames.tar is gigabytes and legitimately slow
+QUICK_TIMEOUT = 120         # a small file the server is waiting on
+
+_METADATA = ('lsf', 'lsd', 'size', 'lsjson')
+
+
 @dataclass
 class Cloud:
     layout: Layout
@@ -31,16 +42,24 @@ class Cloud:
     verbose: bool = False
     transfers: int = 4
 
-    def _run(self, args: List[str], check: bool = True) -> subprocess.CompletedProcess:
+    def _run(self, args: List[str], check: bool = True,
+             timeout: Optional[float] = None) -> subprocess.CompletedProcess:
         if self.verbose:
             print('    rclone ' + ' '.join(args))
         if self.dry_run and args[0] in ('copy', 'copyto', 'delete', 'deletefile', 'moveto'):
             return subprocess.CompletedProcess(args, 0, '', '')
+        if timeout is None:
+            timeout = (METADATA_TIMEOUT if args[0] in _METADATA
+                       else TRANSFER_TIMEOUT)
         try:
             result = subprocess.run(['rclone'] + args, capture_output=True,
-                                    encoding='utf-8')
+                                    encoding='utf-8', timeout=timeout)
         except FileNotFoundError:
             raise CloudError('rclone is not installed, or not on PATH')
+        except subprocess.TimeoutExpired:
+            # killed, so nothing is left holding whatever waits on this
+            raise CloudError('rclone %s gave up after %gs: %s'
+                             % (args[0], timeout, ' '.join(args[1:3])))
         if check and result.returncode != 0:
             raise CloudError('rclone ' + args[0] + ' failed: ' + (result.stderr or '').strip())
         return result
@@ -120,15 +139,22 @@ class Cloud:
         return result.returncode == 0
 
     # -- writing -----------------------------------------------------------
-    def upload(self, local: Path) -> None:
+    def upload(self, local: Path, timeout: Optional[float] = None) -> None:
+        """Send one file or directory up.
+
+        ``timeout`` is for callers who are holding something while they wait —
+        the server passes a short one, because a save that hangs takes the
+        project's lock with it.
+        """
         local = Path(local)
         if not local.exists():
             raise CloudError('nothing to upload at ' + str(local))
         if local.is_dir():
             self._run(['copy', str(local), self.layout.cloud(local),
-                       '--transfers', str(self.transfers)])
+                       '--transfers', str(self.transfers)], timeout=timeout)
         else:
-            self._run(['copyto', str(local), self.layout.cloud(local)])
+            self._run(['copyto', str(local), self.layout.cloud(local)],
+                      timeout=timeout)
 
     def delete(self, local: Path) -> None:
         self._run(['deletefile', self.layout.cloud(local)], check=False)
@@ -239,7 +265,7 @@ class FakeCloud:
                 (Path(local_dir) / item.name).write_bytes(item.read_bytes())
         return True
 
-    def upload(self, local: Path) -> None:
+    def upload(self, local: Path, timeout: Optional[float] = None) -> None:
         local = Path(local)
         if not local.exists():
             raise CloudError('nothing to upload at ' + str(local))

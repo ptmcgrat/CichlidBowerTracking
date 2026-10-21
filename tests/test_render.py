@@ -40,3 +40,44 @@ def test_the_page_renders_without_error(page):
                             capture_output=True, encoding='utf-8', timeout=120)
     assert result.returncode == 0, (
         (result.stdout or '') + (result.stderr or ''))
+
+
+def _render(page):
+    result = subprocess.run(['node', str(HARNESS), page, '--text'], cwd=str(ROOT),
+                            capture_output=True, encoding='utf-8', timeout=120)
+    assert result.returncode == 0, (result.stdout or '') + (result.stderr or '')
+    for line in (result.stdout or '').splitlines():
+        if line.startswith('TEXT  '):
+            return line[6:]
+    return ''
+
+
+@needs_jsdom
+def test_the_summary_strip_draws_its_panels():
+    """Rendering without an error is not the same as rendering the panels: a
+    panel whose promise rejects silently leaves the page looking fine."""
+    text = _render('summary')
+    for label in ('First half of the volume', 'Second half of the volume',
+                  'Cloud size by day', 'Cloud shape by day',
+                  'Spawn depth by day', 'Built overnight'):
+        assert label in text, label
+
+
+@needs_jsdom
+def test_the_volume_split_reaches_about_half():
+    """The split is snapped to a day boundary, so it lands near a half rather
+    than on it -- but a split reporting 0% or 100% means the running total
+    was never accumulated."""
+    import re
+    text = _render('summary')
+    shares = [float(m) for m in re.findall(r'(\d+)% of gross sand moved', text)]
+    assert shares, text[:400]
+    assert any(20 <= s <= 80 for s in shares), shares
+
+
+@needs_jsdom
+def test_the_aspect_panel_reports_its_null():
+    """An aspect ratio without the circular baseline beside it is the thing
+    this panel exists to avoid."""
+    text = _render('summary')
+    assert 'circular would be' in text

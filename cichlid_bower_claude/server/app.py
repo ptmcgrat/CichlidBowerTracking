@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Dict, Optional
 
 from flask import Flask, abort, jsonify, request, send_from_directory
 
-from ..cloud import Cloud, CloudError
+from ..cloud import QUICK_TIMEOUT, Cloud, CloudError
 from ..paths import Layout
 from ..states import AnalysisStates, StatesError, local_analyses
 from ..collect import bundle as B
@@ -44,9 +45,43 @@ LOCKS: Dict[str, threading.Lock] = {}
 LOCKS_GUARD = threading.Lock()
 
 
+LOCK_WAIT = 15.0          # seconds a save will wait for the one ahead of it
+HELD: Dict[str, float] = {}
+
+
 def _lock_for(analysis_id: str, project_id: str) -> threading.Lock:
     with LOCKS_GUARD:
         return LOCKS.setdefault(analysis_id + '/' + project_id, threading.Lock())
+
+
+def _hold(analysis_id: str, project_id: str):
+    """Take a project's lock, waiting a little rather than refusing at once.
+
+    Two people saving the same project within a second of each other is
+    ordinary and used to fail outright. A real wait also makes the failure
+    meaningful: if the lock is still held after LOCK_WAIT seconds, something is
+    stuck rather than busy, and the message says how long so that it reads as
+    the fault it is instead of as a colleague typing.
+    """
+    key = analysis_id + '/' + project_id
+    lock = _lock_for(analysis_id, project_id)
+    if lock.acquire(timeout=LOCK_WAIT):
+        HELD[key] = time.time()
+        return lock, None
+    waited = time.time() - HELD.get(key, time.time())
+    if waited > LOCK_WAIT * 2:
+        message = ('this project has been locked for %d seconds, which means a '
+                   'previous save is stuck rather than in progress. The '
+                   'server needs restarting; your edits are still on screen, '
+                   'so do not reload.' % waited)
+    else:
+        message = 'someone else is saving this project. Try again in a moment.'
+    return None, message
+
+
+def _release(lock, analysis_id: str, project_id: str) -> None:
+    HELD.pop(analysis_id + '/' + project_id, None)
+    lock.release()
 
 
 def _states_or_none(analysis_id: str) -> Optional[AnalysisStates]:
@@ -312,10 +347,9 @@ def save(analysis_id: str, project_id: str):
     if not isinstance(body, dict):
         return jsonify({'error': 'expected a JSON object'}), 400
 
-    lock = _lock_for(analysis_id, project_id)
-    if not lock.acquire(blocking=False):
-        return jsonify({'error': 'someone else is saving this project. '
-                                 'Reload and try again.'}), 409
+    lock, busy = _hold(analysis_id, project_id)
+    if lock is None:
+        return jsonify({'error': busy}), 409
     try:
         prep = C.Prep.from_dict(dict(body, project_id=project_id,
                                      analysis_id=analysis_id,
@@ -323,7 +357,7 @@ def save(analysis_id: str, project_id: str):
         C.save(paths, prep, who=viewer(body.get('who', '')))
         if STATE['upload']:
             try:
-                STATE['cloud'].upload(paths.prep_json)
+                STATE['cloud'].upload(paths.prep_json, timeout=QUICK_TIMEOUT)
             except CloudError as error:
                 return jsonify({'error': 'saved locally but not uploaded: ' +
                                          str(error)}), 502
@@ -332,7 +366,7 @@ def save(analysis_id: str, project_id: str):
     except Exception as error:
         return jsonify({'error': repr(error)}), 500
     finally:
-        lock.release()
+        _release(lock, analysis_id, project_id)
 
 
 @app.route('/<analysis_id>/<project_id>/marks', methods=['POST'])
@@ -349,10 +383,9 @@ def save_marks(analysis_id: str, project_id: str):
     if not isinstance(body, dict):
         return jsonify({'error': 'expected a JSON object'}), 400
 
-    lock = _lock_for(analysis_id, project_id)
-    if not lock.acquire(blocking=False):
-        return jsonify({'error': 'someone else is saving this project. '
-                                 'Reload and try again.'}), 409
+    lock, busy = _hold(analysis_id, project_id)
+    if lock is None:
+        return jsonify({'error': busy}), 409
     try:
         prep = C.load(paths)
         marks = {}
@@ -366,7 +399,7 @@ def save_marks(analysis_id: str, project_id: str):
         C.save(paths, prep, who=viewer(body.get('who', '')))
         if STATE['upload']:
             try:
-                STATE['cloud'].upload(paths.prep_json)
+                STATE['cloud'].upload(paths.prep_json, timeout=QUICK_TIMEOUT)
             except CloudError as error:
                 return jsonify({'error': 'saved locally but not uploaded: ' +
                                          str(error)}), 502
@@ -375,7 +408,7 @@ def save_marks(analysis_id: str, project_id: str):
     except Exception as error:
         return jsonify({'error': repr(error)}), 500
     finally:
-        lock.release()
+        _release(lock, analysis_id, project_id)
 
 
 @app.route('/<analysis_id>/<project_id>/rebuild', methods=['POST'])
@@ -575,6 +608,11 @@ def configure(layout: Layout, cloud: Optional[Cloud] = None,
     TABLES.clear()
     SUMMARIES.clear()
     INDEX_ROWS.clear()
+    # pointing at a different working directory means the old projects are
+    # gone, so their locks are too; keeping them would carry a wedged lock
+    # across a reconfigure, which is the one case where recovery is wanted
+    LOCKS.clear()
+    HELD.clear()
 
 
 def run(layout: Layout, host: str = '127.0.0.1', port: int = 8080,

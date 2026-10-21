@@ -310,3 +310,60 @@ function loadPayload(then) {
         'Could not load the payload: ' + error.message));
     });
 }
+
+// --------------------------------------------------------------- volumes
+// Shared because the features page and the summary sheet must not disagree
+// about how much sand moved. They did briefly, and the two pages showed
+// different volumes for the same trial.
+function pixelArea() {
+  // a map pixel covers more than a sensor pixel: the maps are downsampled for
+  // the browser, and forgetting that understates volume by the square
+  const cm = D.pixelLength || 0.1030168618;
+  const factor = D.downsample || 1;
+  return (cm * factor) * (cm * factor);
+}
+
+function volumes(values, threshold) {
+  const area = pixelArea();
+  let castle = 0, pit = 0;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (Number.isNaN(v)) continue;
+    if (v >= threshold) castle += v * area;
+    else if (v <= -threshold) pit += -v * area;
+  }
+  const total = castle + pit;
+  return { castle, pit, total,
+           index: total > 0 ? (castle - pit) / total : 0 };
+}
+
+// ------------------------------------------------ the null aspect ratio
+// An ellipse fitted to a handful of points comes out elongated even when the
+// points are not: with ten events the median fitted aspect ratio of a
+// perfectly circular cloud is about 1.53. Reporting an aspect ratio without
+// that baseline invites reading sampling noise as shape — and it runs the
+// wrong way, because the categories with more events a day get the lower
+// bias, which is exactly the pattern a real difference would make.
+//
+// Medians from 20,000 simulated isotropic draws per n (4,000 above n=300).
+// Linear in 1/sqrt(n) to a few tenths of a percent between these points, so
+// that is where the interpolation happens.
+const NULL_ASPECT = [
+  [10, 1.528], [15, 1.392], [20, 1.325], [25, 1.278], [30, 1.251],
+  [40, 1.212], [50, 1.185], [75, 1.148], [100, 1.126], [150, 1.101],
+  [200, 1.088], [300, 1.070], [500, 1.054], [1000, 1.038], [2000, 1.027],
+];
+
+function nullAspect(n) {
+  if (!n || n < NULL_ASPECT[0][0]) return NULL_ASPECT[0][1];
+  const last = NULL_ASPECT[NULL_ASPECT.length - 1];
+  if (n >= last[0]) return 1 + (last[1] - 1) * Math.sqrt(last[0] / n);
+  for (let i = 1; i < NULL_ASPECT.length; i++) {
+    const [n1, a1] = NULL_ASPECT[i];
+    if (n > n1) continue;
+    const [n0, a0] = NULL_ASPECT[i - 1];
+    const x = 1 / Math.sqrt(n), x0 = 1 / Math.sqrt(n0), x1 = 1 / Math.sqrt(n1);
+    return a1 + (a0 - a1) * (x - x1) / (x0 - x1);
+  }
+  return 1;
+}
