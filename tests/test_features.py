@@ -102,3 +102,45 @@ def test_the_spawn_histogram_keeps_the_median():
     centres = (edges[:-1] + edges[1:]) / 2
     recovered = centres[np.searchsorted(np.cumsum(counts), counts.sum() / 2)]
     assert abs(recovered - np.median(depths)) < (2 * F.DEPTH_SPAN / F.DEPTH_BINS)
+
+
+def test_a_castle_is_reported_as_a_castle(collected):
+    """Depth is distance down to the sand, so building makes the number
+    smaller and castle-positive change is start minus end.
+
+    This module had it the other way round, so every index it reported was
+    sign-flipped: the fixture below builds a castle and it came back as a pit
+    at -0.85, 'spawnOverCastle' counted spawns over pits, and the
+    cross-project spawn-depth axis was mirrored. The browser was right, which
+    is exactly why nobody noticed from looking at a page.
+    """
+    from cichlid_bower_claude.collect import bundle as B
+
+    paths = collected
+
+    # make_project writes surface = 60 - 3*frac*castle: the depth value falls
+    # where sand accumulates, so this fixture builds a castle
+    data = B.load_bundle(paths.bundle)
+    centre = tuple(d // 2 for d in data['first'][0].shape)
+    fell = float(data['first'][0][centre]) - float(data['last'][-1][centre])
+    assert fell > 0, 'fixture no longer builds up at the centre'
+
+    trial = F.compute(paths)['trials'][0]
+    assert trial['bowerIndex'] > 0, trial
+    assert trial['castleVolume'] > trial['pitVolume'], trial
+
+
+def test_the_null_aspect_table_matches_the_browser_copy():
+    """The same table is carried in common.js. Two copies of a lookup are two
+    chances to be different, so they are checked against each other."""
+    import json
+    import re
+    import subprocess
+    from pathlib import Path
+
+    common = (Path(__file__).resolve().parents[1] / 'cichlid_bower_claude' /
+              'server' / 'templates' / 'common.js').read_text()
+    rows = re.findall(r'\[(\d+), (1\.\d+)\]', common)
+    assert rows, 'no NULL_ASPECT table found in common.js'
+    from_js = [(int(n), float(a)) for n, a in rows]
+    assert from_js == [(n, a) for n, a in F.NULL_ASPECT], (from_js, F.NULL_ASPECT)

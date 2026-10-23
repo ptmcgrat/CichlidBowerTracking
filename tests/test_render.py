@@ -18,7 +18,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = Path(__file__).resolve().parent / 'render_page.js'
-PAGES = ['prep', 'depth', 'clusters', 'summary', 'features', 'analysis']
+PAGES = ['prep', 'depth', 'clusters', 'summary', 'features', 'analysis',
+         'trials']
 
 
 def _has_jsdom() -> bool:
@@ -81,3 +82,30 @@ def test_the_aspect_panel_reports_its_null():
     this panel exists to avoid."""
     text = _render('features')
     assert 'circular would be' in text
+
+
+@needs_jsdom
+def test_the_summary_page_offers_the_workbook():
+    """The button and its panel: a control referenced by an id that was never
+    added to the markup is how this page went blank once before."""
+    text = _render('summary')
+    assert 'Download workbook' in text
+
+
+@needs_jsdom
+def test_the_trials_page_groups_by_category_and_states_its_settings():
+    """Its numbers are computed at fixed settings while the workbook follows
+    the sliders, so the page has to say which it used or the two disagree for
+    no visible reason."""
+    text = _render('trials')
+    assert '24 trials from 8 projects' in text
+    assert 'Fixed settings for this page' in text
+    assert 'will not match these numbers' in text
+    for label in ('Total volume', 'Bower index', 'Built overnight',
+                  'Scoop cloud aspect', 'Median spawn depth'):
+        assert label in text, label
+    # every category appears, with its own count
+    for category in ('MC 8', 'TI 8', 'CVxMC_F1 8'):
+        assert category in text, category
+    # and a project that could not be read is named rather than dropped
+    assert 'P9 (not collected)' in text

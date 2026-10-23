@@ -529,3 +529,144 @@ def test_the_lock_is_given_back_when_a_save_fails(client):
     # and the project is not left locked by either
     assert http.post(ROOT + '/save', json={'who': 'tester'}).status_code == 200
     assert A.HELD.get(ANALYSIS + '/' + PROJECT) is None
+
+
+def test_the_workbook_downloads_with_three_sheets(client):
+    http, layout = client
+    response = http.get(ROOT + '/export.xlsx')
+    assert response.status_code == 200, response.get_data(as_text=True)[:300]
+    assert 'spreadsheet' in response.headers['Content-Type']
+
+    import io
+    import openpyxl
+    book = openpyxl.load_workbook(io.BytesIO(response.data))
+    assert book.sheetnames == ['Settings', 'Trials', 'Days']
+    assert book['Trials'].max_row >= 2          # a header and at least one trial
+    assert book['Days'].max_row >= 2
+
+
+def test_the_workbook_uses_the_settings_it_was_given(client):
+    """The point of passing the sliders through: the numbers in the file are
+    the numbers that were on screen, and the first sheet says which."""
+    import io
+    import openpyxl
+    http, layout = client
+
+    def settings_of(query):
+        response = http.get(ROOT + '/export.xlsx' + query)
+        assert response.status_code == 200
+        book = openpyxl.load_workbook(io.BytesIO(response.data))
+        return {row[0]: row[1] for row in
+                book['Settings'].iter_rows(values_only=True) if row[0]}
+
+    loose = settings_of('?confidence=0.2&threshold=0.3')
+    assert loose['Confidence threshold'] == 0.2
+    assert loose['Sand moved threshold'] == 0.3
+
+    strict = settings_of('?confidence=0.9&threshold=0.3')
+    assert strict['Confidence threshold'] == 0.9
+
+    # and the counts really followed the threshold, rather than the sheet
+    # merely recording a number nothing used
+    def events_of(query):
+        response = http.get(ROOT + '/export.xlsx' + query)
+        book = openpyxl.load_workbook(io.BytesIO(response.data))
+        head = [c.value for c in book['Trials'][1]]
+        column = head.index('events')
+        return [row[column] for row in
+                book['Trials'].iter_rows(min_row=2, values_only=True)]
+
+    assert sum(events_of('?confidence=0.2')) >= sum(events_of('?confidence=0.95'))
+
+
+def test_a_bad_setting_falls_back_rather_than_failing(client):
+    """A typo in a query parameter should not cost someone their download."""
+    import io
+    import openpyxl
+    http, layout = client
+    response = http.get(ROOT + '/export.xlsx?confidence=banana')
+    assert response.status_code == 200
+    book = openpyxl.load_workbook(io.BytesIO(response.data))
+    settings = {row[0]: row[1] for row in
+                book['Settings'].iter_rows(values_only=True) if row[0]}
+    assert settings['Confidence threshold'] == A.F.DEFAULTS.confidence
+
+
+def test_the_trials_page_and_its_rows_are_served(client):
+    http, layout = client
+    page = http.get('/' + ANALYSIS + '/trials')
+    assert page.status_code == 200
+    assert 'trials.js' in page.get_data(as_text=True)
+    assert http.get('/' + ANALYSIS + '/trials.js').status_code == 200
+
+    rows = http.get('/' + ANALYSIS + '/trials.json').get_json()
+    assert rows['analysisID'] == ANALYSIS
+    assert rows['params']['confidence'] == A.F.DEFAULTS.confidence
+    assert rows['rows'], rows
+    first = rows['rows'][0]
+    for key in ('projectID', 'category', 'trial', 'totalVolume', 'bowerIndex',
+                'grossVolume', 'nightShare', 'events'):
+        assert key in first, key
+    assert first['projectID'] == PROJECT
+    assert first['category'] == 'MC'
+
+
+def test_an_excluded_trial_is_left_out_of_the_comparison(client):
+    """Asked for explicitly: the comparison is of trials worth comparing."""
+    http, layout = client
+    paths = layout.project(PROJECT, ANALYSIS)
+    before = len(http.get('/' + ANALYSIS + '/trials.json').get_json()['rows'])
+    assert before >= 1
+
+    prep = C.load(paths)
+    number = prep and 1
+    override = prep.overrides.setdefault('1', C.TrialOverride())
+    override.excluded = True
+    override.reason = 'test'
+    C.save(paths, prep, who='tester')
+
+    after = http.get('/' + ANALYSIS + '/trials.json').get_json()['rows']
+    assert all(r['trial'] != 1 for r in after), after
+    assert len(after) == before - 1
+
+
+def test_a_project_that_cannot_be_read_is_named_not_dropped(client):
+    """A silently shorter comparison is worse than a stated omission."""
+    http, layout = client
+    import pandas as pd
+    states_csv = (layout.local_root / '__AnalysisStates' / ANALYSIS /
+                  (ANALYSIS + '.csv'))
+    table = pd.read_csv(states_csv)
+    table.loc[len(table)] = {'projectID': 'MC_999_t099_tr1', 'tankID': 't099',
+                             'Prep': True, 'RunAnalysis': True, 'Category': 'MC'}
+    table.to_csv(states_csv, index=False)
+    A.TABLES.clear()
+
+    payload = http.get('/' + ANALYSIS + '/trials.json').get_json()
+    named = [s['projectID'] for s in payload['skipped']]
+    assert 'MC_999_t099_tr1' in named, payload['skipped']
+
+
+def test_editing_a_category_shows_up_without_a_restart(client):
+    """The row caches are keyed on what the rows read, and the rows carry the
+    category -- which comes from the states file and nowhere else. Watching
+    only the manifests and the corrections left an edited Category column
+    invisible until an unrelated save moved a prep.json."""
+    import time
+    import pandas as pd
+    http, layout = client
+
+    assert 'MC' in http.get('/' + ANALYSIS + '/').get_data(as_text=True)
+    assert 'MC' in http.get('/').get_data(as_text=True)
+
+    states_csv = (layout.local_root / '__AnalysisStates' / ANALYSIS /
+                  (ANALYSIS + '.csv'))
+    table = pd.read_csv(states_csv)
+    table.loc[table['projectID'] == PROJECT, 'Category'] = 'CVxMC_F1'
+    time.sleep(0.01)                     # so the mtime really differs
+    table.to_csv(states_csv, index=False)
+
+    index = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
+    assert 'CVxMC_F1' in index, 'the per-analysis page did not notice'
+    master = http.get('/').get_data(as_text=True)
+    assert 'CVxMC_F1' in master, 'the master page did not notice'

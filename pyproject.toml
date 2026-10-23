@@ -10,7 +10,7 @@ requires-python = ">=3.9"
 dependencies = ["numpy>=1.22", "pandas>=1.4"]
 
 [project.optional-dependencies]
-server = ["flask>=2.2", "opencv-python-headless>=4.7"]
+server = ["flask>=2.2", "opencv-python-headless>=4.7", "openpyxl>=3.1"]
 dev = ["pytest>=7"]
 
 [project.scripts]

@@ -156,9 +156,21 @@ def _fingerprint(analysis_id: str, projects) -> tuple:
 
     Two stats per project, against two JSON parses per project. Stat is cheap;
     parsing is not, and a landing page reads every project in the analysis.
+
+    The states file is in here too, and has to be: the rows carry each
+    project's category, which comes from that file and from nothing else. With
+    only the manifests and the corrections watched, editing the Category
+    column changed nothing the cache could see, so both landing pages went on
+    serving the old categories until some unrelated save happened to move a
+    prep.json -- or until the server was restarted, which is not a thing
+    anyone should have to know.
     """
     layout = STATE['layout']
     stamps = []
+    try:
+        stamps.append(layout.analysis(analysis_id).states_csv.stat().st_mtime_ns)
+    except OSError:
+        stamps.append(0)
     for project_id in projects:
         paths = layout.project(project_id, analysis_id)
         for source in (paths.manifest, paths.prep_json):
@@ -242,10 +254,110 @@ def analysis_features_data(analysis_id: str):
                     'projects': out})
 
 
+@app.route('/<analysis_id>/trials')
+@app.route('/<analysis_id>/trials.html')
+def analysis_trials(analysis_id: str):
+    """Trial-level metrics for every project, compared by category."""
+    _states(analysis_id)
+    return _template('trials.html').replace('__ANALYSIS__', analysis_id)
+
+
+@app.route('/<analysis_id>/trials.json')
+def analysis_trials_data(analysis_id: str):
+    """One flat row per trial, across every collected project.
+
+    Fixed settings, deliberately. Recomputing thirty projects on every slider
+    move is not something to do on a page load, so this runs at the defaults
+    and says so in its own header. A workbook downloaded with the sliders
+    somewhere else will not match these numbers, which is why both carry the
+    settings they used.
+    """
+    states = _states(analysis_id)
+    params = F.DEFAULTS
+    rows = []
+    skipped = []
+    for project_id in states.project_ids():
+        paths = STATE['layout'].project(project_id, analysis_id)
+        if not paths.manifest.exists():
+            skipped.append({'projectID': project_id, 'why': 'not collected'})
+            continue
+        try:
+            metrics = F.load(paths)
+        except Exception as error:
+            skipped.append({'projectID': project_id, 'why': repr(error)})
+            continue
+        if not metrics:
+            skipped.append({'projectID': project_id, 'why': 'no metrics'})
+            continue
+        category = states.category(project_id) or 'uncategorised'
+        for trial in metrics.get('trials', []):
+            if trial.get('excluded'):
+                continue
+            rows.append(_trial_row(metrics, trial, category,
+                                   states.tank(project_id)))
+    from dataclasses import asdict
+    return jsonify({'analysisID': analysis_id, 'params': asdict(params),
+                    'rows': rows, 'skipped': skipped})
+
+
+def _trial_row(metrics: dict, trial: dict, category: str, tank: str) -> dict:
+    """The flat shape the comparison page plots.
+
+    Flat on purpose: the page has to sort and group by any of these, and
+    reaching three levels into a nested metric at every dot is how the
+    summary page became slow.
+    """
+    def shape(key, field):
+        value = trial.get(key) or {}
+        return value.get(field)
+
+    return {
+        'projectID': metrics.get('projectID'), 'tankID': tank,
+        'category': category, 'trial': trial.get('trial'),
+        'days': trial.get('days'),
+        'castleVolume': trial.get('castleVolume'),
+        'pitVolume': trial.get('pitVolume'),
+        'totalVolume': trial.get('totalVolume'),
+        'bowerIndex': trial.get('bowerIndex'),
+        'volumePerDay': trial.get('volumePerDay'),
+        'daysTo90': trial.get('daysTo90'),
+        'grossVolume': trial.get('grossVolume'),
+        'nightShare': trial.get('nightShare'),
+        'nightRateRatio': trial.get('nightRateRatio'),
+        'firstHalfIndex': (trial.get('firstHalf') or {}).get('bowerIndex'),
+        'secondHalfIndex': (trial.get('secondHalf') or {}).get('bowerIndex'),
+        'events': trial.get('events'),
+        'eventsPerDay': trial.get('eventsPerDay'),
+        'scoops': trial.get('scoops'), 'spits': trial.get('spits'),
+        'spawns': trial.get('spawns'),
+        'scoopSpitRatio': trial.get('scoopSpitRatio'),
+        'scoopArea': shape('scoopShape', 'areaCm2'),
+        'spitArea': shape('spitShape', 'areaCm2'),
+        'scoopAspect': shape('scoopShape', 'aspect'),
+        'spitAspect': shape('spitShape', 'aspect'),
+        'scoopNullAspect': shape('scoopShape', 'nullAspect'),
+        'spitNullAspect': shape('spitShape', 'nullAspect'),
+        'centroidGap': trial.get('centroidGap'),
+        'spawnDepthMedian': trial.get('spawnDepthMedian'),
+        'spawnOverCastle': trial.get('spawnOverCastle'),
+        'spawnsMeasured': trial.get('spawnsMeasured'),
+        'newBowerDays': trial.get('newBowerDays'),
+        'wallBuildingDays': trial.get('wallBuildingDays'),
+    }
+
+
 @app.route('/<analysis_id>/analysis.js')
+@app.route('/<analysis_id>/trials.js')
 def analysis_script(analysis_id: str):
-    return send_from_directory(str(Path(__file__).parent / 'templates'),
-                               'analysis.js')
+    """Scripts for the analysis-level pages.
+
+    These sit one level above a project, so the project asset route cannot
+    reach them: /YH_MC/trials.js has no project in it.
+    """
+    name = request.path.rsplit('/', 1)[-1]
+    if name not in ('analysis.js', 'trials.js'):
+        abort(404)
+    return send_from_directory(str(Path(__file__).parent / 'templates'), name)
 
 
 @app.route('/<analysis_id>/<project_id>/')
@@ -323,6 +435,50 @@ def project_payload(analysis_id: str, project_id: str):
         payload = json.load(handle)
     payload['prep'] = C.load(paths).to_dict()
     return jsonify(payload)
+
+
+def _params_from_query(args) -> 'F.Params':
+    """The slider values the page sent, falling back to the defaults.
+
+    Every setting that changes a number is a query parameter, so the workbook
+    can be computed at exactly what was on screen. A value that will not parse
+    falls back rather than failing the download, and the sheet records what was
+    actually used — so a typo shows up as a number you did not expect rather
+    than as an error page.
+    """
+    from dataclasses import asdict, fields
+    chosen = asdict(F.DEFAULTS)
+    for field in fields(F.Params):
+        raw = args.get(field.name)
+        if raw is None or raw == '':
+            continue
+        try:
+            chosen[field.name] = (int(raw) if field.type in ('int', int)
+                                  else float(raw))
+        except (TypeError, ValueError):
+            continue
+    return F.Params(**chosen)
+
+
+@app.route('/<analysis_id>/<project_id>/export.xlsx')
+def export_workbook(analysis_id: str, project_id: str):
+    """One project as a three-tab workbook, at the chosen settings."""
+    paths = _paths(analysis_id, project_id)
+    params = _params_from_query(request.args)
+    states = _states(analysis_id)
+    from . import workbook as WB
+    try:
+        metrics = F.compute(paths, params)
+    except FileNotFoundError:
+        return jsonify({'error': 'this project has not been collected'}), 404
+    target = paths.pages_dir / (project_id + '.xlsx')
+    try:
+        WB.write_workbook(target, paths, metrics, states.category(project_id))
+    except WB.WorkbookError as error:
+        return jsonify({'error': str(error)}), 501
+    return send_from_directory(
+        str(target.parent), target.name, as_attachment=True,
+        download_name='%s_%s.xlsx' % (analysis_id, project_id))
 
 
 @app.route('/<analysis_id>/<project_id>/<path:name>')
