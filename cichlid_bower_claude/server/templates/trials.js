@@ -208,6 +208,21 @@ function build() {
   const host = document.getElementById('body');
   host.parentNode.insertBefore(params, host);
 
+  const bar = document.getElementById('controls');
+  if (bar) {
+    const link = el('a', null, 'Download CSV \u2193');
+    link.href = 'trials.csv';
+    link.className = 'act';
+    link.style.cssText = 'display:inline-block;padding:6px 11px;border:1px ' +
+      'solid var(--line);border-radius:5px;font-size:13px;background:var(--panel)';
+    bar.appendChild(link);
+    const note = el('span', null,
+      'one row per trial \u00b7 trials are repeated measures of the same ' +
+      'male, so collapsing to one row per fish is yours to decide');
+    note.style.cssText = 'font-size:11.5px;color:var(--dim);margin-left:12px';
+    bar.appendChild(note);
+  }
+
   draw();
 }
 

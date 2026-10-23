@@ -109,3 +109,6 @@ def test_the_trials_page_groups_by_category_and_states_its_settings():
         assert category in text, category
     # and a project that could not be read is named rather than dropped
     assert 'P9 (not collected)' in text
+    # the CSV, with the repeated-measures caveat beside it rather than buried
+    assert 'Download CSV' in text
+    assert 'repeated measures' in text

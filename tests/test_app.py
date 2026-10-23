@@ -670,3 +670,109 @@ def test_editing_a_category_shows_up_without_a_restart(client):
     assert 'CVxMC_F1' in index, 'the per-analysis page did not notice'
     master = http.get('/').get_data(as_text=True)
     assert 'CVxMC_F1' in master, 'the master page did not notice'
+
+
+def test_the_trial_csv_is_shaped_for_mapping(client):
+    """Column names have to survive make.names() unchanged, or every R script
+    written against this file breaks on a rename it did not make."""
+    import csv
+    import io
+    import re
+    http, layout = client
+    response = http.get('/' + ANALYSIS + '/trials.csv')
+    assert response.status_code == 200
+    assert 'text/csv' in response.headers['Content-Type']
+    assert 'attachment' in response.headers['Content-Disposition']
+
+    rows = list(csv.DictReader(io.StringIO(response.get_data(as_text=True))))
+    assert rows, response.get_data(as_text=True)
+
+    head = list(rows[0].keys())
+    for name in head:
+        assert re.fullmatch(r'[a-z][a-z0-9_]*', name), name
+    assert head[:6] == ['project_id', 'logged_project_id', 'sample_id',
+                        'tank_id', 'category', 'trial']
+    assert 'bower_index' in head and 'total_volume_cm3' in head
+
+    first = rows[0]
+    assert first['project_id'] == PROJECT
+    assert first['category'] == 'MC'
+    assert float(first['total_volume_cm3']) >= 0
+    # the sign fix, visible where it matters: the fixture builds a castle
+    assert float(first['bower_index']) > 0
+
+
+def test_a_missing_value_is_NA_not_blank(client):
+    """read.csv makes an empty numeric NA but an empty character "", so blanks
+    would not behave alike across columns."""
+    import csv
+    import io
+    http, layout = client
+    text = http.get('/' + ANALYSIS + '/trials.csv').get_data(as_text=True)
+    rows = list(csv.DictReader(io.StringIO(text)))
+    # this fixture has no registration, so the cloud shapes are absent
+    assert any(row['scoop_aspect'] == 'NA' for row in rows), rows
+    assert all(value != '' for row in rows for value in row.values())
+
+
+def test_an_excluded_trial_is_left_out_of_the_csv_too(client):
+    import csv
+    import io
+    http, layout = client
+    paths = layout.project(PROJECT, ANALYSIS)
+    prep = C.load(paths)
+    override = prep.overrides.setdefault('1', C.TrialOverride())
+    override.excluded = True
+    C.save(paths, prep, who='tester')
+
+    text = http.get('/' + ANALYSIS + '/trials.csv').get_data(as_text=True)
+    rows = list(csv.DictReader(io.StringIO(text)))
+    assert all(row['trial'] != '1' for row in rows), rows
+
+
+def test_rows_are_attributed_to_the_directory_not_the_logfile(tmp_path):
+    """The manifest's projectID is whatever the logfile's ProjectID field
+    says. A logfile copied from another tank carries that tank's name, and
+    nothing about the result would look wrong -- the rows would simply belong
+    to the wrong fish."""
+    import csv
+    import io
+    import pandas as pd
+    from tests.make_log import write_log
+
+    local, remote = tmp_path / 'local', tmp_path / 'remote'
+    local.mkdir(); remote.mkdir()
+    layout = Layout(local_root=local)
+    cloud = FakeCloud(layout=layout, remote_dir=remote)
+    analysis = 'YH_MC_Parentals'
+    here, elsewhere = 'MC_930_t010_tr1', 'MC_920_t001_tr1'
+
+    states_dir = local / '__AnalysisStates' / analysis
+    states_dir.mkdir(parents=True)
+    pd.DataFrame({'projectID': [here], 'tankID': ['t010'], 'Prep': [True],
+                  'RunAnalysis': [True], 'Category': ['MC']}
+                 ).to_csv(states_dir / (analysis + '.csv'), index=False)
+
+    build(remote, project_id=here, days=4, resets=(), H=32, W=40,
+          analysis_id=analysis)
+    # the mistake: this project's logfile names a different project
+    logfile = (remote / '__ProjectData' / analysis / here / 'Logfile.txt')
+    write_log(logfile, days=4, resets=(), project_id=elsewhere,
+              tank_id='t001', analysis_id=analysis, sample_id='s_wrong')
+    assert collect_project(layout, cloud, here, analysis).status == 'ok'
+
+    A.configure(layout, cloud=cloud, upload=False)
+    A.app.config['TESTING'] = True
+    http = A.app.test_client()
+
+    rows = list(csv.DictReader(io.StringIO(
+        http.get('/' + analysis + '/trials.csv').get_data(as_text=True))))
+    assert rows, 'nothing exported'
+    assert all(row['project_id'] == here for row in rows), rows
+    # the logfile's claim is kept in its own column rather than thrown away
+    assert all(row['logged_project_id'] == elsewhere for row in rows), rows
+
+    # and the disagreement is surfaced, not left to be noticed
+    payload = http.get('/' + analysis + '/trials.json').get_json()
+    assert any(elsewhere in str(s.get('why', ''))
+               for s in payload['skipped']), payload['skipped']

@@ -2,9 +2,16 @@
 import datetime as dt
 from pathlib import Path
 
-def write_log(path, days=6, resets=(2, 4), running=False, start=dt.datetime(2025,1,31,14,25)):
+def write_log(path, days=6, resets=(2, 4), running=False,
+              start=dt.datetime(2025,1,31,14,25),
+              project_id='MC_920_t001_tr1', tank_id='t001',
+              analysis_id='YH_MC_Parentals', sample_id='s1'):
+    """The identifiers are arguments because the manifest takes them from the
+    logfile, so a fixture that hard-codes one cannot tell two projects apart
+    -- and could not have caught rows being attributed to the wrong one."""
     lines = ['MasterStart: System: pi,,Device: realsense,,Camera: pi,,Uname: Linux,,'
-             'TankID: t001,,ProjectID: MC_920_t001_tr1,,AnalysisID: YH_MC_Parentals,,SampleID: s1']
+             'TankID: %s,,ProjectID: %s,,AnalysisID: %s,,SampleID: %s'
+             % (tank_id, project_id, analysis_id, sample_id)]
     lines.append('MasterRecordInitialStart: Time: ' + str(start))
     t = start
     frame_n, movie_n = 1, 1

@@ -8,7 +8,10 @@ def build(remote_root, project_id='MC_920_t001_tr1', days=6, resets=(2,4),
           H=48, W=64, with_std=True, drop_frames=(), analysis_id='YH_MC_Parentals'):
     proj = Path(remote_root)/'__ProjectData'/analysis_id/project_id
     proj.mkdir(parents=True, exist_ok=True)
-    write_log(proj/'Logfile.txt', days=days, resets=resets)
+    write_log(proj/'Logfile.txt', days=days, resets=resets,
+              project_id=project_id, analysis_id=analysis_id,
+              sample_id='s_' + project_id.split('_')[1]
+              if '_' in project_id else 's1')
     import sys; sys.path.insert(0,'/home/claude/cbc')
     from cichlid_bower_claude.logfile.parse import parse_logfile
     log = parse_logfile(proj/'Logfile.txt')

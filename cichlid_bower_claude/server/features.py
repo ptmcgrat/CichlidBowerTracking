@@ -624,6 +624,20 @@ def is_stale(project_paths) -> bool:
     cached = path_for(project_paths)
     if not cached.exists():
         return True
+
+    # The schema, before the timestamps. A fix to this module changes the
+    # numbers without touching a single data file, so mtimes alone call a
+    # cache current when the code that wrote it has since been corrected --
+    # which is exactly what happened to the castle-and-pit sign: every cached
+    # file held flipped values and every mtime said they were fine. Bumping
+    # SCHEMA is how that gets announced, so this is where it has to be read.
+    try:
+        with open(cached) as handle:
+            if json.load(handle).get('schema') != SCHEMA:
+                return True
+    except Exception:
+        return True            # unreadable is stale, not current
+
     when = cached.stat().st_mtime
     for source in (project_paths.manifest, project_paths.prep_json):
         if source.exists() and source.stat().st_mtime > when:

@@ -144,3 +144,37 @@ def test_the_null_aspect_table_matches_the_browser_copy():
     assert rows, 'no NULL_ASPECT table found in common.js'
     from_js = [(int(n), float(a)) for n, a in rows]
     assert from_js == [(n, a) for n, a in F.NULL_ASPECT], (from_js, F.NULL_ASPECT)
+
+
+def test_a_cache_from_an_older_schema_is_rebuilt(collected):
+    """A fix to this module changes the numbers without touching any data
+    file, so mtimes alone would call the old cache current.
+
+    That is not hypothetical: when castle and pit were swapped here, every
+    cached features.json held flipped values and every mtime said they were
+    fine. Bumping SCHEMA is how a correction gets announced, so staleness has
+    to read it.
+    """
+    import json
+
+    metrics = F.load(collected)
+    assert metrics and metrics['schema'] == F.SCHEMA
+    assert not F.is_stale(collected)
+
+    cached = F.path_for(collected)
+    stale = dict(metrics, schema='cichlid-features/1')
+    stale['trials'] = [dict(t, bowerIndex=-999) for t in stale['trials']]
+    with open(cached, 'w') as handle:
+        json.dump(stale, handle)
+
+    assert F.is_stale(collected), 'an older schema was taken for current'
+    fresh = F.load(collected)
+    assert fresh['schema'] == F.SCHEMA
+    assert all(t.get('bowerIndex') != -999 for t in fresh['trials'])
+
+
+def test_an_unreadable_cache_is_stale_not_current(collected):
+    F.load(collected)
+    F.path_for(collected).write_text('{ truncated')
+    assert F.is_stale(collected)
+    assert F.load(collected)['schema'] == F.SCHEMA
