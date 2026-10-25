@@ -592,20 +592,24 @@ def test_a_bad_setting_falls_back_rather_than_failing(client):
     assert settings['Confidence threshold'] == A.F.DEFAULTS.confidence
 
 
-def test_the_trials_page_and_its_rows_are_served(client):
+def test_the_phenotypes_page_and_its_rows_are_served(client):
     http, layout = client
-    page = http.get('/' + ANALYSIS + '/trials')
+    page = http.get('/' + ANALYSIS + '/phenotypes')
     assert page.status_code == 200
-    assert 'trials.js' in page.get_data(as_text=True)
-    assert http.get('/' + ANALYSIS + '/trials.js').status_code == 200
+    assert 'phenotypes.js' in page.get_data(as_text=True)
+    assert http.get('/' + ANALYSIS + '/phenotypes.js').status_code == 200
+    # the name it had first still resolves, so a saved link is not broken
+    assert http.get('/' + ANALYSIS + '/trials').status_code == 200
+    assert http.get('/' + ANALYSIS + '/phenotypes.csv').status_code == 200
 
-    rows = http.get('/' + ANALYSIS + '/trials.json').get_json()
+    rows = http.get('/' + ANALYSIS + '/phenotypes.json').get_json()
     assert rows['analysisID'] == ANALYSIS
     assert rows['params']['confidence'] == A.F.DEFAULTS.confidence
     assert rows['rows'], rows
     first = rows['rows'][0]
-    for key in ('projectID', 'category', 'trial', 'totalVolume', 'bowerIndex',
-                'grossVolume', 'nightShare', 'events'):
+    for key in ('projectID', 'category', 'trial', 'totalVolume',
+                'bowerIndex', 'nightShare', 'eventsPerDay',
+                'buildEventsPerDay', 'scoopAreaDaily'):
         assert key in first, key
     assert first['projectID'] == PROJECT
     assert first['category'] == 'MC'
@@ -615,7 +619,7 @@ def test_an_excluded_trial_is_left_out_of_the_comparison(client):
     """Asked for explicitly: the comparison is of trials worth comparing."""
     http, layout = client
     paths = layout.project(PROJECT, ANALYSIS)
-    before = len(http.get('/' + ANALYSIS + '/trials.json').get_json()['rows'])
+    before = len(http.get('/' + ANALYSIS + '/phenotypes.json').get_json()['rows'])
     assert before >= 1
 
     prep = C.load(paths)
@@ -625,7 +629,7 @@ def test_an_excluded_trial_is_left_out_of_the_comparison(client):
     override.reason = 'test'
     C.save(paths, prep, who='tester')
 
-    after = http.get('/' + ANALYSIS + '/trials.json').get_json()['rows']
+    after = http.get('/' + ANALYSIS + '/phenotypes.json').get_json()['rows']
     assert all(r['trial'] != 1 for r in after), after
     assert len(after) == before - 1
 
@@ -642,7 +646,7 @@ def test_a_project_that_cannot_be_read_is_named_not_dropped(client):
     table.to_csv(states_csv, index=False)
     A.TABLES.clear()
 
-    payload = http.get('/' + ANALYSIS + '/trials.json').get_json()
+    payload = http.get('/' + ANALYSIS + '/phenotypes.json').get_json()
     named = [s['projectID'] for s in payload['skipped']]
     assert 'MC_999_t099_tr1' in named, payload['skipped']
 
@@ -679,7 +683,7 @@ def test_the_trial_csv_is_shaped_for_mapping(client):
     import io
     import re
     http, layout = client
-    response = http.get('/' + ANALYSIS + '/trials.csv')
+    response = http.get('/' + ANALYSIS + '/phenotypes.csv')
     assert response.status_code == 200
     assert 'text/csv' in response.headers['Content-Type']
     assert 'attachment' in response.headers['Content-Disposition']
@@ -690,9 +694,20 @@ def test_the_trial_csv_is_shaped_for_mapping(client):
     head = list(rows[0].keys())
     for name in head:
         assert re.fullmatch(r'[a-z][a-z0-9_]*', name), name
-    assert head[:6] == ['project_id', 'logged_project_id', 'sample_id',
-                        'tank_id', 'category', 'trial']
+    assert head[:7] == ['project_id', 'logged_project_id', 'sample_id',
+                        'tank_id', 'category', 'trial', 'days']
     assert 'bower_index' in head and 'total_volume_cm3' in head
+    # the CSV matches the page exactly, which was asked for: every plotted
+    # metric present, and nothing the page does not show
+    for name in ('night_share', 'build_events_per_day', 'feed_events_per_day',
+                 'spawn_events_per_day', 'scoop_area_pooled_cm2',
+                 'scoop_area_daily_cm2', 'spit_area_daily_cm2',
+                 'scoop_spit_area_index', 'scoop_aspect_daily',
+                 'spit_aspect_daily', 'spawn_depth_median_cm'):
+        assert name in head, name
+    for gone in ('gross_volume_cm3', 'night_rate_ratio', 'days_to_90pct',
+                 'centroid_gap_cm', 'spawn_over_added_sand_pct', 'scoops'):
+        assert gone not in head, gone
 
     first = rows[0]
     assert first['project_id'] == PROJECT
@@ -708,10 +723,10 @@ def test_a_missing_value_is_NA_not_blank(client):
     import csv
     import io
     http, layout = client
-    text = http.get('/' + ANALYSIS + '/trials.csv').get_data(as_text=True)
+    text = http.get('/' + ANALYSIS + '/phenotypes.csv').get_data(as_text=True)
     rows = list(csv.DictReader(io.StringIO(text)))
     # this fixture has no registration, so the cloud shapes are absent
-    assert any(row['scoop_aspect'] == 'NA' for row in rows), rows
+    assert any(row['scoop_aspect_daily'] == 'NA' for row in rows), rows
     assert all(value != '' for row in rows for value in row.values())
 
 
@@ -725,7 +740,7 @@ def test_an_excluded_trial_is_left_out_of_the_csv_too(client):
     override.excluded = True
     C.save(paths, prep, who='tester')
 
-    text = http.get('/' + ANALYSIS + '/trials.csv').get_data(as_text=True)
+    text = http.get('/' + ANALYSIS + '/phenotypes.csv').get_data(as_text=True)
     rows = list(csv.DictReader(io.StringIO(text)))
     assert all(row['trial'] != '1' for row in rows), rows
 
@@ -766,13 +781,13 @@ def test_rows_are_attributed_to_the_directory_not_the_logfile(tmp_path):
     http = A.app.test_client()
 
     rows = list(csv.DictReader(io.StringIO(
-        http.get('/' + analysis + '/trials.csv').get_data(as_text=True))))
+        http.get('/' + analysis + '/phenotypes.csv').get_data(as_text=True))))
     assert rows, 'nothing exported'
     assert all(row['project_id'] == here for row in rows), rows
     # the logfile's claim is kept in its own column rather than thrown away
     assert all(row['logged_project_id'] == elsewhere for row in rows), rows
 
     # and the disagreement is surfaced, not left to be noticed
-    payload = http.get('/' + analysis + '/trials.json').get_json()
+    payload = http.get('/' + analysis + '/phenotypes.json').get_json()
     assert any(elsewhere in str(s.get('why', ''))
                for s in payload['skipped']), payload['skipped']

@@ -70,8 +70,14 @@ const trialRows={analysisID:'A',
     firstHalfIndex:-0.4+0.04*i, secondHalfIndex:0.2-0.03*i,
     events:4000+90*i, eventsPerDay:180+4*i, scoops:900+13*i, spits:880+15*i,
     spawns:40+i, scoopSpitRatio:0.8+0.02*(i%11),
-    scoopArea:60+4*i, spitArea:70+3*i, scoopAspect:1.1+0.05*(i%8),
-    spitAspect:1.2+0.04*(i%6), scoopNullAspect:1.07, spitNullAspect:1.07,
+    buildEventsPerDay:90+3*i, feedEventsPerDay:60+2*(i%13),
+    spawnEventsPerDay:1.5+0.2*(i%7),
+    scoopArea:60+4*i, spitArea:70+3*i,
+    scoopAreaDaily:30+2*i, spitAreaDaily:34+1.7*i,
+    scoopAspect:1.1+0.05*(i%8), spitAspect:1.2+0.04*(i%6),
+    scoopAspectDaily:1.15+0.04*(i%9), spitAspectDaily:1.22+0.03*(i%7),
+    scoopSpitAreaIndex:0.85+0.03*(i%10),
+    scoopNullAspect:1.07, spitNullAspect:1.07,
     centroidGap:1+0.2*(i%9), spawnDepthMedian:-0.8+0.1*(i%12),
     spawnOverCastle:10+3*(i%14), spawnsMeasured:30+i,
     newBowerDays:i%4, wallBuildingDays:i%3, daysTo90:3+(i%9)}))};
@@ -94,7 +100,7 @@ const dom=new JSDOM(inlined,{runScripts:'dangerously',virtualConsole:vc,
     w.fetch=(u)=>Promise.resolve({ok:true,status:200,
       json:()=>Promise.resolve(u.indexOf('clusters.json')>=0?packed:
                                (u.indexOf('features.json')>=0?analysis:
-                               (u.indexOf('trials.json')>=0?trialRows:payload)))});
+                               (u.indexOf('phenotypes.json')>=0?trialRows:payload)))});
     w.HTMLCanvasElement.prototype.getContext=function(){return{
       // the whole 2D surface a page might touch: a stub missing one method
       // fails the page for a reason a browser would never have

@@ -412,6 +412,16 @@ def _event_metrics(prep, number, days, events, first, last, shape, outside,
         out['scoopSpitRatio'] = round(out['scoops'] / out['spits'], 3)
     out['eventsPerDay'] = round(out['events'] / max(1, len(days)), 1)
 
+    # the three families, because 'events per day' mixes building with
+    # feeding and spawning and so moves for reasons that are not building
+    out['buildEvents'] = out['scoops'] + out['spits'] + out['multiples']
+    out['feedEvents'] = (out['feedScoops'] + out['feedSpits']
+                         + out['feedMultiples'])
+    for name, total in (('buildEventsPerDay', out['buildEvents']),
+                        ('feedEventsPerDay', out['feedEvents']),
+                        ('spawnEventsPerDay', out['spawns'])):
+        out[name] = round(total / max(1, len(days)), 2)
+
     # --- day by day, for the day-level sheet ------------------------------
     # Counts first, because they need no registration: a project not yet
     # registered still has events, and building these after the early return
@@ -478,8 +488,13 @@ def _event_metrics(prep, number, days, events, first, last, shape, outside,
                 row['spawnDepthMin'] = round(float(values.min()), 3)
                 row['spawnDepthMax'] = round(float(values.max()), 3)
                 row['spawnsMeasured'] = int(len(values))
-        per_day[str(index)] = row
-    out['dayEvents'] = per_day
+
+    # --- clouds averaged over days, which is not the pooled cloud ----------
+    # Pooling every event in a trial adds the day-to-day wandering of the
+    # centre, so a male who works one spot a day but moves about over the
+    # trial pools much wider than he scatters. Both are wanted, and they are
+    # different measurements rather than two estimates of one.
+    out.update(_daily_means(per_day))
 
     # --- the halves, pooled, for the clouds -------------------------------
     rows = day_volumes(first, last, days, outside, params)
@@ -529,6 +544,41 @@ def _event_metrics(prep, number, days, events, first, last, shape, outside,
             counts, _ = np.histogram(np.clip(depths, -DEPTH_SPAN, DEPTH_SPAN),
                                      bins=edges)
             out['spawnDepthHistogram'] = counts.astype(int).tolist()
+    return out
+
+
+def _daily_means(per_day: dict) -> dict:
+    """Cloud size and shape averaged across days, with the day counts.
+
+    A day whose cloud was not reported -- too few events for an ellipse, or
+    too few for its shape -- contributes nothing rather than a zero, so the
+    counts are given too: a mean over three days and a mean over twenty are
+    not the same number however alike they look.
+    """
+    out: Dict[str, object] = {}
+    for label, key in (('scoop', 'scoopShape'), ('spit', 'spitShape')):
+        areas, aspects = [], []
+        for row in per_day.values():
+            shape = row.get(key)
+            if not shape:
+                continue
+            areas.append(shape['areaCm2'])
+            if shape.get('aspect') is not None:
+                aspects.append(shape['aspect'])
+        name = label.capitalize()
+        out[label + 'AreaDaily'] = round(sum(areas) / len(areas), 2) \
+            if areas else None
+        out[label + 'AreaDailyDays'] = len(areas)
+        out[label + 'AspectDaily'] = round(sum(aspects) / len(aspects), 3) \
+            if aspects else None
+        out[label + 'AspectDailyDays'] = len(aspects)
+
+    # scoop over spit, of the daily averages. NOT spreadRatio, which is spit
+    # over scoop of the pooled clouds -- the other direction and the other
+    # pooling, so the two must never be read as the same quantity.
+    scoop, spit = out.get('scoopAreaDaily'), out.get('spitAreaDaily')
+    if scoop and spit:
+        out['scoopSpitAreaIndex'] = round(scoop / spit, 3)
     return out
 
 

@@ -254,14 +254,17 @@ def analysis_features_data(analysis_id: str):
                     'projects': out})
 
 
-@app.route('/<analysis_id>/trials')
+@app.route('/<analysis_id>/phenotypes')
+@app.route('/<analysis_id>/phenotypes.html')
+@app.route('/<analysis_id>/trials')              # the name it had first
 @app.route('/<analysis_id>/trials.html')
 def analysis_trials(analysis_id: str):
     """Trial-level metrics for every project, compared by category."""
     _states(analysis_id)
-    return _template('trials.html').replace('__ANALYSIS__', analysis_id)
+    return _template('phenotypes.html').replace('__ANALYSIS__', analysis_id)
 
 
+@app.route('/<analysis_id>/phenotypes.json')
 @app.route('/<analysis_id>/trials.json')
 def analysis_trials_data(analysis_id: str):
     """One flat row per trial, across every collected project.
@@ -325,37 +328,33 @@ def _trial_row(metrics: dict, trial: dict, category: str, tank: str,
     return {
         'projectID': project_id or metrics.get('projectID'),
         'loggedProjectID': metrics.get('projectID'),
-        'tankID': tank,
-        'category': category, 'trial': trial.get('trial'),
-        'days': trial.get('days'),
-        'castleVolume': trial.get('castleVolume'),
-        'pitVolume': trial.get('pitVolume'),
+        'tankID': tank, 'category': category,
+        'trial': trial.get('trial'), 'days': trial.get('days'),
+
         'totalVolume': trial.get('totalVolume'),
-        'bowerIndex': trial.get('bowerIndex'),
         'volumePerDay': trial.get('volumePerDay'),
-        'daysTo90': trial.get('daysTo90'),
-        'grossVolume': trial.get('grossVolume'),
-        'nightShare': trial.get('nightShare'),
-        'nightRateRatio': trial.get('nightRateRatio'),
+        'pitVolume': trial.get('pitVolume'),
+        'castleVolume': trial.get('castleVolume'),
+
+        'bowerIndex': trial.get('bowerIndex'),
         'firstHalfIndex': (trial.get('firstHalf') or {}).get('bowerIndex'),
         'secondHalfIndex': (trial.get('secondHalf') or {}).get('bowerIndex'),
-        'events': trial.get('events'),
+        'nightShare': trial.get('nightShare'),
+
         'eventsPerDay': trial.get('eventsPerDay'),
-        'scoops': trial.get('scoops'), 'spits': trial.get('spits'),
-        'spawns': trial.get('spawns'),
-        'scoopSpitRatio': trial.get('scoopSpitRatio'),
+        'buildEventsPerDay': trial.get('buildEventsPerDay'),
+        'feedEventsPerDay': trial.get('feedEventsPerDay'),
+        'spawnEventsPerDay': trial.get('spawnEventsPerDay'),
+
         'scoopArea': shape('scoopShape', 'areaCm2'),
+        'scoopAreaDaily': trial.get('scoopAreaDaily'),
         'spitArea': shape('spitShape', 'areaCm2'),
-        'scoopAspect': shape('scoopShape', 'aspect'),
-        'spitAspect': shape('spitShape', 'aspect'),
-        'scoopNullAspect': shape('scoopShape', 'nullAspect'),
-        'spitNullAspect': shape('spitShape', 'nullAspect'),
-        'centroidGap': trial.get('centroidGap'),
+        'spitAreaDaily': trial.get('spitAreaDaily'),
+
+        'scoopSpitAreaIndex': trial.get('scoopSpitAreaIndex'),
+        'scoopAspectDaily': trial.get('scoopAspectDaily'),
+        'spitAspectDaily': trial.get('spitAspectDaily'),
         'spawnDepthMedian': trial.get('spawnDepthMedian'),
-        'spawnOverCastle': trial.get('spawnOverCastle'),
-        'spawnsMeasured': trial.get('spawnsMeasured'),
-        'newBowerDays': trial.get('newBowerDays'),
-        'wallBuildingDays': trial.get('wallBuildingDays'),
     }
 
 
@@ -365,34 +364,37 @@ def _trial_row(metrics: dict, trial: dict, category: str, tank: str,
 # rule does. Lower case with underscores and no units in the name, because
 # make.names() mangles anything else and a mangled name is a broken script.
 CSV_COLUMNS = (
+    # identifiers, then the twenty measures the page plots, in page order.
+    # Matching the page exactly was asked for: a file holding more than the
+    # figure invites someone to compare a column nobody has looked at.
     ('project_id', 'projectID'), ('logged_project_id', 'loggedProjectID'),
-    ('sample_id', 'sampleID'),
-    ('tank_id', 'tankID'), ('category', 'category'), ('trial', 'trial'),
-    ('days', 'days'),
-    ('castle_volume_cm3', 'castleVolume'),
-    ('pit_volume_cm3', 'pitVolume'),
+    ('sample_id', 'sampleID'), ('tank_id', 'tankID'),
+    ('category', 'category'), ('trial', 'trial'), ('days', 'days'),
+
     ('total_volume_cm3', 'totalVolume'),
-    ('bower_index', 'bowerIndex'),
     ('volume_per_day_cm3', 'volumePerDay'),
-    ('days_to_90pct', 'daysTo90'),
-    ('gross_volume_cm3', 'grossVolume'),
-    ('night_share', 'nightShare'),
-    ('night_rate_ratio', 'nightRateRatio'),
+    ('pit_volume_cm3', 'pitVolume'),
+    ('castle_volume_cm3', 'castleVolume'),
+
+    ('bower_index', 'bowerIndex'),
     ('first_half_index', 'firstHalfIndex'),
     ('second_half_index', 'secondHalfIndex'),
-    ('events', 'events'), ('events_per_day', 'eventsPerDay'),
-    ('scoops', 'scoops'), ('spits', 'spits'), ('spawns', 'spawns'),
-    ('scoop_spit_ratio', 'scoopSpitRatio'),
-    ('scoop_area_cm2', 'scoopArea'), ('spit_area_cm2', 'spitArea'),
-    ('scoop_aspect', 'scoopAspect'), ('spit_aspect', 'spitAspect'),
-    ('scoop_aspect_null', 'scoopNullAspect'),
-    ('spit_aspect_null', 'spitNullAspect'),
-    ('centroid_gap_cm', 'centroidGap'),
+    ('night_share', 'nightShare'),
+
+    ('events_per_day', 'eventsPerDay'),
+    ('build_events_per_day', 'buildEventsPerDay'),
+    ('feed_events_per_day', 'feedEventsPerDay'),
+    ('spawn_events_per_day', 'spawnEventsPerDay'),
+
+    ('scoop_area_pooled_cm2', 'scoopArea'),
+    ('scoop_area_daily_cm2', 'scoopAreaDaily'),
+    ('spit_area_pooled_cm2', 'spitArea'),
+    ('spit_area_daily_cm2', 'spitAreaDaily'),
+
+    ('scoop_spit_area_index', 'scoopSpitAreaIndex'),
+    ('scoop_aspect_daily', 'scoopAspectDaily'),
+    ('spit_aspect_daily', 'spitAspectDaily'),
     ('spawn_depth_median_cm', 'spawnDepthMedian'),
-    ('spawn_over_added_sand_pct', 'spawnOverCastle'),
-    ('spawns_measured', 'spawnsMeasured'),
-    ('new_bower_days', 'newBowerDays'),
-    ('wall_building_days', 'wallBuildingDays'),
 )
 
 
@@ -413,6 +415,7 @@ def _sample_id(paths) -> str:
     return ''
 
 
+@app.route('/<analysis_id>/phenotypes.csv')
 @app.route('/<analysis_id>/trials.csv')
 def analysis_trials_csv(analysis_id: str):
     """The trial rows as one flat CSV, for mapping.
@@ -459,11 +462,11 @@ def analysis_trials_csv(analysis_id: str):
     return app.response_class(
         body, mimetype='text/csv',
         headers={'Content-Disposition':
-                 'attachment; filename="%s_trials.csv"' % analysis_id})
+                 'attachment; filename="%s_phenotypes.csv"' % analysis_id})
 
 
 @app.route('/<analysis_id>/analysis.js')
-@app.route('/<analysis_id>/trials.js')
+@app.route('/<analysis_id>/phenotypes.js')
 def analysis_script(analysis_id: str):
     """Scripts for the analysis-level pages.
 
@@ -471,7 +474,7 @@ def analysis_script(analysis_id: str):
     reach them: /YH_MC/trials.js has no project in it.
     """
     name = request.path.rsplit('/', 1)[-1]
-    if name not in ('analysis.js', 'trials.js'):
+    if name not in ('analysis.js', 'phenotypes.js'):
         abort(404)
     return send_from_directory(str(Path(__file__).parent / 'templates'), name)
 
