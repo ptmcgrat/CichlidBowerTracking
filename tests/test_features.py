@@ -178,3 +178,50 @@ def test_an_unreadable_cache_is_stale_not_current(collected):
     F.path_for(collected).write_text('{ truncated')
     assert F.is_stale(collected)
     assert F.load(collected)['schema'] == F.SCHEMA
+
+
+def test_a_cache_older_than_this_module_is_rebuilt(collected):
+    """The failure the schema check was supposed to prevent and did not.
+
+    Bumping SCHEMA is something a person has to remember, and the change
+    right after it -- adding the daily-mean fields -- did not get one. Every
+    cache was served as current while missing the new keys, and nine panels
+    on the phenotypes page drew nothing. Comparing against this module's own
+    mtime needs nobody to remember anything.
+    """
+    import os
+    import time
+    from pathlib import Path
+
+    metrics = F.load(collected)
+    assert metrics and not F.is_stale(collected)
+
+    # the module edited after the cache was written, schema unchanged
+    module = Path(F.__file__)
+    later = time.time() + 5
+    os.utime(module, (later, later))
+    try:
+        assert F.is_stale(collected), 'a cache older than the code was current'
+    finally:
+        os.utime(module, None)
+
+
+def test_every_metric_the_phenotypes_page_plots_is_computed(collected):
+    """A field the page asks for and compute() never produces draws an empty
+    panel, which looks like no data rather than like a missing key."""
+    from cichlid_bower_claude.server import app as A
+
+    metrics = F.compute(collected)
+    trial = next(t for t in metrics['trials'] if not t.get('excluded'))
+    row = A._trial_row(metrics, trial, 'MC', 't001', 'MC_920_t001_tr1')
+
+    for _, key in A.CSV_COLUMNS:
+        if key == 'sampleID':
+            continue          # read from the logfile by the CSV route itself
+        assert key in row, key
+
+    # these need no registration and no events, so they must always be there
+    for key in ('totalVolume', 'volumePerDay', 'pitVolume', 'castleVolume',
+                'bowerIndex', 'nightShare', 'firstHalfIndex',
+                'secondHalfIndex'):
+        assert row[key] is not None, key

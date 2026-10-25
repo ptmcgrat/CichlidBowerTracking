@@ -28,7 +28,7 @@ import numpy as np
 from ..collect import bundle as B
 from . import corrections as C
 
-SCHEMA = 'cichlid-features/2'
+SCHEMA = 'cichlid-features/3'
 
 # The ten codes the classifier assigns, with the name each gets in a column
 # heading. 'b' is both a scoop and a spit, so it is counted on its own and
@@ -675,12 +675,24 @@ def is_stale(project_paths) -> bool:
     if not cached.exists():
         return True
 
-    # The schema, before the timestamps. A fix to this module changes the
-    # numbers without touching a single data file, so mtimes alone call a
-    # cache current when the code that wrote it has since been corrected --
-    # which is exactly what happened to the castle-and-pit sign: every cached
-    # file held flipped values and every mtime said they were fine. Bumping
-    # SCHEMA is how that gets announced, so this is where it has to be read.
+    when = cached.stat().st_mtime
+
+    # This module's own mtime, before anything else. A change here changes the
+    # output without touching a single data file, so file timestamps alone
+    # call a cache current when the code that wrote it has moved on.
+    #
+    # The schema check below was meant to cover that, and did not: bumping
+    # SCHEMA is a thing someone has to remember, and the very next change --
+    # adding the daily-mean fields -- did not get one. Every cached file was
+    # served as current while missing the new keys, so nine panels on the
+    # phenotypes page drew nothing. Comparing against the module is the
+    # version of this that needs no discipline.
+    try:
+        if Path(__file__).stat().st_mtime > when:
+            return True
+    except OSError:
+        pass
+
     try:
         with open(cached) as handle:
             if json.load(handle).get('schema') != SCHEMA:
@@ -688,7 +700,6 @@ def is_stale(project_paths) -> bool:
     except Exception:
         return True            # unreadable is stale, not current
 
-    when = cached.stat().st_mtime
     for source in (project_paths.manifest, project_paths.prep_json):
         if source.exists() and source.stat().st_mtime > when:
             return True
