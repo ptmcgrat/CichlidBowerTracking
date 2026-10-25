@@ -114,6 +114,7 @@ function stripPlot(metric, label, units, showZero, order) {
   const counts = present.map(g => g.category + ' ' + g.rows.length).join(' · ');
   box.appendChild(el('p', 'hint', units + '  ·  ' + counts));
 
+  const hits = [];           // where each dot landed, for hit testing
   const width = 420, height = 36 + present.length * 34;
   const left = 96, right = 10;
   const canvas = el('canvas');
@@ -155,14 +156,74 @@ function stripPlot(metric, label, units, showZero, order) {
       ctx.stroke();
     }
     group.rows.forEach((r, i) => {
+      const cx = X(r[metric]), cy = y + offsetFor(r, i) * 22;
       ctx.fillStyle = 'rgba(' + colour.join(',') + ',.72)';
       ctx.beginPath();
-      ctx.arc(X(r[metric]), y + offsetFor(r, i) * 22, 3, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
       ctx.fill();
+      hits.push({ x: cx, y: cy, row: r });
     });
   });
   box.appendChild(canvas);
+  attachHover(box, canvas, hits, metric, units);
   return box;
+}
+
+// --------------------------------------------------------------- hovering
+// The dots are canvas pixels, not elements, so there is nothing for the
+// browser to put a title on: finding the nearest dot to the pointer is the
+// whole of it. The canvas is drawn at a fixed width and stretched by CSS, so
+// client coordinates have to be scaled back into the space the dots were
+// drawn in -- without that the hit test is right only at one window width.
+const HOVER_RADIUS = 7;
+
+function attachHover(box, canvas, hits, metric, units) {
+  if (!hits.length) return;
+  // a seam for the test: where each dot landed, in the canvas's own
+  // coordinates. Without it a test can only check that hovering produces
+  // some tooltip, which passes just as happily when the hit test forgets to
+  // scale and every dot answers at the wrong place on screen.
+  canvas._hits = hits;
+  box.style.position = 'relative';
+  const tip = el('div', 'tip');
+  tip.style.display = 'none';
+  box.appendChild(tip);
+
+  const nearest = event => {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const px = (event.clientX - rect.left) * (canvas.width / rect.width);
+    const py = (event.clientY - rect.top) * (canvas.height / rect.height);
+    let best = null, bestGap = HOVER_RADIUS * HOVER_RADIUS;
+    hits.forEach(hit => {
+      const gap = (hit.x - px) * (hit.x - px) + (hit.y - py) * (hit.y - py);
+      if (gap <= bestGap) { bestGap = gap; best = hit; }
+    });
+    return best;
+  };
+
+  canvas.addEventListener('mousemove', event => {
+    const hit = nearest(event);
+    if (!hit) { tip.style.display = 'none'; return; }
+    const r = hit.row;
+    const value = r[metric];
+    tip.innerHTML = '<b>' + r.projectID + '</b>' +
+      '<span>trial ' + r.trial + ' \u00b7 ' + r.category +
+      (r.tankID ? ' \u00b7 tank ' + r.tankID : '') + '</span>' +
+      '<span>' + (typeof value === 'number' ? trim(value) : value) +
+      (units ? ' ' + units.split(' \u00b7 ')[0] : '') + '</span>';
+    tip.style.display = 'block';
+    // placed from the dot, then pulled back inside the panel: a dot at the
+    // right-hand end would otherwise push the tooltip off the card
+    const rect = canvas.getBoundingClientRect();
+    const scale = rect.width / canvas.width;
+    const left = Math.min(Math.max(hit.x * scale - 60, 0),
+                          Math.max(0, rect.width - tip.offsetWidth));
+    tip.style.left = left + 'px';
+    tip.style.top = (canvas.offsetTop + hit.y * (rect.height / canvas.height)
+                     - tip.offsetHeight - 8) + 'px';
+  });
+  canvas.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
 }
 
 function trim(value) {

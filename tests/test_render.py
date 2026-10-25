@@ -122,3 +122,24 @@ def test_the_phenotypes_page_groups_by_category_and_states_its_settings():
     # the CSV, with the repeated-measures caveat beside it rather than buried
     assert 'Download CSV' in text
     assert 'repeated measures' in text
+
+
+@needs_jsdom
+def test_hovering_a_dot_names_its_project():
+    """Pointing where a dot is ON SCREEN has to name that dot.
+
+    The canvas is drawn at a fixed width and stretched by CSS, so the hit
+    test scales client coordinates back into the space the dots were drawn
+    in. Without that it is right only at one window width. The harness shows
+    the canvas at 1.5x its backing store for exactly that reason -- with the
+    scaling removed this reports 0 named, 2 misnamed, 6 silent.
+    """
+    result = subprocess.run(['node', str(HARNESS), 'phenotypes', '--hover'],
+                            cwd=str(ROOT), capture_output=True,
+                            encoding='utf-8', timeout=120)
+    out = (result.stdout or '') + (result.stderr or '')
+    assert result.returncode == 0, out
+    line = [l for l in out.splitlines() if l.startswith('HOVER')]
+    assert line, out
+    assert 'misnamed 0' in line[0], line[0]
+    assert 'silent 0' in line[0], line[0]

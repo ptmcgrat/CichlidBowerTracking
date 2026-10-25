@@ -165,6 +165,49 @@ setTimeout(()=>{
   // the whole document, not just #body: the controls bar, the meta strip and
   // the title sit outside it, and a control that failed to render there is
   // exactly as broken as one missing from the body
+  // --hover: canvas dots are pixels, not elements, so the only way to know
+  // the hit test works is to move a pointer over the thing and see what
+  // appears. jsdom gives every element a zero-sized rect, so the canvas is
+  // given a real one first -- and a deliberately different size from its
+  // backing store, since a hit test that forgets to scale is right only when
+  // the two happen to match.
+  // --hover: canvas dots are pixels, not elements, so the only way to know
+  // the hit test works is to point at one and see what comes back. jsdom
+  // gives every element a zero-sized rect, so the canvas gets a real one --
+  // and a deliberately different size from its backing store, because a hit
+  // test that forgets to scale is right only when the two happen to match.
+  //
+  // The check is that pointing where a dot IS ON SCREEN names that dot. A
+  // sweep that only asks whether any tooltip appeared passes with the
+  // scaling removed, which makes it worthless for the one bug worth having
+  // a test for.
+  if (process.argv[3] === '--hover') {
+    const canvas = w.document.querySelector('.strip canvas');
+    const tip = w.document.querySelector('.strip .tip');
+    if (!canvas || !tip) { console.log('HOVER  no canvas or no tooltip'); process.exit(1); }
+    const hits = canvas._hits;
+    if (!hits || !hits.length) { console.log('HOVER  no dots recorded'); process.exit(1); }
+
+    const SHOWN_W = 630, SHOWN_H = canvas.height * 1.5;   // 1.5x, not 1:1
+    canvas.getBoundingClientRect = () => ({
+      left: 0, top: 0, width: SHOWN_W, height: SHOWN_H,
+      right: SHOWN_W, bottom: SHOWN_H });
+    const sx = SHOWN_W / canvas.width, sy = SHOWN_H / canvas.height;
+
+    let right = 0, wrong = 0, quiet = 0;
+    const sample = hits.length > 12 ? hits.filter((_, i) => i % 3 === 0) : hits;
+    sample.forEach(hit => {
+      tip.style.display = 'none';
+      canvas.dispatchEvent(new w.MouseEvent('mousemove',
+        { clientX: hit.x * sx, clientY: hit.y * sy, bubbles: true }));
+      if (tip.style.display === 'none') { quiet++; return; }
+      if (tip.textContent.indexOf(hit.row.projectID) === 0) right++; else wrong++;
+    });
+    console.log('HOVER  named ' + right + ', misnamed ' + wrong +
+                ', silent ' + quiet + ' of ' + sample.length);
+    process.exit(right === sample.length ? 0 : 1);
+  }
+
   if (process.argv[3] === '--text') {
     // a clone with the scripts taken out: the harness inlines them as real
     // tags, and textContent on the body would otherwise return every line of
