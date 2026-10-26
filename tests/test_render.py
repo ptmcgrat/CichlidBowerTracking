@@ -155,8 +155,10 @@ def test_the_summary_page_shows_the_night_row_and_the_phase_toggle():
     # the first day of a trial has no night before it, and says so rather
     # than drawing an empty cell
     assert 'no night before the first day' in text
-    # the toggle starts unset, so it shows the placeholder label
-    assert 'phase' in text
+    # late build is the default, so an untouched day reads as late rather
+    # than as an unset state the person has to clear
+    assert 'late build' in text
+    assert 'phase \u2013' not in text
 
 
 @needs_jsdom

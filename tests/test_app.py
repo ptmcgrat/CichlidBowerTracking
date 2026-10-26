@@ -5,6 +5,7 @@ import pytest
 
 flask = pytest.importorskip('flask')
 
+from cichlid_bower_claude.collect import bundle as B
 from cichlid_bower_claude.cloud import FakeCloud
 from cichlid_bower_claude.collect.collector import collect_project
 from cichlid_bower_claude.paths import Layout
@@ -791,3 +792,62 @@ def test_rows_are_attributed_to_the_directory_not_the_logfile(tmp_path):
     payload = http.get('/' + analysis + '/phenotypes.json').get_json()
     assert any(elsewhere in str(s.get('why', ''))
                for s in payload['skipped']), payload['skipped']
+
+
+def test_the_landing_page_shows_broods_when_the_column_is_there(client):
+    """Optional: an analysis without the column is not missing anything, so
+    it shows a dash rather than an error or a zero."""
+    import pandas as pd
+    http, layout = client
+    states_csv = (layout.local_root / '__AnalysisStates' / ANALYSIS /
+                  (ANALYSIS + '.csv'))
+
+    # without the column
+    page = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
+    assert '<th>broods</th>' in page
+    assert A._states(ANALYSIS).broods(PROJECT) is None
+
+    table = pd.read_csv(states_csv)
+    table['Broods'] = [4]
+    table.to_csv(states_csv, index=False)
+    A.TABLES.clear()
+    A.INDEX_ROWS.clear()
+
+    assert A._states(ANALYSIS).broods(PROJECT) == 4
+    page = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
+    assert '<td>4</td>' in page, page[page.index('<table'):][:600]
+
+
+def test_a_broods_value_outside_nought_to_ten_is_not_shown(client):
+    """It is a count of broods, not a free number: 47 is a typo or another
+    column, and showing it would be reporting a typo as data."""
+    import pandas as pd
+    http, layout = client
+    states_csv = (layout.local_root / '__AnalysisStates' / ANALYSIS /
+                  (ANALYSIS + '.csv'))
+    for value, expected in ((4, 4), (0, 0), (10, 10), (47, None),
+                            (-1, None), ('', None), ('maybe', None)):
+        table = pd.read_csv(states_csv)
+        table['Broods'] = [value]
+        table.to_csv(states_csv, index=False)
+        A.TABLES.clear()
+        assert A._states(ANALYSIS).broods(PROJECT) == expected, value
+
+
+def test_a_new_bower_mark_is_flagged_on_the_landing_page(client):
+    """It shortens the trial for analysis, so it is worth seeing before
+    opening the project rather than after."""
+    http, layout = client
+    paths = layout.project(PROJECT, ANALYSIS)
+
+    page = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
+    assert 'new bower' not in page
+
+    manifest = B.read_manifest(paths.manifest)
+    day = manifest['days'][2]
+    prep = C.load(paths)
+    prep.day_marks[str(day['index'])] = C.DayMark(new_bower=True)
+    C.save(paths, prep, who='tester')
+
+    page = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
+    assert 'new bower · trial %d' % day['trial'] in page, page[:400]

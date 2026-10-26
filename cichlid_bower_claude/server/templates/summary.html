@@ -149,7 +149,8 @@
   button.phase:hover { border-color:var(--tray); color:var(--ink); }
   button.phase.set { color:var(--ink); }
   button.phase.phase-early { border-color:var(--tray); color:var(--tray); }
-  button.phase.phase-late { border-color:var(--video); color:var(--video); }
+  /* the default, so it stays quiet; the two deliberate choices stand out */
+  button.phase.phase-late { border-color:var(--line); color:var(--dim); }
   button.phase.phase-none { border-color:var(--line); color:#6c7684;
                             text-decoration:line-through; }
   .blank { }

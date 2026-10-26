@@ -107,6 +107,22 @@ class AnalysisStates:
         text = str(value).strip()
         return '' if text.lower() in ('nan', 'none', '') else text
 
+    def broods(self, project_id: str) -> Optional[int]:
+        """How many broods this female produced, if the table says.
+
+        Optional, and deliberately absent from EXPECTED: an analysis without
+        the column is not missing anything, and reporting it as missing would
+        make every older analysis look incomplete.
+        """
+        if 'Broods' not in self.table.columns or project_id not in self.table.index:
+            return None
+        value = self.table.loc[project_id, 'Broods']
+        try:
+            number = int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return None
+        return number if 0 <= number <= 10 else None
+
     def tank(self, project_id: str) -> str:
         if 'tankID' not in self.table.columns or project_id not in self.table.index:
             return ''

@@ -208,11 +208,19 @@ def index(analysis_id: str):
             manifest = B.read_manifest(paths.manifest)
             trials = [t['number'] for t in (manifest or {}).get('trials', [])]
         coverage = prep.coverage(trials) if trials else None
+        # which trials hold a new-bower mark, since that mark now shortens a
+        # trial for analysis and is worth seeing before opening the project
+        marked = set(prep.marked_days('new_bower'))
+        day_trial = {int(d['index']): int(d['trial'])
+                     for d in (manifest or {}).get('days', [])}
+        new_bower = sorted({day_trial[i] for i in marked if i in day_trial})
         rows.append({'projectID': project_id,
                      'category': states.category(project_id),
+                     'broods': states.broods(project_id),
                      'tank': states.tank(project_id),
                      'collected': collected, 'prepped': ready, 'updated': updated,
-                     'coverage': coverage, 'who': prep.who})
+                     'coverage': coverage, 'who': prep.who,
+                     'newBower': new_bower})
     INDEX_ROWS[analysis_id] = (fingerprint, rows)
     return _render_index(analysis_id, rows)
 
@@ -855,11 +863,21 @@ def _render_index(analysis_id, rows) -> str:
             for slug, label in (('prep', 'prep'), ('depth', 'depth'),
                                 ('clusters', 'clusters'), ('summary', 'summary'),
                                 ('features', 'features')))
+        broods = '-' if row.get('broods') is None else str(row['broods'])
+        # a new bower ends its trial for analysis, so a project carrying one
+        # reads differently from one that does not; named by trial, because
+        # which trial it was is the first thing anyone asks
+        bower = ''
+        if row.get('newBower'):
+            bower = ('<span class="chip out">new bower \u00b7 trial %s</span>'
+                     % ', '.join(str(t) for t in row['newBower']))
         body.append(
-            '<tr class="%s"><td><a class="name" href="/%s/%s/prep">%s</a></td>'
-            '<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+            '<tr class="%s"><td><a class="name" href="/%s/%s/prep">%s</a>%s</td>'
+            '<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
             '<td class="links">%s</td><td>%s</td></tr>'
-            % (band, analysis_id, project, project, category, row['tank'] or '-',
+            % (band, analysis_id, project, project,
+               ('<br>' + bower) if bower else '',
+               category, broods, row['tank'] or '-',
                _tick(row['collected']),
                _of_trials((coverage or {}).get('registered', []), coverage,
                           'missingRegistration'),

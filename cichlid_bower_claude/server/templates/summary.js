@@ -39,21 +39,31 @@ function setMark(dayIndex, which, on) {
 // Early, late or no build, as a person reads the day. Recorded and saved;
 // nothing uses it yet, which is why it is a plain cycle rather than three
 // controls -- there is no analysis to disambiguate for.
-const PHASES = ['', 'early', 'late', 'none'];
-const PHASE_LABEL = { '': 'phase \u2013', early: 'early build',
-                      late: 'late build', none: 'no build' };
+// Late build is the default, so there is no unset state to show: a day
+// nobody has touched reads as late. Note that a day with no saved mark and a
+// day explicitly set to late look the same here but differ in prep.json --
+// clicking writes the value, so what is saved is what somebody chose rather
+// than whatever the default happens to be today. If the default ever changes,
+// the days someone actually looked at keep their answer.
+const PHASE_DEFAULT = 'late';
+const PHASES = ['late', 'early', 'none'];
+const PHASE_LABEL = { late: 'late build', early: 'early build',
+                      none: 'no build' };
+
+function phaseOf(dayIndex) {
+  return markOf(dayIndex).build_phase || PHASE_DEFAULT;
+}
 
 function phaseControl(day) {
   const button = el('button', 'phase');
   const paint = () => {
-    const value = markOf(day.index).build_phase || '';
-    button.textContent = PHASE_LABEL[value];
-    button.className = 'phase' + (value ? ' set phase-' + value : '');
+    const value = phaseOf(day.index);
+    button.textContent = PHASE_LABEL[value] || value;
+    button.className = 'phase set phase-' + value;
   };
   button.addEventListener('click', () => {
-    const value = markOf(day.index).build_phase || '';
-    const next = PHASES[(PHASES.indexOf(value) + 1) % PHASES.length];
-    setMark(day.index, 'build_phase', next);
+    const at = PHASES.indexOf(phaseOf(day.index));
+    setMark(day.index, 'build_phase', PHASES[(at + 1) % PHASES.length]);
     paint();
   });
   paint();
