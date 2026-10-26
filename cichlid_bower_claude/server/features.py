@@ -26,6 +26,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from ..collect import bundle as B
+from ..collect import residual as R
 from . import corrections as C
 
 SCHEMA = 'cichlid-features/3'
@@ -266,7 +267,8 @@ def compute(project_paths, params: Optional['Params'] = None,
     trials = []
     for number in sorted(by_trial):
         entry = _trial_metrics(project_paths, prep, number, by_trial[number],
-                               first, last, shape, events, params)
+                               first, last, shape, events, params,
+                               residual_maps=data.get('residual'))
         trials.append(entry)
 
     return {
@@ -289,18 +291,58 @@ def compute(project_paths, params: Optional['Params'] = None,
     }
 
 
+def truncate_at_new_bower(prep, days) -> tuple:
+    """The days to analyse, and where the trial was cut short.
+
+    A day marked 'new bower' means the fish abandoned what it had and started
+    again somewhere else, so the cumulative map from there on is two
+    overlapping structures and its volume and index describe neither. For
+    analysis the trial ends at the previous day's close.
+
+    The FIRST such mark in the trial wins: a second new bower is already past
+    the end. A mark on the trial's own first day leaves nothing to analyse, so
+    it is reported and the trial is left whole -- dropping the trial silently
+    would be a worse answer than an obviously odd one.
+    """
+    marks = prep.day_marks or {}
+    for position, day in enumerate(days):
+        if not getattr(marks.get(str(day['index'])), 'new_bower', False):
+            continue
+        if position == 0:
+            return days, {'at': None, 'why': 'new bower on the first day'}
+        return days[:position], {'at': int(day['index']),
+                                 'date': day['date'],
+                                 'droppedDays': len(days) - position}
+    return days, None
+
+
 def _trial_metrics(project_paths, prep, number, days, first, last, shape,
-                   events, params) -> dict:
+                   events, params, residual_maps=None) -> dict:
     """One trial: what the sand did, and what the fish did to it."""
-    out = {'trial': number, 'days': len(days),
+    logged = len(days)
+    days, truncation = truncate_at_new_bower(prep, days)
+    out = {'trial': number, 'days': len(days), 'daysLogged': logged,
            'from': days[0]['date'], 'to': days[-1]['date'],
            'excluded': prep.is_excluded(number),
            'reason': prep.override(number).reason}
+    if truncation:
+        out['truncatedAtNewBower'] = truncation
     if out['excluded']:
         return out
 
     crop = prep.depth_crop_for(number)
-    outside = ~_inside(crop, shape) if crop and len(crop) >= 3 else None
+    inside = _inside(crop, shape) if crop and len(crop) >= 3 else None
+    outside = ~inside if inside is not None else None
+
+    # The residual mask, from this trial's own days, on top of the crop. It
+    # was applied on the depth tab and nowhere else, so every volume, index
+    # and spawn depth here was measured partly on pixels the depth tab had
+    # already called unreliable.
+    unreliable = trial_mask(residual_maps, days, prep.residual_k, inside)
+    if unreliable is not None:
+        outside = unreliable if outside is None else (outside | unreliable)
+        out['maskedPixels'] = int(unreliable.sum())
+    out['residualK'] = prep.residual_k
 
     # Depth is distance from the sensor down to the sand, so sand piling up
     # makes the number SMALLER. Castle-positive change is therefore
@@ -580,6 +622,50 @@ def _daily_means(per_day: dict) -> dict:
     if scoop and spit:
         out['scoopSpitAreaIndex'] = round(scoop / spit, 3)
     return out
+
+
+def score_mask(score: np.ndarray, k: float) -> Optional[np.ndarray]:
+    """Which pixels are too unreliable to measure sand with.
+
+    The residual is a pixel's RMS departure from its own fitted line, so a
+    pixel that builds steadily scores low and one that thrashes scores high.
+    The cut is k median-absolute-deviations above the median *of the logs*,
+    because the scores are heavy-tailed and a cut on the raw values is set by
+    the worst pixel.
+
+    This is a second implementation of common.js's scoreMask, and a test pins
+    the two together: a mask that differs between the page and the server
+    means a volume on screen and a volume in the spreadsheet disagree for a
+    reason nobody can see.
+    """
+    finite = score[np.isfinite(score) & (score > 0)]
+    if not finite.size:
+        return None
+    logs = np.log(np.sort(finite))
+    median = float(logs[len(logs) >> 1])
+    deviations = np.sort(np.abs(logs - median))
+    mad = float(deviations[len(deviations) >> 1]) * 1.4826
+    cut = np.exp(median + k * mad)
+    # NaN counts as unreliable, not as fine
+    return ~np.isfinite(score) | (score > cut)
+
+
+def trial_mask(residual_maps, days, k: float,
+               inside: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
+    """The mask for one trial, from that trial's own days.
+
+    Per trial rather than per project: the tank is reset between trials, and a
+    camera knocked during one of them should not mask the others. A pixel that
+    thrashed in trial two was fine in trial one and its sand should still be
+    counted there.
+    """
+    if residual_maps is None:
+        return None
+    picked = [residual_maps[int(d['index'])] for d in days
+              if int(d['index']) < len(residual_maps)]
+    if not picked:
+        return None
+    return score_mask(R.project_score(picked, inside=inside), k)
 
 
 def _mask(values, outside):

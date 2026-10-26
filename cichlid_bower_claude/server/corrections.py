@@ -64,6 +64,9 @@ class TrialOverride:
     reason: str = ''
 
 
+BUILD_PHASES = ('', 'early', 'late', 'none')
+
+
 @dataclass
 class DayMark:
     """What a person noticed about one day that the analysis cannot see.
@@ -77,7 +80,17 @@ class DayMark:
 
     new_bower: bool = False      # the fish began building somewhere else
     wall_building: bool = False  # building against the wall, missed by clustering
+    # '', 'early', 'late' or 'none': which part of the build this day belongs
+    # to, as a person reads it. Recorded and saved; nothing uses it yet.
+    build_phase: str = ''
     note: str = ''
+
+    # Added after prep.json files existed in the wild, and deliberately
+    # without touching SCHEMA: corrections.load REFUSES a file whose schema
+    # does not match exactly, so a bump here would make every saved
+    # correction unreadable. An optional field with a default is compatible
+    # both ways -- an older build drops it on read, because the marks route
+    # keeps only the fields this class declares.
 
 
 @dataclass

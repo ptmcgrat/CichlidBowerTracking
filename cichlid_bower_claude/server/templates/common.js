@@ -367,3 +367,66 @@ function nullAspect(n) {
   }
   return 1;
 }
+
+// ------------------------------------------------- the per-trial exclusions
+// Two things decide which data a trial's numbers are built from, and both
+// were applied in one place and forgotten everywhere else: the residual mask
+// (depth tab only) and a new-bower mark (nowhere at all). They live here so
+// every page applies the same ones, and so the server's copies have something
+// definite to be pinned to.
+const TRIAL_MASKS = {};
+
+// The mask for one trial, cached. Falls back to the project score where a
+// trial has none, which is what an older payload holds.
+function trialMaskFor(trial) {
+  const key = String(trial);
+  if (key in TRIAL_MASKS) return Promise.resolve(TRIAL_MASKS[key]);
+  const scores = D.trialResidualScores || {};
+  const meta = scores[key] || D.residualScore;
+  if (!meta) { TRIAL_MASKS[key] = null; return Promise.resolve(null); }
+  return loadDepth(meta).then(score => {
+    const result = score ? scoreMask(score, PREP.residual_k) : { mark: null };
+    TRIAL_MASKS[key] = result.mark || null;
+    return TRIAL_MASKS[key];
+  });
+}
+
+// Loaded up front, because the pages apply the mask inside a synchronous
+// cropped() called once per cell: making that await a mask would mean
+// rewriting every call site to return a promise.
+function preloadTrialMasks(trials) {
+  return Promise.all(trials.map(trialMaskFor));
+}
+
+// Crop and residual mask together: outside the tray, or too unreliable to
+// measure sand with. Synchronous, so preloadTrialMasks has to have run --
+// without it the residual half is simply absent, which is the state every
+// page except the depth tab was in.
+const EXCLUDED = {};
+
+function excludedPixels(meta, trial) {
+  const key = (meta && meta.url ? meta.url : '?') + '|' + trial;
+  if (key in EXCLUDED) return EXCLUDED[key];
+  const outside = cropMaskFor(meta, trial);
+  const unreliable = TRIAL_MASKS[String(trial)];
+  let both = outside || unreliable || null;
+  if (outside && unreliable) {
+    both = new Uint8Array(outside.length);
+    for (let i = 0; i < both.length; i++)
+      both[i] = (outside[i] || unreliable[i]) ? 1 : 0;
+  }
+  EXCLUDED[key] = both;
+  return both;
+}
+
+// A day marked 'new bower' ends the trial for analysis: from there the
+// cumulative map is two overlapping structures and its volume and index
+// describe neither. The first mark wins; one on the trial's own first day
+// leaves nothing to analyse, so the trial is left whole.
+function daysToAnalyse(days) {
+  for (let i = 0; i < days.length; i++) {
+    const mark = (PREP.day_marks || {})[String(days[i].index)];
+    if (mark && mark.new_bower) return i === 0 ? days : days.slice(0, i);
+  }
+  return days;
+}

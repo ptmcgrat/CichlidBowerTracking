@@ -220,8 +220,127 @@ def test_every_metric_the_phenotypes_page_plots_is_computed(collected):
             continue          # read from the logfile by the CSV route itself
         assert key in row, key
 
-    # these need no registration and no events, so they must always be there
+    # These come from the trial's endpoints, so they need no registration, no
+    # events and no day-to-day movement.
     for key in ('totalVolume', 'volumePerDay', 'pitVolume', 'castleVolume',
-                'bowerIndex', 'nightShare', 'firstHalfIndex',
-                'secondHalfIndex'):
+                'bowerIndex'):
         assert row[key] is not None, key
+
+    # The rest legitimately can be None, and on this fixture are: night share
+    # and the half indices all come from per-DAY volumes, and no single day of
+    # a gradual six-day build moves 0.6 cm of sand anywhere once the residual
+    # mask has excluded the churning patch -- which was the only thing moving
+    # that far in a day. Requiring them here would be requiring the mask not
+    # to work.
+    for key in ('nightShare', 'firstHalfIndex', 'secondHalfIndex'):
+        assert key in row, key
+
+
+def _js_score_mask(score, k):
+    """common.js's scoreMask, on the same array, through node."""
+    import json
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    import numpy as np
+    import pytest as _pytest
+
+    if not shutil.which('node'):
+        _pytest.skip('needs node')
+    root = Path(__file__).resolve().parents[1]
+    flat = np.asarray(score, dtype=np.float64).ravel()
+    payload = {'values': [0.0 if not np.isfinite(v) else float(v) for v in flat],
+               'nan': [i for i, v in enumerate(flat) if not np.isfinite(v)]}
+    import tempfile
+    with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as handle:
+        json.dump(payload, handle)
+        where = handle.name
+    result = subprocess.run(
+        ['node', str(root / 'tests' / 'score_mask.js'), where, str(k)],
+        cwd=str(root), capture_output=True, encoding='utf-8', timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    return json.loads(result.stdout)
+
+
+def test_the_residual_mask_matches_the_browser_copy():
+    """The mask decides which pixels every volume is measured on, and it is
+    implemented twice. A difference between the two means a volume on screen
+    and the same volume in the spreadsheet disagree invisibly -- which is how
+    castle and pit stayed swapped on the server for weeks.
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(7)
+    score = np.abs(rng.lognormal(0.0, 0.45, (40, 50))).astype(np.float64)
+    score[6:9, 10:14] = 55.0          # a thrashing patch
+    score[0, 0] = np.nan
+    score[1, 1] = 0.0                 # zero is not a score, and is skipped
+
+    for k in (2.0, 5.0, 8.0):
+        mine = F.score_mask(score, k)
+        theirs = _js_score_mask(score, k)
+        assert theirs['marked'] is not None
+        assert mine.ravel().astype(int).tolist() == theirs['marked'], k
+
+
+def test_a_new_bower_mark_ends_the_trial_for_analysis(collected):
+    """Asked for: from a new bower the cumulative map is two overlapping
+    structures, so its volume and index describe neither."""
+    paths = collected
+    whole = F.compute(paths)['trials'][0]
+    assert whole['days'] == whole['daysLogged']
+    assert 'truncatedAtNewBower' not in whole
+
+    prep = C.load(paths)
+    days = F.B.read_manifest(paths.manifest)['days']
+    in_trial = [d for d in days if d['trial'] == whole['trial']]
+    assert len(in_trial) >= 3
+    cut_at = in_trial[2]['index']
+    prep.day_marks[str(cut_at)] = C.DayMark(new_bower=True)
+    C.save(paths, prep, who='tester')
+
+    after = F.compute(paths)['trials'][0]
+    assert after['days'] == 2, after
+    assert after['daysLogged'] == whole['daysLogged']
+    assert after['truncatedAtNewBower']['at'] == cut_at
+    assert after['truncatedAtNewBower']['droppedDays'] == len(in_trial) - 2
+    assert after['to'] == in_trial[1]['date']
+
+
+def test_a_new_bower_on_the_first_day_leaves_the_trial_whole(collected):
+    """There would be nothing left to analyse. Reported rather than silently
+    dropping the trial, which would be a worse answer than an odd one."""
+    paths = collected
+    whole = F.compute(paths)['trials'][0]
+    days = F.B.read_manifest(paths.manifest)['days']
+    first = [d for d in days if d['trial'] == whole['trial']][0]
+
+    prep = C.load(paths)
+    prep.day_marks[str(first['index'])] = C.DayMark(new_bower=True)
+    C.save(paths, prep, who='tester')
+
+    after = F.compute(paths)['trials'][0]
+    assert after['days'] == whole['days']
+    assert after['truncatedAtNewBower']['at'] is None
+    assert 'first day' in after['truncatedAtNewBower']['why']
+
+
+def test_the_residual_mask_reaches_the_volumes(collected):
+    """It was applied on the depth tab and nowhere else, so every volume here
+    was measured partly on pixels that tab had already called unreliable."""
+    paths = collected
+
+    prep = C.load(paths)
+    prep.residual_k = 50.0           # so loose nothing is masked
+    C.save(paths, prep, who='tester')
+    loose = F.compute(paths)['trials'][0]
+
+    prep = C.load(paths)
+    prep.residual_k = 0.5            # so tight much is masked
+    C.save(paths, prep, who='tester')
+    tight = F.compute(paths)['trials'][0]
+
+    assert loose['maskedPixels'] < tight['maskedPixels'], (loose, tight)
+    assert tight['totalVolume'] < loose['totalVolume'], (loose, tight)
+    assert tight['residualK'] == 0.5 and loose['residualK'] == 50.0

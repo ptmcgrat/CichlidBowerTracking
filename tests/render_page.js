@@ -16,6 +16,13 @@ const DIR=path.join(__dirname, '..', 'cichlid_bower_claude',
                     'server', 'templates') + path.sep;
 const page=process.argv[2]||'summary';
 
+// --mark-new-bower <dayIndex>: so a test can see what a mark does to a page
+// without having to save one through the server first
+const MARKS = {};
+const markAt = process.argv.indexOf('--mark-new-bower');
+if (markAt > 0 && process.argv[markAt+1] !== undefined)
+  MARKS[String(process.argv[markAt+1])] = { new_bower: true };
+
 // --- payloads the page will ask for -----------------------------------
 const ND=10, N=6000, BIDS=['c','p','b','f','t','m','s','d','o','x'];
 function enc(a,T){return Buffer.from(new T(a).buffer).toString('base64');}
@@ -45,8 +52,9 @@ const payload={projectID:'MC_920_t001_tr1',analysisID:'YH_MC_Parentals',
   pairs:[{trial:1,side:'first',gapMinutes:0.2,piJpg:'pi.jpg',depthJpg:'d.jpg'},
          {trial:2,side:'first',gapMinutes:0.3,piJpg:'pi2.jpg',depthJpg:'d2.jpg'}],
   hasClusters:true,offsets:[0,30,60],residualScore:png('score'),
+  trialResidualScores:{'1':png('score1'),'2':png('score2')},
   logIssues:[],missing:[],
-  prep:{trials:{},residual_k:5,day_marks:{},
+  prep:{trials:{},residual_k:5,day_marks:MARKS,
         transform:[[0.49,0.01,-60],[0.005,0.49,-50],[0,0,1]],
         depth_crop:[[20,15],[600,15],[600,460],[20,460]],
         video_crop:[[150,120],[1180,130],[1190,900],[140,890]],overrides:{}}};
@@ -124,12 +132,23 @@ const dom=new JSDOM(inlined,{runScripts:'dangerously',virtualConsole:vc,
         const out=new w.Uint8ClampedArray(c*d*4);
         let seed=0;
         for(let i=0;i<lastDrawn.length;i++) seed=(seed*31+lastDrawn.charCodeAt(i))%997;
+        // A residual SCORE is not a depth map: it is near-flat with a few
+        // bad pixels, and feeding it a mound makes the mask exclude most of
+        // the tray -- which silently emptied the panels that depend on
+        // per-day volume.
+        const isScore = lastDrawn.indexOf('score') >= 0;
         for(let i=0,pi=0;i<c*d;i++,pi+=4){
           const row=Math.floor(i/c), col=i%c;
-          // a mound that grows with the seed, over a flat base, in the units
-          // loadDepth expects: (R<<8|G)*scale + offset
-          const bump=Math.exp(-(((col-c*0.6)/(c*0.2))**2+((row-d*0.5)/(d*0.25))**2));
-          const value=Math.round(400+seed*0.12+bump*seed*0.5);
+          let value;
+          if(isScore){
+            const bad = row>=2 && row<5 && col>=3 && col<7;   // a churning patch
+            value = bad ? 4000 : 100 + ((i*7)%9);
+          }else{
+            // a mound that grows with the seed, over a flat base, in the units
+            // loadDepth expects: (R<<8|G)*scale + offset
+            const bump=Math.exp(-(((col-c*0.6)/(c*0.2))**2+((row-d*0.5)/(d*0.25))**2));
+            value=Math.round(400+seed*0.12+bump*seed*0.5);
+          }
           out[pi]=(value>>8)&255; out[pi+1]=value&255; out[pi+2]=255; out[pi+3]=255;
         }
         return {data:out};
@@ -181,7 +200,7 @@ setTimeout(()=>{
   // sweep that only asks whether any tooltip appeared passes with the
   // scaling removed, which makes it worthless for the one bug worth having
   // a test for.
-  if (process.argv[3] === '--hover') {
+  if (process.argv.indexOf('--hover') > 0) {
     const canvas = w.document.querySelector('.strip canvas');
     const tip = w.document.querySelector('.strip .tip');
     if (!canvas || !tip) { console.log('HOVER  no canvas or no tooltip'); process.exit(1); }
@@ -208,7 +227,7 @@ setTimeout(()=>{
     process.exit(right === sample.length ? 0 : 1);
   }
 
-  if (process.argv[3] === '--text') {
+  if (process.argv.indexOf('--text') > 0) {
     // a clone with the scripts taken out: the harness inlines them as real
     // tags, and textContent on the body would otherwise return every line of
     // the page's own source as though it were rendered text

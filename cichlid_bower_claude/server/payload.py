@@ -121,14 +121,32 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
             day['videoJpg'] = 'assets/' + video_still.name
         days.append(day)
 
-    # the project-wide residual score, which is what the mask is built from
+    # The residual score the mask is built from, per trial as well as for the
+    # project. Per trial because the tank is reset between them: a camera
+    # knocked during one trial should not mask the sand in the others, and a
+    # project-wide score cannot tell a pixel that failed in one trial from one
+    # that failed throughout.
     score_url = None
+    trial_scores = {}
     if 'residual' in data:
         maps = [data['residual'][i] for i in range(data['residual'].shape[0])]
         score = R.project_score(maps)
         meta = write_depth(assets / 'residual_score.png', _half(score))
         meta['url'] = 'assets/residual_score.png'
         score_url = meta
+
+        by_trial = {}
+        for entry in manifest['days']:
+            by_trial.setdefault(int(entry['trial']), []).append(int(entry['index']))
+        for number, indices in sorted(by_trial.items()):
+            picked = [data['residual'][i] for i in indices
+                      if i < data['residual'].shape[0]]
+            if not picked:
+                continue
+            name = 'residual_score_t%02d.png' % number
+            per = write_depth(assets / name, _half(R.project_score(picked)))
+            per['url'] = 'assets/' + name
+            trial_scores[str(number)] = per
 
     candidates = []
     for entry in manifest.get('candidates', []):
@@ -188,6 +206,7 @@ def build_prep_payload(project_paths, out_dir: Optional[Path] = None) -> dict:
         'pairs': pairs,
         'offsets': sorted({c['offset'] for c in manifest.get('candidates', [])}),
         'residualScore': score_url,
+        'trialResidualScores': trial_scores,
         # the packed events are served separately: they are larger than every
         # image put together, and only one page needs them
         'hasClusters': project_paths.clusters_packed.exists(),

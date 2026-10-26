@@ -668,8 +668,13 @@ def save_marks(analysis_id: str, project_id: str):
             if not isinstance(value, dict):
                 continue
             allowed = {f for f in C.DayMark.__dataclass_fields__}
-            marks[str(key)] = C.DayMark(
-                **{k: v for k, v in value.items() if k in allowed})
+            fields = {k: v for k, v in value.items() if k in allowed}
+            # a phase the page does not offer is not a phase: anything else
+            # would be written to prep.json and read back as a state no
+            # control can reach or clear
+            if fields.get('build_phase') not in C.BUILD_PHASES:
+                fields.pop('build_phase', None)
+            marks[str(key)] = C.DayMark(**fields)
         prep.day_marks = marks
         C.save(paths, prep, who=viewer(body.get('who', '')))
         if STATE['upload']:

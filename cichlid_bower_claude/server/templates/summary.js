@@ -27,16 +27,52 @@ function setMark(dayIndex, which, on) {
   const key = String(dayIndex);
   const entry = PREP.day_marks[key] || {};
   entry[which] = on;
-  if (!entry.new_bower && !entry.wall_building && !entry.note)
+  // an entry holding nothing is not a mark: left behind it would be saved,
+  // uploaded and read back as a day someone had looked at
+  if (!entry.new_bower && !entry.wall_building && !entry.note &&
+      !entry.build_phase)
     delete PREP.day_marks[key];
   else PREP.day_marks[key] = entry;
   markDirty();
+}
+
+// Early, late or no build, as a person reads the day. Recorded and saved;
+// nothing uses it yet, which is why it is a plain cycle rather than three
+// controls -- there is no analysis to disambiguate for.
+const PHASES = ['', 'early', 'late', 'none'];
+const PHASE_LABEL = { '': 'phase \u2013', early: 'early build',
+                      late: 'late build', none: 'no build' };
+
+function phaseControl(day) {
+  const button = el('button', 'phase');
+  const paint = () => {
+    const value = markOf(day.index).build_phase || '';
+    button.textContent = PHASE_LABEL[value];
+    button.className = 'phase' + (value ? ' set phase-' + value : '');
+  };
+  button.addEventListener('click', () => {
+    const value = markOf(day.index).build_phase || '';
+    const next = PHASES[(PHASES.indexOf(value) + 1) % PHASES.length];
+    setMark(day.index, 'build_phase', next);
+    paint();
+  });
+  paint();
+  return button;
 }
 
 // Two things a person can see and the analysis cannot: a bower restarted
 // somewhere else, which makes the cumulative map two overlapping structures,
 // and building against a wall, which is real sand movement the cluster
 // detector misses because the fish is half out of frame.
+// A negative span means the days are out of order or a clock moved, and
+// anything past two days is not a night.
+function nightHours(previous, day) {
+  const from = Date.parse(previous.last), to = Date.parse(day.first);
+  if (!isFinite(from) || !isFinite(to)) return null;
+  const hours = (to - from) / 3600000;
+  return (hours > 0 && hours < 48) ? hours : null;
+}
+
 function dayMarkControls(day) {
   const wrap = el('div');
   [['new_bower', 'new bower'], ['wall_building', 'wall building']]
@@ -55,6 +91,7 @@ function dayMarkControls(day) {
       wrap.appendChild(box);
       wrap.appendChild(el('br'));
     });
+  wrap.appendChild(phaseControl(day));
   return wrap;
 }
 let SCALE = null;        // cm of depth per net event, fitted per trial
@@ -64,6 +101,7 @@ const ROWS = [
   ['Depth change', 'cumulative, from the sensor', 'depth'],
   ['From events', 'cumulative, spits minus scoops', 'fromEvents'],
   ['24 hour change', 'this morning to the next', 'daily'],
+  ['Night change', 'last night of the previous day to this morning', 'night'],
   ['Building', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
   ['Spawning', 'that day', 'spawn'],
   ['Spread', 'cumulative \u00b7 ellipse holding the chosen share', 'spread'],
@@ -208,7 +246,7 @@ function eventsOf(trial, codes, cut, upToDay) {
 // there, and leaving it in makes every map's colour scale answer to something
 // that is not sand.
 function cropped(values, meta, trial) {
-  const outside = cropMaskFor(meta, trial);
+  const outside = excludedPixels(meta, trial);
   if (!outside) return values;
   const out = new Float32Array(values.length);
   for (let i = 0; i < values.length; i++)
@@ -405,6 +443,32 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
         slot.appendChild(stage);
         paintMap(canvas, cropped(difference(first, last), meta, trial), meta,
                  { range: 4 });
+      });
+    return;
+  }
+
+  if (key === 'night') {
+    // the dark period: the previous day's closing frame against this day's
+    // opening one. Both endpoints are already in the bundle, which is why
+    // overnight building needed no new collection to measure.
+    const position = days.findIndex(d => d.index === day.index);
+    const previous = days[position - 1];
+    if (!previous) {
+      slot.appendChild(el('div', 'cellnote', 'no night before the first day'));
+      return;
+    }
+    Promise.all([loadDepth(previous.lastPng), loadDepth(day.firstPng)])
+      .then(([evening, morning]) => {
+        if (!evening || !morning) return;
+        const canvas = el('canvas');
+        const stage = el('div', 'stage');
+        stage.appendChild(canvas);
+        slot.appendChild(stage);
+        paintMap(canvas, cropped(difference(evening, morning), meta, trial),
+                 meta, { range: 1 });
+        const hours = nightHours(previous, day);
+        slot.appendChild(el('div', 'cellfoot',
+          hours === null ? 'span unknown' : hours.toFixed(1) + ' h dark'));
       });
     return;
   }
@@ -680,6 +744,14 @@ function draw() {
 
   const byTrial = daysByTrial(false);
 
+  // The masks before anything is drawn, as on the features page. This page
+  // deliberately shows every day rather than stopping at a new-bower mark:
+  // it is where the mark gets set, so it has to show what is being marked.
+  preloadTrialMasks(Object.keys(byTrial).map(Number)).then(() => drawTrials(byTrial));
+}
+
+function drawTrials(byTrial) {
+  const body = document.getElementById('body');
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];
     const section = el('div', 'trial');

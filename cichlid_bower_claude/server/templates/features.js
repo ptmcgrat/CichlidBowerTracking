@@ -131,7 +131,7 @@ function dispersion(points, coverage) {
 }
 
 function cropped(values, meta, trial) {
-  const outside = cropMaskFor(meta, trial);
+  const outside = excludedPixels(meta, trial);
   if (!outside) return values;
   const out = new Float32Array(values.length);
   for (let i = 0; i < values.length; i++) out[i] = outside[i] ? NaN : values[i];
@@ -369,13 +369,18 @@ function pointsUpToWithDay(trial, code, days) {
 }
 
 // -------------------------------------------------------------------- rows
-function renderTrial(trial, days, table) {
+function renderTrial(trial, days, table, loggedDays) {
   const meta = days[0].firstPng;
   const cm3 = ' cm³';
 
+  // the dropped days are named, not silently absent: a trial that became
+  // twelve days instead of thirty should say so where its numbers are read
+  const cut = (loggedDays && loggedDays > days.length)
+    ? '<br><span style="color:var(--warn)">' + days.length + ' of ' +
+      loggedDays + ' days<br>new bower after</span>' : '';
   table.appendChild(el('div', 'rowlab', '<b>Trial ' + trial + '</b><span>' +
     days.length + ' days<br>' + days[0].date + '<br>to ' +
-    days[days.length - 1].date + '</span>'));
+    days[days.length - 1].date + cut + '</span>'));
 
   const cells = {};
   COLUMNS.forEach(([, , key]) => {
@@ -487,9 +492,17 @@ function draw() {
   // the confidence slider changes which events exist, so the last redraw's
   // volumes and ellipses are not this redraw's
   VOLUME_CACHE = {};
-  trials.forEach(trial => {
-    renderTrial(+trial, byTrial[trial], table);
-    renderTrialDetail(+trial, byTrial[trial], table);
+  // The masks first: cropped() applies them synchronously, so a redraw that
+  // starts before they are loaded measures sand on pixels the depth tab
+  // calls unreliable -- which is what every page here did.
+  preloadTrialMasks(trials.map(Number)).then(() => {
+    trials.forEach(trial => {
+      // a new-bower mark ends the trial for analysis; the summary page still
+      // shows every day, because that is where the mark gets set
+      const days = daysToAnalyse(byTrial[trial]);
+      renderTrial(+trial, days, table, byTrial[trial].length);
+      renderTrialDetail(+trial, days, table);
+    });
   });
 }
 

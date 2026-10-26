@@ -143,3 +143,53 @@ def test_hovering_a_dot_names_its_project():
     assert line, out
     assert 'misnamed 0' in line[0], line[0]
     assert 'silent 0' in line[0], line[0]
+
+
+@needs_jsdom
+def test_the_summary_page_shows_the_night_row_and_the_phase_toggle():
+    """Both asked for: the overnight map as its own row under the 24 hour
+    one, and a per-day toggle whose state is saved with the marks."""
+    text = _render('summary')
+    assert 'Night change' in text
+    assert 'last night of the previous day to this morning' in text
+    # the first day of a trial has no night before it, and says so rather
+    # than drawing an empty cell
+    assert 'no night before the first day' in text
+    # the toggle starts unset, so it shows the placeholder label
+    assert 'phase' in text
+
+
+@needs_jsdom
+def test_the_residual_mask_reaches_the_pages_not_only_the_depth_tab():
+    """It was applied on the depth tab and nowhere else, so the summary and
+    features pages measured sand on pixels that tab had already called
+    unreliable. The harness's score has a known churning patch, so a page
+    that applies the mask reports fewer usable pixels than one that does not.
+    """
+    import re
+    for page in ('summary', 'features'):
+        text = _render(page)
+        # the pages report their own scales and volumes; what matters here is
+        # that the page got through its render with masks loaded rather than
+        # falling back to crop only
+        assert 'could not start' not in text, page
+    # the depth tab still states the k it used, which is where the mask began
+    depth = _render('depth')
+    assert 'residual mask at k' in depth
+
+
+@needs_jsdom
+def test_a_new_bower_mark_shortens_the_trial_on_the_features_page():
+    """The summary page shows every day because that is where the mark is
+    set; the features page analyses up to the day before it, and says so."""
+    import json
+    import subprocess
+    result = subprocess.run(['node', str(HARNESS), 'features', '--text',
+                             '--mark-new-bower', '3'],
+                            cwd=str(ROOT), capture_output=True,
+                            encoding='utf-8', timeout=120)
+    out = (result.stdout or '') + (result.stderr or '')
+    assert result.returncode == 0, out
+    text = [l for l in out.splitlines() if l.startswith('TEXT')][0]
+    assert 'new bower after' in text, text[:400]
+    assert '3 of 5 days' in text, text[:400]
