@@ -28,8 +28,8 @@ const ROWS = [
   ]],
   ['Depth \u2014 what shape', [
     ['bowerIndex', 'Bower index', '\u22121 pit \u2026 +1 castle', true],
-    ['firstHalfIndex', 'Index, first half', '\u22121 \u2026 +1', true],
-    ['secondHalfIndex', 'Index, second half', '\u22121 \u2026 +1', true],
+    ['earlyBuildIndex', 'Index, early build', '\u22121 \u2026 +1', true],
+    ['lateBuildIndex', 'Index, late build', '\u22121 \u2026 +1', true],
     ['nightShare', 'Night share', 'night \u00f7 total sand moved', false],
   ]],
   ['Behaviour \u2014 how often', [
@@ -45,9 +45,9 @@ const ROWS = [
     ['spitAreaDaily', 'Spit cloud area, daily mean', 'cm\u00b2', false],
   ]],
   ['Clouds \u2014 what shape', [
-    ['scoopSpitAreaIndex', 'Scoop \u00f7 spit area', '\u00d7 \u00b7 daily means', true],
-    ['scoopAspectDaily', 'Scoop aspect, daily mean', '\u00d7 (1 = round)', true],
-    ['spitAspectDaily', 'Spit aspect, daily mean', '\u00d7 (1 = round)', true],
+    ['scoopSpitAreaIndex', 'Scoop \u00f7 spit area', '\u00d7 \u00b7 whole trial', true],
+    ['scoopSpitAreaEarly', 'Scoop \u00f7 spit area, early build', '\u00d7', true],
+    ['scoopSpitAreaLate', 'Scoop \u00f7 spit area, late build', '\u00d7', true],
     ['spawnDepthMedian', 'Median spawn depth', 'cm', true],
   ]],
 ];

@@ -108,7 +108,10 @@ def test_the_phenotypes_page_groups_by_category_and_states_its_settings():
         assert heading in text, heading
     for label in ('Total volume', 'Bower index', 'Night share',
                   'Build events per day', 'Scoop cloud area, daily mean',
-                  'Scoop \u00f7 spit area', 'Median spawn depth'):
+                  'Index, early build', 'Index, late build',
+                  'Scoop \u00f7 spit area, early build',
+                  'Scoop \u00f7 spit area, late build',
+                  'Median spawn depth'):
         assert label in text, label
     # every one of the twenty has data, so the panels are drawing rather than
     # reporting an empty metric -- which is what they did when the fixture
@@ -151,14 +154,25 @@ def test_the_summary_page_shows_the_night_row_and_the_phase_toggle():
     one, and a per-day toggle whose state is saved with the marks."""
     text = _render('summary')
     assert 'Night change' in text
-    assert 'last night of the previous day to this morning' in text
+    assert 'the dark period, between the two days it spans' in text
     # the first day of a trial has no night before it, and says so rather
     # than drawing an empty cell
     assert 'no night before the first day' in text
+
+    # the daily row is this day's own lights-on period, not the 24 hours it
+    # used to be -- the night is the other row's job, and measuring it twice
+    # is what the change was for
+    assert 'Daily change' in text
+    assert 'this day\u2019s own morning to evening' in text
+    assert 'h light' in text
+    assert 'no following day in this trial' not in text
+
     # late build is the default, so an untouched day reads as late rather
     # than as an unset state the person has to clear
     assert 'late build' in text
     assert 'phase \u2013' not in text
+    # and the per-trial opt-out of the phase analysis
+    assert 'exclude from phase analysis' in text
 
 
 @needs_jsdom
@@ -195,3 +209,22 @@ def test_a_new_bower_mark_shortens_the_trial_on_the_features_page():
     text = [l for l in out.splitlines() if l.startswith('TEXT')][0]
     assert 'new bower after' in text, text[:400]
     assert '3 of 5 days' in text, text[:400]
+
+
+@needs_jsdom
+def test_every_depth_map_states_its_scale():
+    """A diverging ramp centred on zero looks identical at 0.5 cm and at
+    5 cm, so a map without its ends written down cannot be read. Drawn into
+    the canvas by paintMap, so no call site has to remember.
+    """
+    import subprocess
+    result = subprocess.run(['node', str(HARNESS), 'summary', '--scale-text'],
+                            cwd=str(ROOT), capture_output=True,
+                            encoding='utf-8', timeout=120)
+    out = (result.stdout or '') + (result.stderr or '')
+    assert result.returncode == 0, out
+    line = [l for l in out.splitlines() if l.startswith('SCALE')]
+    assert line, out
+    # at least one map, and every one of them labelled at both ends
+    assert 'maps 0' not in line[0], line[0]
+    assert 'unlabelled 0' in line[0], line[0]

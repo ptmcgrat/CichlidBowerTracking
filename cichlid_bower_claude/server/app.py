@@ -345,8 +345,8 @@ def _trial_row(metrics: dict, trial: dict, category: str, tank: str,
         'castleVolume': trial.get('castleVolume'),
 
         'bowerIndex': trial.get('bowerIndex'),
-        'firstHalfIndex': (trial.get('firstHalf') or {}).get('bowerIndex'),
-        'secondHalfIndex': (trial.get('secondHalf') or {}).get('bowerIndex'),
+        'earlyBuildIndex': (trial.get('earlyBuild') or {}).get('bowerIndex'),
+        'lateBuildIndex': (trial.get('lateBuild') or {}).get('bowerIndex'),
         'nightShare': trial.get('nightShare'),
 
         'eventsPerDay': trial.get('eventsPerDay'),
@@ -360,8 +360,8 @@ def _trial_row(metrics: dict, trial: dict, category: str, tank: str,
         'spitAreaDaily': trial.get('spitAreaDaily'),
 
         'scoopSpitAreaIndex': trial.get('scoopSpitAreaIndex'),
-        'scoopAspectDaily': trial.get('scoopAspectDaily'),
-        'spitAspectDaily': trial.get('spitAspectDaily'),
+        'scoopSpitAreaEarly': trial.get('scoopSpitAreaEarly'),
+        'scoopSpitAreaLate': trial.get('scoopSpitAreaLate'),
         'spawnDepthMedian': trial.get('spawnDepthMedian'),
     }
 
@@ -385,8 +385,8 @@ CSV_COLUMNS = (
     ('castle_volume_cm3', 'castleVolume'),
 
     ('bower_index', 'bowerIndex'),
-    ('first_half_index', 'firstHalfIndex'),
-    ('second_half_index', 'secondHalfIndex'),
+    ('early_build_index', 'earlyBuildIndex'),
+    ('late_build_index', 'lateBuildIndex'),
     ('night_share', 'nightShare'),
 
     ('events_per_day', 'eventsPerDay'),
@@ -400,8 +400,8 @@ CSV_COLUMNS = (
     ('spit_area_daily_cm2', 'spitAreaDaily'),
 
     ('scoop_spit_area_index', 'scoopSpitAreaIndex'),
-    ('scoop_aspect_daily', 'scoopAspectDaily'),
-    ('spit_aspect_daily', 'spitAspectDaily'),
+    ('scoop_spit_area_early', 'scoopSpitAreaEarly'),
+    ('scoop_spit_area_late', 'scoopSpitAreaLate'),
     ('spawn_depth_median_cm', 'spawnDepthMedian'),
 )
 
@@ -684,6 +684,15 @@ def save_marks(analysis_id: str, project_id: str):
                 fields.pop('build_phase', None)
             marks[str(key)] = C.DayMark(**fields)
         prep.day_marks = marks
+
+        # Per-trial phase exclusion, merged field by field rather than by
+        # replacing the override. The override also holds this trial's
+        # registration and crops, set on the prep page; posting a whole
+        # override from here would let a summary page loaded before those
+        # were changed put the old ones back.
+        for key, value in (body.get('phase_excluded') or {}).items():
+            override = prep.overrides.setdefault(str(key), C.TrialOverride())
+            override.phase_excluded = bool(value)
         C.save(paths, prep, who=viewer(body.get('who', '')))
         if STATE['upload']:
             try:

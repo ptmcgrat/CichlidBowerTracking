@@ -61,10 +61,18 @@ class TrialOverride:
     depth_crop: Optional[List[List[int]]] = None
     video_crop: Optional[List[List[int]]] = None
     excluded: bool = False
+    # Separate from ``excluded``: a trial can be worth measuring sand and
+    # events in while being useless for reading a build into phases -- a
+    # trial that was cut short, say. Excluding it everywhere to keep it out of
+    # one analysis would throw away the rest.
+    phase_excluded: bool = False
     reason: str = ''
 
 
-BUILD_PHASES = ('', 'early', 'late', 'none')
+# No build, early, middle, late. '' is kept so an older prep.json that holds
+# it still loads; the pages default an unset day to 'late' rather than
+# offering a blank.
+BUILD_PHASES = ('', 'none', 'early', 'middle', 'late')
 
 
 @dataclass

@@ -703,11 +703,13 @@ def test_the_trial_csv_is_shaped_for_mapping(client):
     for name in ('night_share', 'build_events_per_day', 'feed_events_per_day',
                  'spawn_events_per_day', 'scoop_area_pooled_cm2',
                  'scoop_area_daily_cm2', 'spit_area_daily_cm2',
-                 'scoop_spit_area_index', 'scoop_aspect_daily',
-                 'spit_aspect_daily', 'spawn_depth_median_cm'):
+                 'scoop_spit_area_index', 'early_build_index',
+                 'late_build_index', 'scoop_spit_area_early',
+                 'scoop_spit_area_late', 'spawn_depth_median_cm'):
         assert name in head, name
     for gone in ('gross_volume_cm3', 'night_rate_ratio', 'days_to_90pct',
-                 'centroid_gap_cm', 'spawn_over_added_sand_pct', 'scoops'):
+                 'centroid_gap_cm', 'spawn_over_added_sand_pct', 'scoops',
+                 'first_half_index', 'scoop_aspect_daily'):
         assert gone not in head, gone
 
     first = rows[0]
@@ -727,7 +729,7 @@ def test_a_missing_value_is_NA_not_blank(client):
     text = http.get('/' + ANALYSIS + '/phenotypes.csv').get_data(as_text=True)
     rows = list(csv.DictReader(io.StringIO(text)))
     # this fixture has no registration, so the cloud shapes are absent
-    assert any(row['scoop_aspect_daily'] == 'NA' for row in rows), rows
+    assert any(row['scoop_spit_area_early'] == 'NA' for row in rows), rows
     assert all(value != '' for row in rows for value in row.values())
 
 
@@ -851,3 +853,58 @@ def test_a_new_bower_mark_is_flagged_on_the_landing_page(client):
 
     page = http.get('/' + ANALYSIS + '/').get_data(as_text=True)
     assert 'new bower · trial %d' % day['trial'] in page, page[:400]
+
+
+def test_phase_exclusion_saves_without_touching_the_rest_of_the_override(client):
+    """The override also holds this trial's registration and crops, set on
+    the prep page. This route must merge one field, not replace the object,
+    or a summary page loaded before those were changed puts the old ones
+    back when someone saves a mark."""
+    http, layout = client
+    paths = layout.project(PROJECT, ANALYSIS)
+
+    prep = C.load(paths)
+    prep.overrides['1'] = C.TrialOverride(
+        transform=[[1, 0, 5], [0, 1, 7], [0, 0, 1]],
+        depth_crop=[[1, 1], [9, 1], [9, 9], [1, 9]],
+        excluded=False, reason='knocked camera')
+    C.save(paths, prep, who='prep page')
+
+    response = http.post(ROOT + '/marks', json={
+        'who': 'summary page',
+        'day_marks': {'0': {'build_phase': 'middle'}},
+        'phase_excluded': {'1': True},
+    })
+    assert response.status_code == 200, response.get_json()
+
+    saved = C.load(paths)
+    assert saved.overrides['1'].phase_excluded is True
+    # and everything the prep page set is still there
+    assert saved.overrides['1'].transform == [[1, 0, 5], [0, 1, 7], [0, 0, 1]]
+    assert saved.overrides['1'].depth_crop == [[1, 1], [9, 1], [9, 9], [1, 9]]
+    assert saved.overrides['1'].reason == 'knocked camera'
+    assert saved.day_marks['0'].build_phase == 'middle'
+
+    # and it clears again
+    assert http.post(ROOT + '/marks', json={
+        'who': 'summary page', 'day_marks': {},
+        'phase_excluded': {'1': False}}).status_code == 200
+    assert C.load(paths).overrides['1'].phase_excluded is False
+    assert C.load(paths).overrides['1'].reason == 'knocked camera'
+
+
+def test_middle_is_an_accepted_phase_and_nonsense_is_not(client):
+    http, layout = client
+    paths = layout.project(PROJECT, ANALYSIS)
+    assert 'middle' in C.BUILD_PHASES
+
+    assert http.post(ROOT + '/marks', json={
+        'who': 'tester',
+        'day_marks': {'0': {'build_phase': 'middle'},
+                      '1': {'build_phase': 'sideways'}}}).status_code == 200
+    saved = C.load(paths)
+    assert saved.day_marks['0'].build_phase == 'middle'
+    # a phase no control can reach would be written and read back as a state
+    # nobody can clear, so it is dropped rather than stored
+    assert saved.day_marks.get('1') is None or \
+        saved.day_marks['1'].build_phase == ''

@@ -291,6 +291,50 @@ def compute(project_paths, params: Optional['Params'] = None,
     }
 
 
+PHASE_DEFAULT = 'late'
+
+
+def phase_days(prep, days) -> Dict[str, List[dict]]:
+    """Each day of a trial grouped by the build phase someone marked it.
+
+    An unmarked day counts as the default, which is late -- the same default
+    the toggle shows, so the grouping matches what is on screen. The
+    consequence is worth knowing: in a project nobody has marked, every day
+    is late, so the early-build figures are empty rather than wrong.
+    """
+    marks = prep.day_marks or {}
+    grouped: Dict[str, List[dict]] = {'none': [], 'early': [], 'middle': [],
+                                      'late': []}
+    for day in days:
+        mark = marks.get(str(day['index']))
+        phase = (getattr(mark, 'build_phase', '') or PHASE_DEFAULT)
+        grouped.setdefault(phase, []).append(day)
+    return grouped
+
+
+def _phase_change(picked, first, last, outside, params) -> Optional[dict]:
+    """What the sand did across one phase's days.
+
+    Measured from the span's endpoints -- the first marked day's opening frame
+    to the last marked day's closing frame -- because that is the net shape
+    built in that stretch, which is what an index means. ``spanDays`` is
+    reported beside ``days`` so a phase marked in two separate stretches is
+    visible rather than quietly including the days between them.
+    """
+    if not picked:
+        return None
+    indices = sorted(int(d['index']) for d in picked)
+    change = first[indices[0]] - last[indices[-1]]
+    if outside is not None:
+        change = np.where(outside, np.nan, change)
+    out = _volumes(change, params.threshold)
+    out['days'] = len(picked)
+    out['spanDays'] = indices[-1] - indices[0] + 1
+    out['fromDate'] = picked[0]['date']
+    out['toDate'] = picked[-1]['date']
+    return out
+
+
 def truncate_at_new_bower(prep, days) -> tuple:
     """The days to analyse, and where the trial was cut short.
 
@@ -415,6 +459,20 @@ def _trial_metrics(project_paths, prep, number, days, first, last, shape,
                 else 1 - split['fraction'], 4)
             out[name] = half
 
+    # --- the build phases someone marked ---------------------------------
+    # Replaces the halves by volume for the index: a person's reading of when
+    # the build happened is better than a split at the halfway point of the
+    # sand, which can fall anywhere.
+    out['phaseExcluded'] = prep.override(number).phase_excluded
+    grouped = phase_days(prep, days)
+    out['phaseDays'] = {name: len(picked) for name, picked in grouped.items()}
+    if not out['phaseExcluded']:
+        for name in ('early', 'middle', 'late'):
+            measured = _phase_change(grouped.get(name), first, last, outside,
+                                     params)
+            if measured is not None:
+                out[name + 'Build'] = measured
+
     marks = prep.day_marks or {}
     indices = {str(d['index']) for d in days}
     out['newBowerDays'] = sum(
@@ -530,6 +588,23 @@ def _event_metrics(prep, number, days, events, first, last, shape, outside,
                 row['spawnDepthMin'] = round(float(values.min()), 3)
                 row['spawnDepthMax'] = round(float(values.max()), 3)
                 row['spawnsMeasured'] = int(len(values))
+
+    # --- scoop against spit, within each marked phase ---------------------
+    # Replaces the daily-mean aspect ratios. Both are daily means of the
+    # cloud areas, so the figure is comparable with the whole-trial one in
+    # the same row; only the set of days differs.
+    if not prep.override(number).phase_excluded:
+        for name, picked in phase_days(prep, days).items():
+            if name not in ('early', 'middle', 'late') or not picked:
+                continue
+            subset = {str(int(d['index'])): per_day[str(int(d['index']))]
+                      for d in picked if str(int(d['index'])) in per_day}
+            means = _daily_means(subset)
+            ratio = means.get('scoopSpitAreaIndex')
+            if ratio is not None:
+                out['scoopSpitArea' + name.capitalize()] = ratio
+            out['scoopSpitArea' + name.capitalize() + 'Days'] = \
+                means.get('scoopAreaDailyDays', 0)
 
     # --- clouds averaged over days, which is not the pooled cloud ----------
     # Pooling every event in a trial adds the day-to-day wandering of the

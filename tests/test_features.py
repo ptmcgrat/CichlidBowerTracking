@@ -232,7 +232,11 @@ def test_every_metric_the_phenotypes_page_plots_is_computed(collected):
     # mask has excluded the churning patch -- which was the only thing moving
     # that far in a day. Requiring them here would be requiring the mask not
     # to work.
-    for key in ('nightShare', 'firstHalfIndex', 'secondHalfIndex'):
+    # The phase indices are empty on an unmarked project by design: every day
+    # defaults to late, so there is no early build to measure until someone
+    # has said where it was.
+    for key in ('nightShare', 'earlyBuildIndex', 'lateBuildIndex',
+                'scoopSpitAreaEarly', 'scoopSpitAreaLate'):
         assert key in row, key
 
 
@@ -344,3 +348,79 @@ def test_the_residual_mask_reaches_the_volumes(collected):
     assert loose['maskedPixels'] < tight['maskedPixels'], (loose, tight)
     assert tight['totalVolume'] < loose['totalVolume'], (loose, tight)
     assert tight['residualK'] == 0.5 and loose['residualK'] == 50.0
+
+
+def test_the_phase_indices_follow_the_day_marks(collected):
+    """Asked for: the index of the early build and of the late build, from
+    the toggle rather than from a split at the halfway point of the sand."""
+    paths = collected
+    trial = F.compute(paths)['trials'][0]
+    days = [d for d in F.B.read_manifest(paths.manifest)['days']
+            if d['trial'] == trial['trial']]
+    assert len(days) >= 4
+
+    # unmarked: every day defaults to late, so there is no early build. That
+    # is the design, not a gap -- an early figure before anyone has said
+    # where the early build was would be inventing the answer.
+    assert trial['phaseDays']['late'] == len(days)
+    assert trial['phaseDays']['early'] == 0
+    assert 'earlyBuild' not in trial
+    assert trial['lateBuild']['days'] == len(days)
+
+    prep = C.load(paths)
+    for day in days[:2]:
+        prep.day_marks[str(day['index'])] = C.DayMark(build_phase='early')
+    C.save(paths, prep, who='tester')
+
+    after = F.compute(paths)['trials'][0]
+    assert after['phaseDays'] == {'none': 0, 'early': 2, 'middle': 0,
+                                  'late': len(days) - 2}
+    assert after['earlyBuild']['days'] == 2
+    assert after['earlyBuild']['fromDate'] == days[0]['date']
+    assert after['earlyBuild']['toDate'] == days[1]['date']
+    assert after['lateBuild']['days'] == len(days) - 2
+
+
+def test_a_phase_marked_in_two_stretches_reports_its_span(collected):
+    """Measured from the span's endpoints, so a phase marked in two separate
+    stretches quietly includes the days between them. spanDays beside days is
+    how that shows."""
+    paths = collected
+    days = [d for d in F.B.read_manifest(paths.manifest)['days']
+            if d['trial'] == 1]
+    assert len(days) >= 4
+
+    prep = C.load(paths)
+    prep.day_marks[str(days[0]['index'])] = C.DayMark(build_phase='early')
+    prep.day_marks[str(days[3]['index'])] = C.DayMark(build_phase='early')
+    C.save(paths, prep, who='tester')
+
+    early = F.compute(paths)['trials'][0]['earlyBuild']
+    assert early['days'] == 2
+    assert early['spanDays'] == 4          # two marked, two in between
+    assert early['spanDays'] > early['days']
+
+
+def test_excluding_a_trial_from_phase_analysis_drops_only_the_phase_figures(collected):
+    """Separate from excluding the trial: its sand and events still count."""
+    paths = collected
+    prep = C.load(paths)
+    days = [d for d in F.B.read_manifest(paths.manifest)['days']
+            if d['trial'] == 1]
+    prep.day_marks[str(days[0]['index'])] = C.DayMark(build_phase='early')
+    C.save(paths, prep, who='tester')
+    before = F.compute(paths)['trials'][0]
+    assert 'earlyBuild' in before
+
+    prep = C.load(paths)
+    prep.overrides['1'] = C.TrialOverride(phase_excluded=True)
+    C.save(paths, prep, who='tester')
+    after = F.compute(paths)['trials'][0]
+
+    assert after['phaseExcluded'] is True
+    assert 'earlyBuild' not in after and 'lateBuild' not in after
+    assert 'scoopSpitAreaEarly' not in after
+    # and the trial is still measured
+    assert after['totalVolume'] == before['totalVolume']
+    assert after['events'] == before['events']
+    assert after['excluded'] is False

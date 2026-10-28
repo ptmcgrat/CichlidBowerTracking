@@ -126,6 +126,8 @@
   .rowlab span { color:var(--dim); font-size:11px; }
   .cell { background:var(--panel); border:1px solid var(--line); border-radius:5px;
           overflow:hidden; }
+  /* the night spans two days, so its cell straddles their boundary */
+  .cell.straddle { transform:translateX(-50%); }
   .cellnote { padding:14px 8px; font-size:11px; color:var(--dim); text-align:center; }
   .cellfoot { padding:3px 6px; font-size:10px; color:var(--dim);
               border-top:1px solid var(--line); font-variant-numeric:tabular-nums; }
@@ -151,8 +153,14 @@
   button.phase.phase-early { border-color:var(--tray); color:var(--tray); }
   /* the default, so it stays quiet; the two deliberate choices stand out */
   button.phase.phase-late { border-color:var(--line); color:var(--dim); }
+  button.phase.phase-middle { border-color:var(--ok); color:var(--ok); }
   button.phase.phase-none { border-color:var(--line); color:#6c7684;
                             text-decoration:line-through; }
+  label.phasebox { margin-left:4px; }
+  /* a trial out of the phase analysis still shows its data; the phase
+     controls are what stops applying */
+  .trial.nophase button.phase { opacity:.35; text-decoration:line-through; }
+  .trial.nophase > h3 { color:var(--dim); }
   .blank { }
 </style>
 <script>

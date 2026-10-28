@@ -79,6 +79,28 @@ function paintMap(canvas, values, meta, opts) {
     image.data[p+3] = 255;
   }
   ctx.putImageData(image, 0, 0);
+
+  // The scale, in the map itself. Every one of these is a diverging ramp
+  // centred on zero, and without the ends written down a reader cannot tell
+  // a 0.5 cm map from a 5 cm one -- they look identical. Drawn into the
+  // canvas rather than beside it so that every call site gets it without
+  // each one having to remember.
+  if (opts.scaleText !== false && meta.width >= 48) {
+    const size = Math.max(6, Math.min(11, Math.round(meta.width / 11)));
+    ctx.font = size + 'px sans-serif';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = Math.max(1.5, size / 4);
+    ctx.strokeStyle = 'rgba(0,0,0,.75)';   // so it reads over any colour
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    const units = opts.units === undefined ? ' cm' : opts.units;
+    const low = '\u2212' + range + units, high = '+' + range + units;
+    ctx.textAlign = 'left';
+    ctx.strokeText(low, 2, meta.height - 1);
+    ctx.fillText(low, 2, meta.height - 1);
+    ctx.textAlign = 'right';
+    ctx.strokeText(high, meta.width - 2, meta.height - 1);
+    ctx.fillText(high, meta.width - 2, meta.height - 1);
+  }
 }
 
 function mapFigure(values, meta, caption, opts) {

@@ -64,6 +64,8 @@ const analysis={analysisID:'A',threshold:0.6,coverage:0.68,projects:[
      spawnsMeasured:192,spawnDepthMedian:1.5,spawnOverCastle:80}]}]};
 
 let lastDrawn='';
+const TEXTS=[];          // everything any canvas was asked to write
+let paintedMaps=0;
 // one flat row per trial, as /<analysis>/trials.json returns them
 const CATS=['MC','TI','CVxMC_F1'];
 const trialRows={analysisID:'A',
@@ -75,7 +77,7 @@ const trialRows={analysisID:'A',
     days:20+i, totalVolume:300+17*i, castleVolume:150+11*i, pitVolume:120+6*i,
     bowerIndex:-0.6+0.05*i, volumePerDay:12+0.4*i, grossVolume:800+30*i,
     nightShare:0.1+0.03*(i%9), nightRateRatio:0.4+0.07*(i%7),
-    firstHalfIndex:-0.4+0.04*i, secondHalfIndex:0.2-0.03*i,
+    earlyBuildIndex:-0.4+0.04*i, lateBuildIndex:0.2-0.03*i,
     events:4000+90*i, eventsPerDay:180+4*i, scoops:900+13*i, spits:880+15*i,
     spawns:40+i, scoopSpitRatio:0.8+0.02*(i%11),
     buildEventsPerDay:90+3*i, feedEventsPerDay:60+2*(i%13),
@@ -83,7 +85,7 @@ const trialRows={analysisID:'A',
     scoopArea:60+4*i, spitArea:70+3*i,
     scoopAreaDaily:30+2*i, spitAreaDaily:34+1.7*i,
     scoopAspect:1.1+0.05*(i%8), spitAspect:1.2+0.04*(i%6),
-    scoopAspectDaily:1.15+0.04*(i%9), spitAspectDaily:1.22+0.03*(i%7),
+    scoopSpitAreaEarly:0.8+0.04*(i%9), scoopSpitAreaLate:1.1+0.03*(i%7),
     scoopSpitAreaIndex:0.85+0.03*(i%10),
     scoopNullAspect:1.07, spitNullAspect:1.07,
     centroidGap:1+0.2*(i%9), spawnDepthMedian:-0.8+0.1*(i%12),
@@ -113,12 +115,15 @@ const dom=new JSDOM(inlined,{runScripts:'dangerously',virtualConsole:vc,
       // the whole 2D surface a page might touch: a stub missing one method
       // fails the page for a reason a browser would never have
       drawImage(img){ lastDrawn = (img && img.src) || ''; },
-      putImageData(){},fillRect(){},clearRect(){},strokeRect(){},
+      putImageData(){ paintedMaps++; },
+      fillRect(){},clearRect(){},strokeRect(){},
       beginPath(){},closePath(){},moveTo(){},lineTo(){},arc(){},arcTo(){},
       ellipse(){},rect(){},bezierCurveTo(){},quadraticCurveTo(){},
       fill(){},stroke(){},clip(){},save(){},restore(){},translate(){},
       rotate(){},scale(){},setTransform(){},transform(){},
-      fillText(){},strokeText(){},setLineDash(){},
+      fillText(t){ (this._texts || (this._texts = [])).push(String(t));
+                   TEXTS.push(String(t)); },
+      strokeText(){},setLineDash(){},
       measureText(){return{width:0};},
       createLinearGradient(){return{addColorStop(){}};},
       globalAlpha:1,fillStyle:'',strokeStyle:'',lineWidth:1,lineCap:'',
@@ -200,6 +205,20 @@ setTimeout(()=>{
   // sweep that only asks whether any tooltip appeared passes with the
   // scaling removed, which makes it worthless for the one bug worth having
   // a test for.
+  // --scale-text: paintMap writes the ramp's two ends into the canvas, so
+  // what it wrote is visible in the stub's fillText log rather than only in
+  // pixels nobody can read back.
+  if (process.argv.indexOf('--scale-text') > 0) {
+    const lows = TEXTS.filter(t => t.indexOf('\u2212') === 0).length;
+    const highs = TEXTS.filter(t => t.indexOf('+') === 0).length;
+    const labelled = Math.min(lows, highs);
+    console.log('SCALE  maps ' + paintedMaps + ', labelled ' + labelled +
+                ', unlabelled ' + Math.max(0, paintedMaps - labelled) +
+                ', e.g. ' + TEXTS.filter(t => t.indexOf('\u2212') === 0)
+                                 .slice(0, 3).join(' '));
+    process.exit(paintedMaps > 0 && labelled >= paintedMaps ? 0 : 1);
+  }
+
   if (process.argv.indexOf('--hover') > 0) {
     const canvas = w.document.querySelector('.strip canvas');
     const tip = w.document.querySelector('.strip .tip');

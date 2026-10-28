@@ -46,9 +46,43 @@ function setMark(dayIndex, which, on) {
 // than whatever the default happens to be today. If the default ever changes,
 // the days someone actually looked at keep their answer.
 const PHASE_DEFAULT = 'late';
-const PHASES = ['late', 'early', 'none'];
-const PHASE_LABEL = { late: 'late build', early: 'early build',
-                      none: 'no build' };
+// In the order they were asked for, so clicking walks the list rather than
+// jumping about. Starting from the default, that is late, none, early,
+// middle, late.
+const PHASES = ['none', 'early', 'middle', 'late'];
+const PHASE_LABEL = { none: 'no build', early: 'early build',
+                      middle: 'middle build', late: 'late build' };
+
+// Per trial, and separate from excluding the trial outright: a trial can be
+// worth measuring sand and events in while being useless for reading a build
+// into phases. Saved by the same button as the day marks.
+function phaseExcluded(trial) {
+  const override = (PREP.overrides || {})[String(trial)] || {};
+  return !!override.phase_excluded;
+}
+
+function setPhaseExcluded(trial, on) {
+  PREP.overrides = PREP.overrides || {};
+  const key = String(trial);
+  PREP.overrides[key] = PREP.overrides[key] || {};
+  PREP.overrides[key].phase_excluded = on;
+  markDirty();
+}
+
+function phaseExcludeControl(trial, section) {
+  const box = el('label', 'daymark phasebox' + (phaseExcluded(trial) ? ' set' : ''));
+  const input = el('input');
+  input.type = 'checkbox';
+  input.checked = phaseExcluded(trial);
+  input.addEventListener('change', event => {
+    setPhaseExcluded(trial, event.target.checked);
+    box.className = 'daymark phasebox' + (event.target.checked ? ' set' : '');
+    section.className = 'trial' + (event.target.checked ? ' nophase' : '');
+  });
+  box.appendChild(input);
+  box.appendChild(el('span', null, 'exclude from phase analysis'));
+  return box;
+}
 
 function phaseOf(dayIndex) {
   return markOf(dayIndex).build_phase || PHASE_DEFAULT;
@@ -76,10 +110,18 @@ function phaseControl(day) {
 // detector misses because the fish is half out of frame.
 // A negative span means the days are out of order or a clock moved, and
 // anything past two days is not a night.
+function dayHours(day) {
+  return spanHours(day.first, day.last);
+}
+
 function nightHours(previous, day) {
-  const from = Date.parse(previous.last), to = Date.parse(day.first);
-  if (!isFinite(from) || !isFinite(to)) return null;
-  const hours = (to - from) / 3600000;
+  return spanHours(previous.last, day.first);
+}
+
+function spanHours(from, to) {
+  const a = Date.parse(from), b = Date.parse(to);
+  if (!isFinite(a) || !isFinite(b)) return null;
+  const hours = (b - a) / 3600000;
   return (hours > 0 && hours < 48) ? hours : null;
 }
 
@@ -110,8 +152,8 @@ const ROWS = [
   ['Depth camera', 'the tray that day', 'still'],
   ['Depth change', 'cumulative, from the sensor', 'depth'],
   ['From events', 'cumulative, spits minus scoops', 'fromEvents'],
-  ['24 hour change', 'this morning to the next', 'daily'],
-  ['Night change', 'last night of the previous day to this morning', 'night'],
+  ['Daily change', 'this day\u2019s own morning to evening', 'daily'],
+  ['Night change', 'the dark period, between the two days it spans', 'night'],
   ['Building', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
   ['Spawning', 'that day', 'spawn'],
   ['Spread', 'cumulative \u00b7 ellipse holding the chosen share', 'spread'],
@@ -415,6 +457,11 @@ function renderTrial(trial, days, host) {
         '<b>' + name + '</b><span>' + hint + '</span>'));
       block.forEach(day => {
         const slot = el('div', 'cell');
+        // The night belongs between the two days it spans, so its cell is
+        // shifted half a column left to straddle the boundary. The first day
+        // of a block has no night before it, so nothing hangs off the left
+        // edge of the matrix.
+        if (key === 'night') slot.className = 'cell straddle';
         table.appendChild(slot);
         fillCell(slot, key, trial, day, days, meta, cut);
       });
@@ -484,23 +531,22 @@ function fillCell(slot, key, trial, day, days, meta, cut) {
   }
 
   if (key === 'daily') {
-    // this day's own morning against the next, which is the change the depth
-    // page calls 24 hour: it isolates one day from the accumulated total
-    const position = days.findIndex(d => d.index === day.index);
-    const next = days[position + 1];
-    if (!next) {
-      slot.appendChild(el('div', 'cellnote', 'no following day in this trial'));
-      return;
-    }
-    Promise.all([loadDepth(day.firstPng), loadDepth(next.firstPng)])
-      .then(([morning, nextMorning]) => {
-        if (!morning || !nextMorning) return;
+    // This day's own lights-on period: its first frame against its last.
+    // Previously this was morning-to-next-morning, which is a 24 hour window
+    // and so includes the night -- the same sand the night row now shows. Day
+    // and night are each measured once, and together they are the 24 hours.
+    Promise.all([loadDepth(day.firstPng), loadDepth(day.lastPng)])
+      .then(([morning, evening]) => {
+        if (!morning || !evening) return;
         const canvas = el('canvas');
         const stage = el('div', 'stage');
         stage.appendChild(canvas);
         slot.appendChild(stage);
-        paintMap(canvas, cropped(difference(morning, nextMorning), meta, trial),
+        paintMap(canvas, cropped(difference(morning, evening), meta, trial),
                  meta, { range: 2 });
+        const hours = dayHours(day);
+        slot.appendChild(el('div', 'cellfoot',
+          hours === null ? 'span unknown' : hours.toFixed(1) + ' h light'));
       });
     return;
   }
@@ -764,12 +810,15 @@ function drawTrials(byTrial) {
   const body = document.getElementById('body');
   Object.keys(byTrial).sort((a, b) => a - b).forEach(trial => {
     const days = byTrial[trial];
-    const section = el('div', 'trial');
+    const section = el('div', 'trial' +
+      (phaseExcluded(+trial) ? ' nophase' : ''));
     const missing = (EVENTS.unplacedTrials || {})[trial];
-    section.appendChild(el('h3', null, 'Trial ' + trial +
+    const heading = el('h3', null, 'Trial ' + trial +
       '<span>' + days.length + ' days' +
       (missing ? ' \u00b7 no registration, ' + missing + ' events unplaced' : '') +
-      '</span>'));
+      '</span>');
+    heading.appendChild(phaseExcludeControl(+trial, section));
+    section.appendChild(heading);
     body.appendChild(section);
     renderTrial(+trial, days, section);
 
@@ -863,7 +912,18 @@ function saveMarks(whoField) {
   button.disabled = true;
   state.textContent = 'saving\u2026';
   fetch('marks', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                   body: JSON.stringify({ who: who, day_marks: PREP.day_marks || {} }) })
+                   body: JSON.stringify({
+                     who: who,
+                     day_marks: PREP.day_marks || {},
+                     // only this one field of each override, so a page
+                     // loaded before someone changed a registration cannot
+                     // post the old one back with it
+                     phase_excluded: Object.keys(PREP.overrides || {})
+                       .reduce((out, trial) => {
+                         out[trial] = !!PREP.overrides[trial].phase_excluded;
+                         return out;
+                       }, {}),
+                   }) })
     .then(response => response.json().then(body => ({ ok: response.ok, body })))
     .then(({ ok, body }) => {
       if (!ok) throw new Error(body.error || 'the server refused the change');
