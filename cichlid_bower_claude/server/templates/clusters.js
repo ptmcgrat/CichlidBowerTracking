@@ -43,13 +43,30 @@ const ROWS = [
    'that day \u00b7 scoop orange, spit blue, multiple green \u00b7 passes every filter',
    'build'],
   ['Build by type, dropped',
-   'that day \u00b7 the same three, from the events the filters reject',
+   'that day \u00b7 the same three, from the events the filters reject ' +
+   '\u00b7 ignores the fish filter',
    'buildFail'],
   ['Feed by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'feed'],
   ['Spawning', 'that day \u00b7 quivering events', 'spawn'],
-  ['Set aside', 'that day \u00b7 no clip black, outside the crop red', 'aside'],
+  ['Set aside', 'that day \u00b7 no clip black, outside the crop red ' +
+   '\u00b7 ignores the fish filter', 'aside'],
 ];
 const CUMULATIVE = new Set(['buildNet']);
+
+// The two rows whose job is to show what is being discarded, and which
+// therefore ignore the fish filter. An event the crop rejects sits outside
+// where fish are tracked, so no track matches it and its sex is Unknown --
+// which means filtering to a sex emptied exactly the rows that exist to say
+// what was thrown away. They show every rejected event, whatever the filter.
+const IGNORES_SEX = new Set(['buildFail', 'aside']);
+
+// Why an event was rejected, in the order the gate tests them, so a count
+// attributes each one to a single cause rather than to all that apply.
+const DROP_REASONS = [
+  ['no clip', (hasClip) => !hasClip],
+  ['outside crop', (hasClip, cropped) => cropped],
+  ['low confidence', () => true],
+];
 
 function unpackColumn(text, Type) {
   const binary = atob(text);
@@ -133,9 +150,6 @@ function bucketByDay(trial, days) {
     if (slot === undefined) continue;
     const hour = EVENTS.hour[i];
     if (hour < HOUR_FROM || hour >= HOUR_TO) continue;
-    // here rather than in the row predicates, so every row obeys it: the
-    // kept and dropped maps, the set aside row, all of them
-    if (SEX && (!EVENTS.sex || EVENTS.sex[i] !== SEX)) continue;
     buckets[slot].push(i);
   }
   return { buckets, cut };
@@ -342,10 +356,14 @@ function renderTrial(trial, days, host) {
     parts.forEach(part => { running[part] = new Float32Array(cells); totals[part] = 0; });
     const accumulates = CUMULATIVE.has(key);
 
+    const ignoresSex = IGNORES_SEX.has(key);
+    const reasons = DROP_REASONS.map(() => 0);
+
     days.forEach((day, position) => {
       const points = {};
       parts.forEach(part => { points[part] = []; });
       if (!accumulates) parts.forEach(part => { running[part].fill(0); totals[part] = 0; });
+      if (!accumulates) reasons.fill(0);
       // by position within the trial, which is how the buckets were filled.
       // Indexing by the global day index worked for trial one, whose days
       // start at zero, and silently emptied every trial after it.
@@ -353,16 +371,25 @@ function renderTrial(trial, days, host) {
         const hasClip = (EVENTS.flags[i] & 1) !== 0;
         const clustered = (EVENTS.flags[i] & 2) !== 0;
         if (!clustered && key !== 'aside') continue;
+        // the kept rows answer to the fish filter; the two that report what
+        // was discarded do not, or they empty themselves
+        if (SEX && !ignoresSex && (!EVENTS.sex || EVENTS.sex[i] !== SEX))
+          continue;
         const cropped = CROPPED[i] === 1;
         const bin = Math.min(grid.down - 1, (EVENTS.y[i] / BIN) | 0) * grid.across +
                     Math.min(grid.across - 1, (EVENTS.x[i] / BIN) | 0);
+        let counted = false;
         for (const part of parts) {
           if (!categories[part](EVENTS.bid[i], EVENTS.prob[i], cut, hasClip, cropped))
             continue;
           running[part][bin] += 1;
           totals[part] += 1;
+          counted = true;
           if (!accumulates) points[part].push([EVENTS.x[i], EVENTS.y[i]]);
         }
+        if (counted && key === 'buildFail')
+          for (let r = 0; r < DROP_REASONS.length; r++)
+            if (DROP_REASONS[r][1](hasClip, cropped)) { reasons[r] += 1; break; }
       }
       const slot = slots[key + ':' + day.index];
       if (!slot) return;
@@ -374,9 +401,15 @@ function renderTrial(trial, days, host) {
           '+' + totals.spit + ' spits, \u2212' + totals.scoop + ' scoops'));
         return;
       }
+      let foot = parts.map(part => totals[part]).join(' / ');
+      if (key === 'buildFail')
+        // why, not just how many: at confidence zero the only cause left is
+        // the crop, and the footer saying so is what makes that readable
+        foot += ' — ' + DROP_REASONS
+          .map(([name], r) => reasons[r] + ' ' + name).join(', ');
       slot.appendChild(scatterCell(
         parts.map(part => ({ points: points[part], colour: LAYER_COLOUR[part] })),
-        width, height, parts.map(part => totals[part]).join(' / ')));
+        width, height, foot));
     });
   });
 }

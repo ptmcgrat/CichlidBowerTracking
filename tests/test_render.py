@@ -246,7 +246,7 @@ def test_the_cluster_page_applies_the_crop_and_shows_what_it_dropped():
         return [int(g) for g in match.groups()]
 
     kept = first_pair('multiple green · passes every filter')
-    dropped = first_pair('from the events the filters reject')
+    dropped = first_pair('the filters reject · ignores the fish filter')
     assert min(dropped) > 0, dropped          # rejects really are rejected
     for a, b in zip(kept, dropped):
         assert a + b == 67, (kept, dropped)
@@ -292,6 +292,71 @@ def test_the_fish_filter_actually_narrows_every_row():
     # the cumulative maps still accumulate under the filter: a sex landing on
     # two days out of ten looks frozen, which the fixture's strides avoid
     assert male[0] < male[4], male
+
+
+@needs_jsdom
+def test_the_discard_rows_ignore_the_fish_filter():
+    """An event the crop rejects sits outside where fish are tracked, so no
+    track matches it and its sex is Unknown. Filtering to a sex therefore
+    emptied the two rows that exist to say what was thrown away -- 54
+    dropped spits at 'any' became 0 at male and 0 at female on a real
+    project. Those rows now report every rejected event whatever the filter,
+    while the kept rows still narrow.
+    """
+    import re
+    import subprocess
+
+    def text_for(sex):
+        result = subprocess.run(['node', str(HARNESS), 'clusters', '--text',
+                                 '--sex', str(sex)], cwd=str(ROOT),
+                                capture_output=True, encoding='utf-8',
+                                timeout=120)
+        out = (result.stdout or '') + (result.stderr or '')
+        assert result.returncode == 0, out
+        return [l[6:] for l in out.splitlines() if l.startswith('TEXT  ')][0]
+
+    def first_pair(text, after):
+        match = re.match(r'(\d+) / (\d+) / ', text.split(after, 1)[1])
+        assert match, text.split(after, 1)[1][:80]
+        return [int(g) for g in match.groups()]
+
+    DROPPED = 'the filters reject · ignores the fish filter'
+    ASIDE = 'outside the crop red · ignores the fish filter'
+    KEPT = 'multiple green · passes every filter'
+
+    everyone, male, female = text_for(0), text_for(1), text_for(2)
+
+    # the discard rows do not move
+    for anchor in (DROPPED, ASIDE):
+        assert first_pair(male, anchor) == first_pair(everyone, anchor), anchor
+        assert first_pair(female, anchor) == first_pair(everyone, anchor), anchor
+
+    # while the kept row does, in both directions, and to something smaller
+    kept_all = first_pair(everyone, KEPT)
+    kept_male = first_pair(male, KEPT)
+    kept_female = first_pair(female, KEPT)
+    assert kept_male != kept_all and kept_female != kept_all
+    assert kept_male[0] < kept_all[0] and kept_female[0] < kept_all[0]
+    assert kept_male != kept_female
+
+
+@needs_jsdom
+def test_the_dropped_row_says_why_each_event_was_dropped():
+    """'I'm not sure why those 54 were dropped' is the question the row has
+    to answer. The causes are attributed one apiece, in gate order, so they
+    sum to the events shown rather than double counting an event that fails
+    two tests."""
+    import re
+    text = _render('clusters')
+    tail = text.split('the filters reject · ignores the fish filter', 1)[1]
+    match = re.match(r'(\d+) / (\d+) / (\d+) — (\d+) no clip, '
+                     r'(\d+) outside crop, (\d+) low confidence', tail)
+    assert match, tail[:160]
+    counts = [int(g) for g in match.groups()]
+    shown, causes = counts[:3], counts[3:]
+    assert sum(causes) == sum(shown), (shown, causes)
+    # the crop is a real cause here, which is the whole reason it was added
+    assert causes[1] > 0, causes
 
 
 @needs_jsdom
