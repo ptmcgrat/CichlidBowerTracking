@@ -43,30 +43,16 @@ const ROWS = [
    'that day \u00b7 scoop orange, spit blue, multiple green \u00b7 passes every filter',
    'build'],
   ['Build by type, dropped',
-   'that day \u00b7 the same three, from the events the filters reject ' +
-   '\u00b7 ignores the fish filter',
+   'that day \u00b7 the same three, from every build event the filters reject ' +
+   '\u2014 the hour and fish filters included',
    'buildFail'],
   ['Feed by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'feed'],
   ['Spawning', 'that day \u00b7 quivering events', 'spawn'],
   ['Set aside', 'that day \u00b7 no clip black, outside the crop red ' +
-   '\u00b7 ignores the fish filter', 'aside'],
+   '\u00b7 answers to no filter', 'aside'],
 ];
 const CUMULATIVE = new Set(['buildNet']);
 
-// The two rows whose job is to show what is being discarded, and which
-// therefore ignore the fish filter. An event the crop rejects sits outside
-// where fish are tracked, so no track matches it and its sex is Unknown --
-// which means filtering to a sex emptied exactly the rows that exist to say
-// what was thrown away. They show every rejected event, whatever the filter.
-const IGNORES_SEX = new Set(['buildFail', 'aside']);
-
-// Why an event was rejected, in the order the gate tests them, so a count
-// attributes each one to a single cause rather than to all that apply.
-const DROP_REASONS = [
-  ['no clip', (hasClip) => !hasClip],
-  ['outside crop', (hasClip, cropped) => cropped],
-  ['low confidence', () => true],
-];
 
 function unpackColumn(text, Type) {
   const binary = atob(text);
@@ -148,8 +134,9 @@ function bucketByDay(trial, days) {
     if (EVENTS.trial[i] !== trial) continue;
     const slot = position[EVENTS.day[i]];
     if (slot === undefined) continue;
-    const hour = EVENTS.hour[i];
-    if (hour < HOUR_FROM || hour >= HOUR_TO) continue;
+    // the hour window is NOT applied here. It used to be, which meant an
+    // event outside it reached no row at all and so could not be reported as
+    // dropped. It is a gate like any other now, tested per row.
     buckets[slot].push(i);
   }
   return { buckets, cut };
@@ -260,43 +247,73 @@ function cell(layers, grid, width, height, foot) {
   return box;
 }
 
+// Predicates take one context object rather than a positional list. They used
+// to take (bid, prob, cut, hasClip, cropped) and forward them by hand, and a
+// caller that forwarded four of the five left `cropped` undefined -- so the
+// crop silently passed everything. Adding two more filters by the same route
+// would be adding two more chances at that bug.
+function context(index, cut) {
+  const hour = EVENTS.hour[index];
+  return {
+    bid: EVENTS.bid[index],
+    hasClip: (EVENTS.flags[index] & 1) !== 0,
+    cropped: CROPPED[index] === 1,
+    confident: EVENTS.prob[index] >= cut,
+    inHours: hour >= HOUR_FROM && hour < HOUR_TO,
+    sexOk: !SEX || !!(EVENTS.sex && EVENTS.sex[index] === SEX),
+  };
+}
+
+// Every gate a kept event clears. The crop is one of them: it was computed on
+// every redraw and then used only to colour the set aside row, so every other
+// row drew events from outside the tray, which is what put feeding spits on
+// the glass.
+function passes(c) {
+  return c.hasClip && !c.cropped && c.confident && c.inHours && c.sexOk &&
+         c.bid !== 255;
+}
+
+// Why an event was rejected, tested in gate order and attributed to the first
+// cause that applies, so the causes sum to the events shown rather than
+// counting one event under every test it fails.
+const DROP_REASONS = [
+  ['no clip', c => !c.hasClip],
+  ['outside crop', c => c.cropped],
+  ['low confidence', c => !c.confident],
+  ['outside hours', c => !c.inHours],
+  ['other sex', c => !c.sexOk],
+];
+
 function categoriesFor(key) {
   const code = EVENTS.code;
-  // a real event: clipped, classified, and part of a cluster. LID -1 marks a
-  // transition that never clustered, which is not an event.
-  // The four point crop belongs here too. It was computed every redraw and
-  // then used only to colour the set aside row, so every other row drew
-  // events from outside the tray -- which is what put feeding spits on the
-  // glass. An event outside the crop is not an event about this tank.
-  const ok = (bid, prob, cut, hasClip, cropped) =>
-    hasClip && !cropped && prob >= cut && bid !== 255;
-  // the same build events seen from the other side: predicted as building,
-  // inside the day and hour window, and thrown out by one of the filters
-  // above. Clustering is still required, because an unclustered transition
-  // is not an event at all and belongs in the set aside row.
-  const dropped = (bid, prob, cut, hasClip, cropped) =>
-    !ok(bid, prob, cut, hasClip, cropped) && bid !== 255;
+  // the same build events seen from the other side: predicted as building and
+  // rejected by any gate at all, the sex and hour filters included, so the row
+  // is a complete account of what is not in the row above it. Clustering is
+  // still required, because an unclustered transition is not an event and
+  // belongs in the set aside row.
+  const dropped = c => !passes(c) && c.bid !== 255;
   if (key === 'buildFail')
-    return { scoop: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.c,
-             spit: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.p,
-             multiple: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.b };
+    return { scoop: c => dropped(c) && c.bid === code.c,
+             spit: c => dropped(c) && c.bid === code.p,
+             multiple: c => dropped(c) && c.bid === code.b };
   if (key === 'buildNet')
     // signed: a spit puts sand down and a scoop takes it away, so summing them
     // shows where the bower is being built against where it is being dug out
-    return { spit: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.p,
-             scoop: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.c };
+    return { spit: c => passes(c) && c.bid === code.p,
+             scoop: c => passes(c) && c.bid === code.c };
   if (key === 'build')
-    return { scoop: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.c,
-             spit: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.p,
-             multiple: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.b };
+    return { scoop: c => passes(c) && c.bid === code.c,
+             spit: c => passes(c) && c.bid === code.p,
+             multiple: c => passes(c) && c.bid === code.b };
   if (key === 'feed')
-    return { scoop: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.f,
-             spit: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.t,
-             multiple: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.m };
+    return { scoop: c => passes(c) && c.bid === code.f,
+             spit: c => passes(c) && c.bid === code.t,
+             multiple: c => passes(c) && c.bid === code.m };
   if (key === 'spawn')
-    return { spawn: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.s };
-  return { noclip: (b, p, c, hasClip) => !hasClip,
-           cropped: (b, p, c, hasClip, cropped) => hasClip && cropped };
+    return { spawn: c => passes(c) && c.bid === code.s };
+  // set aside reports what never became usable, so it answers to no filter
+  return { noclip: c => !c.hasClip,
+           cropped: c => c.hasClip && c.cropped };
 }
 
 const LAYER_COLOUR = { all: COLOURS.scoop, scoop: COLOURS.scoop, spit: COLOURS.spit,
@@ -356,7 +373,6 @@ function renderTrial(trial, days, host) {
     parts.forEach(part => { running[part] = new Float32Array(cells); totals[part] = 0; });
     const accumulates = CUMULATIVE.has(key);
 
-    const ignoresSex = IGNORES_SEX.has(key);
     const reasons = DROP_REASONS.map(() => 0);
 
     days.forEach((day, position) => {
@@ -368,20 +384,14 @@ function renderTrial(trial, days, host) {
       // Indexing by the global day index worked for trial one, whose days
       // start at zero, and silently emptied every trial after it.
       for (const i of buckets[position] || []) {
-        const hasClip = (EVENTS.flags[i] & 1) !== 0;
         const clustered = (EVENTS.flags[i] & 2) !== 0;
         if (!clustered && key !== 'aside') continue;
-        // the kept rows answer to the fish filter; the two that report what
-        // was discarded do not, or they empty themselves
-        if (SEX && !ignoresSex && (!EVENTS.sex || EVENTS.sex[i] !== SEX))
-          continue;
-        const cropped = CROPPED[i] === 1;
+        const c = context(i, cut);
         const bin = Math.min(grid.down - 1, (EVENTS.y[i] / BIN) | 0) * grid.across +
                     Math.min(grid.across - 1, (EVENTS.x[i] / BIN) | 0);
         let counted = false;
         for (const part of parts) {
-          if (!categories[part](EVENTS.bid[i], EVENTS.prob[i], cut, hasClip, cropped))
-            continue;
+          if (!categories[part](c)) continue;
           running[part][bin] += 1;
           totals[part] += 1;
           counted = true;
@@ -389,7 +399,7 @@ function renderTrial(trial, days, host) {
         }
         if (counted && key === 'buildFail')
           for (let r = 0; r < DROP_REASONS.length; r++)
-            if (DROP_REASONS[r][1](hasClip, cropped)) { reasons[r] += 1; break; }
+            if (DROP_REASONS[r][1](c)) { reasons[r] += 1; break; }
       }
       const slot = slots[key + ':' + day.index];
       if (!slot) return;

@@ -40,7 +40,12 @@ for(let i=0;i<N;i++){const d=i%ND;
   else { x.push(200+((i*37)%900)); y.push(150+((i*53)%700)); }
   bid.push(BIDS.indexOf(['c','p','b','f','t','m','s','o','x'][i%9]));
   prob.push(unsure ? 100 : 200); flags.push(noclip ? 2 : 3); day.push(d);
-  trial.push(d<5?1:2); hour.push(8+(i%10));
+  // 6 to 16, so some events fall outside the 8-18 window and the hour gate
+  // has something to reject. All inside it meant the dropped row could not
+  // be shown to report that cause at all. The period is coprime with every
+  // other stride here: 14 put the male events on two hours out of fourteen,
+  // and 13 would have made every out-of-crop event out-of-hours as well.
+  trial.push(d<5?1:2); hour.push(6+(i%11));
   // mostly unattributed, as the real cluster files are: 0 unknown, 1 male,
   // 2 female. The two sexes deliberately do not sum to the whole. The strides
   // are coprime with ND, or the sexes land on two days out of ten and the

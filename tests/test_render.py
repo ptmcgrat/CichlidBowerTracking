@@ -229,10 +229,9 @@ def test_the_cluster_page_applies_the_crop_and_shows_what_it_dropped():
     assert 'Build by type, kept' in text
     assert 'Build by type, dropped' in text
 
-    # trial one's fixture holds 332 build spits. The page drew all 332 while
-    # the crop went unapplied; with it applied the net row keeps 275.
+    # the net row keeps only what clears every gate
     net = [int(m) for m in re.findall(r'\+(\d+) spits', text)]
-    assert net and net[4] == 275, net
+    assert net and net[4] == 226, net
 
     # Adjacent cells abut in the flattened text, so read the first triple of
     # each row. The fixture puts 67 of each build type in day one, and the
@@ -246,7 +245,7 @@ def test_the_cluster_page_applies_the_crop_and_shows_what_it_dropped():
         return [int(g) for g in match.groups()]
 
     kept = first_pair('multiple green · passes every filter')
-    dropped = first_pair('the filters reject · ignores the fish filter')
+    dropped = first_pair('hour and fish filters included')
     assert min(dropped) > 0, dropped          # rejects really are rejected
     for a, b in zip(kept, dropped):
         assert a + b == 67, (kept, dropped)
@@ -283,7 +282,7 @@ def test_the_fish_filter_actually_narrows_every_row():
         return [int(m) for m in re.findall(r'\+(\d+) spits', text)]
 
     everyone, male, female = kept(0), kept(1), kept(2)
-    assert everyone[4] == 275, everyone
+    assert everyone[4] == 226, everyone
     # each sex is a real, non-empty subset
     assert 0 < male[4] < everyone[4], (male, everyone)
     assert 0 < female[4] < everyone[4], (female, everyone)
@@ -295,68 +294,95 @@ def test_the_fish_filter_actually_narrows_every_row():
 
 
 @needs_jsdom
-def test_the_discard_rows_ignore_the_fish_filter():
-    """An event the crop rejects sits outside where fish are tracked, so no
-    track matches it and its sex is Unknown. Filtering to a sex therefore
-    emptied the two rows that exist to say what was thrown away -- 54
-    dropped spits at 'any' became 0 at male and 0 at female on a real
-    project. Those rows now report every rejected event whatever the filter,
-    while the kept rows still narrow.
+def _clusters_at(sex):
+    import subprocess
+    result = subprocess.run(['node', str(HARNESS), 'clusters', '--text',
+                             '--sex', str(sex)], cwd=str(ROOT),
+                            capture_output=True, encoding='utf-8', timeout=120)
+    out = (result.stdout or '') + (result.stderr or '')
+    assert result.returncode == 0, out
+    return [l[6:] for l in out.splitlines() if l.startswith('TEXT  ')][0]
+
+
+_KEPT = 'multiple green · passes every filter'
+_DROPPED = 'hour and fish filters included'
+_ASIDE = 'outside the crop red · answers to no filter'
+
+
+def _first_pair(text, after):
+    """The first two of the first cell's counts.
+
+    Only two can be read: the third runs straight into the next cell's first
+    count with no separator ('46 / 46 / 464 / 44 / 46'), so a regex for three
+    reads the boundary as part of the number.
     """
     import re
-    import subprocess
-
-    def text_for(sex):
-        result = subprocess.run(['node', str(HARNESS), 'clusters', '--text',
-                                 '--sex', str(sex)], cwd=str(ROOT),
-                                capture_output=True, encoding='utf-8',
-                                timeout=120)
-        out = (result.stdout or '') + (result.stderr or '')
-        assert result.returncode == 0, out
-        return [l[6:] for l in out.splitlines() if l.startswith('TEXT  ')][0]
-
-    def first_pair(text, after):
-        match = re.match(r'(\d+) / (\d+) / ', text.split(after, 1)[1])
-        assert match, text.split(after, 1)[1][:80]
-        return [int(g) for g in match.groups()]
-
-    DROPPED = 'the filters reject · ignores the fish filter'
-    ASIDE = 'outside the crop red · ignores the fish filter'
-    KEPT = 'multiple green · passes every filter'
-
-    everyone, male, female = text_for(0), text_for(1), text_for(2)
-
-    # the discard rows do not move
-    for anchor in (DROPPED, ASIDE):
-        assert first_pair(male, anchor) == first_pair(everyone, anchor), anchor
-        assert first_pair(female, anchor) == first_pair(everyone, anchor), anchor
-
-    # while the kept row does, in both directions, and to something smaller
-    kept_all = first_pair(everyone, KEPT)
-    kept_male = first_pair(male, KEPT)
-    kept_female = first_pair(female, KEPT)
-    assert kept_male != kept_all and kept_female != kept_all
-    assert kept_male[0] < kept_all[0] and kept_female[0] < kept_all[0]
-    assert kept_male != kept_female
+    tail = text.split(after, 1)[1]
+    match = re.match(r'(\d+) / (\d+) / ', tail)
+    assert match, tail[:100]
+    return [int(g) for g in match.groups()]
 
 
 @needs_jsdom
-def test_the_dropped_row_says_why_each_event_was_dropped():
+def test_every_build_event_is_either_kept_or_dropped_under_any_filter():
+    """The dropped row is a complete account of what is not in the row above
+    it, so narrowing a filter moves events across rather than losing them.
+
+    This failed twice before. First the sex filter was applied upstream of
+    every row, so filtering to a sex emptied the dropped row instead of
+    filling it -- 54 dropped spits at 'any' became 0 at male on a real
+    project. Then the hour window was applied in the bucketing, so an event
+    outside it reached no row at all and could not be reported as dropped.
+    The fixture puts 67 of each build type in day one, and that total has to
+    survive every setting of both filters.
+    """
+    for sex in (0, 1, 2):
+        text = _clusters_at(sex)
+        kept = _first_pair(text, _KEPT)
+        dropped = _first_pair(text, _DROPPED)
+        for a, b in zip(kept, dropped):
+            assert a + b == 67, (sex, kept, dropped)
+        # and filtering really narrows: a kept row that ignored the filter
+        # would conserve the total just as well
+        if sex:
+            assert sum(kept) < 67 * 3 / 2, (sex, kept)
+
+
+@needs_jsdom
+def test_the_dropped_row_attributes_every_event_to_one_cause():
     """'I'm not sure why those 54 were dropped' is the question the row has
-    to answer. The causes are attributed one apiece, in gate order, so they
-    sum to the events shown rather than double counting an event that fails
-    two tests."""
+    to answer. Causes are tested in gate order and counted once each, so
+    they sum to the events shown rather than counting an event under every
+    test it fails. All five have to be reachable, or a cause that never
+    fires is a cause that was never checked.
+    """
     import re
-    text = _render('clusters')
-    tail = text.split('the filters reject · ignores the fish filter', 1)[1]
-    match = re.match(r'(\d+) / (\d+) / (\d+) — (\d+) no clip, '
-                     r'(\d+) outside crop, (\d+) low confidence', tail)
-    assert match, tail[:160]
-    counts = [int(g) for g in match.groups()]
-    shown, causes = counts[:3], counts[3:]
-    assert sum(causes) == sum(shown), (shown, causes)
-    # the crop is a real cause here, which is the whole reason it was added
-    assert causes[1] > 0, causes
+    seen = set()
+    for sex in (0, 1, 2):
+        text = _clusters_at(sex)
+        tail = text.split(_DROPPED, 1)[1]
+        match = re.match(
+            r'(\d+) / (\d+) / (\d+) — (\d+) no clip, (\d+) outside crop, '
+            r'(\d+) low confidence, (\d+) outside hours, (\d+) other sex',
+            tail)
+        assert match, tail[:200]
+        counts = [int(g) for g in match.groups()]
+        shown, causes = counts[:3], counts[3:]
+        assert sum(causes) == sum(shown), (sex, shown, causes)
+        for name, value in zip(('no clip', 'crop', 'confidence', 'hours',
+                                'sex'), causes):
+            if value:
+                seen.add(name)
+    assert seen == {'no clip', 'crop', 'confidence', 'hours', 'sex'}, seen
+
+
+@needs_jsdom
+def test_set_aside_answers_to_no_filter():
+    """It reports what never became usable at all, so neither the fish nor
+    the hour filter may change it."""
+    everyone = _first_pair(_clusters_at(0), _ASIDE)
+    assert _first_pair(_clusters_at(1), _ASIDE) == everyone
+    assert _first_pair(_clusters_at(2), _ASIDE) == everyone
 
 
 @needs_jsdom
