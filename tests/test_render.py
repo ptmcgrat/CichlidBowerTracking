@@ -224,21 +224,32 @@ def test_the_cluster_page_applies_the_crop_and_shows_what_it_dropped():
     """
     import re
     text = _render('clusters')
-    assert 'Building, kept' in text
-    assert 'Building, dropped' in text
-
-    kept = [int(m) for m in re.findall(r'\+(\d+) spits', text)]
-    # the counts run on from the end of the row's own caption, and adjacent
-    # cells abut in the flattened text, so only the two ends can be read
-    tail = text.split('the filters reject', 1)[1].split('Build by type', 1)[0]
-    assert kept, text[:400]
+    # the cumulative net row is left whole; it is Build by type that splits
+    assert 'Buildingcumulative · spits minus scoops' in text
+    assert 'Build by type, kept' in text
+    assert 'Build by type, dropped' in text
 
     # trial one's fixture holds 332 build spits. The page drew all 332 while
-    # the crop went unapplied; it now keeps 275 and drops 57, which is the
-    # whole of them and no more.
-    assert kept[4] == 275, kept
-    assert tail.startswith('11 / 11'), tail
-    assert tail.endswith('57 / 56'), tail
+    # the crop went unapplied; with it applied the net row keeps 275.
+    net = [int(m) for m in re.findall(r'\+(\d+) spits', text)]
+    assert net and net[4] == 275, net
+
+    # Adjacent cells abut in the flattened text, so read the first triple of
+    # each row. The fixture puts 67 of each build type in day one, and the
+    # two halves have to account for all of them and no more.
+    # only the first two of the triple can be read: the third abuts the next
+    # cell's first count with no separator ('56 / 56 / 5655 / 55 / 56')
+    def first_pair(after):
+        tail = text.split(after, 1)[1]
+        match = re.match(r'(\d+) / (\d+) / ', tail)
+        assert match, tail[:80]
+        return [int(g) for g in match.groups()]
+
+    kept = first_pair('multiple green · passes every filter')
+    dropped = first_pair('from the events the filters reject')
+    assert min(dropped) > 0, dropped          # rejects really are rejected
+    for a, b in zip(kept, dropped):
+        assert a + b == 67, (kept, dropped)
 
 
 @needs_jsdom

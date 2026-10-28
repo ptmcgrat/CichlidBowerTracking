@@ -38,17 +38,18 @@ const COLOURS = {
 // binning them only throws it away.
 const ROWS = [
   ['Pi camera', 'the tank that day', 'still'],
-  ['Building, kept', 'cumulative \u00b7 spits minus scoops \u00b7 passes every filter',
-   'buildNet'],
-  ['Building, dropped',
-   'cumulative \u00b7 the same map from build events the filters reject',
-   'buildNetFail'],
-  ['Build by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
+  ['Building', 'cumulative \u00b7 spits minus scoops', 'buildNet'],
+  ['Build by type, kept',
+   'that day \u00b7 scoop orange, spit blue, multiple green \u00b7 passes every filter',
+   'build'],
+  ['Build by type, dropped',
+   'that day \u00b7 the same three, from the events the filters reject',
+   'buildFail'],
   ['Feed by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'feed'],
   ['Spawning', 'that day \u00b7 quivering events', 'spawn'],
   ['Set aside', 'that day \u00b7 no clip black, outside the crop red', 'aside'],
 ];
-const CUMULATIVE = new Set(['buildNet', 'buildNetFail']);
+const CUMULATIVE = new Set(['buildNet']);
 
 function unpackColumn(text, Type) {
   const binary = atob(text);
@@ -261,9 +262,10 @@ function categoriesFor(key) {
   // is not an event at all and belongs in the set aside row.
   const dropped = (bid, prob, cut, hasClip, cropped) =>
     !ok(bid, prob, cut, hasClip, cropped) && bid !== 255;
-  if (key === 'buildNetFail')
-    return { spit: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.p,
-             scoop: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.c };
+  if (key === 'buildFail')
+    return { scoop: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.c,
+             spit: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.p,
+             multiple: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.b };
   if (key === 'buildNet')
     // signed: a spit puts sand down and a scoop takes it away, so summing them
     // shows where the bower is being built against where it is being dug out
