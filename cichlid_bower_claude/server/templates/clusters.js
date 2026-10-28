@@ -11,7 +11,14 @@
 
 let EVENTS = null;
 let CONFIDENCE = 0.67;
-let HOUR_FROM = 0, HOUR_TO = 24;
+// 8am to 6pm: the lit period, and the same window features.py analyses. The
+// page opened on 0 to 24 and so disagreed with every number computed from it.
+const HOUR_MIN = 8, HOUR_MAX = 18;
+let HOUR_FROM = HOUR_MIN, HOUR_TO = HOUR_MAX;
+// 0 shows every event, 1 male, 2 female -- the codes the collector packs.
+// Filtering to a sex drops the unattributed events rather than splitting
+// them, so the two sexes do not add up to all, and the control says so.
+let SEX = 0;
 let BIN = 20;            // pixels per bin, in Pi coordinates
 let VIEW = 'maps';       // maps | stats
 
@@ -31,13 +38,17 @@ const COLOURS = {
 // binning them only throws it away.
 const ROWS = [
   ['Pi camera', 'the tank that day', 'still'],
-  ['Building', 'cumulative \u00b7 spits minus scoops', 'buildNet'],
+  ['Building, kept', 'cumulative \u00b7 spits minus scoops \u00b7 passes every filter',
+   'buildNet'],
+  ['Building, dropped',
+   'cumulative \u00b7 the same map from build events the filters reject',
+   'buildNetFail'],
   ['Build by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'build'],
   ['Feed by type', 'that day \u00b7 scoop orange, spit blue, multiple green', 'feed'],
   ['Spawning', 'that day \u00b7 quivering events', 'spawn'],
   ['Set aside', 'that day \u00b7 no clip black, outside the crop red', 'aside'],
 ];
-const CUMULATIVE = new Set(['buildNet']);
+const CUMULATIVE = new Set(['buildNet', 'buildNetFail']);
 
 function unpackColumn(text, Type) {
   const binary = atob(text);
@@ -64,6 +75,11 @@ function loadEvents() {
         day: unpackColumn(packed.day, Uint16Array),
         trial: unpackColumn(packed.trial, Uint8Array),
         hour: unpackColumn(packed.hour, Uint8Array),
+        // absent in anything collected before the cluster file's Sex column
+        // was packed. Null, not a zero filled array: the control has to be
+        // able to tell 'not collected' from 'every event unknown'.
+        sex: packed.sex ? unpackColumn(packed.sex, Uint8Array) : null,
+        sexes: packed.sexes || null,
         summary: packed.summary,
       };
       return EVENTS;
@@ -116,6 +132,9 @@ function bucketByDay(trial, days) {
     if (slot === undefined) continue;
     const hour = EVENTS.hour[i];
     if (hour < HOUR_FROM || hour >= HOUR_TO) continue;
+    // here rather than in the row predicates, so every row obeys it: the
+    // kept and dropped maps, the set aside row, all of them
+    if (SEX && (!EVENTS.sex || EVENTS.sex[i] !== SEX)) continue;
     buckets[slot].push(i);
   }
   return { buckets, cut };
@@ -230,22 +249,36 @@ function categoriesFor(key) {
   const code = EVENTS.code;
   // a real event: clipped, classified, and part of a cluster. LID -1 marks a
   // transition that never clustered, which is not an event.
-  const ok = (bid, prob, cut, hasClip) => hasClip && prob >= cut && bid !== 255;
+  // The four point crop belongs here too. It was computed every redraw and
+  // then used only to colour the set aside row, so every other row drew
+  // events from outside the tray -- which is what put feeding spits on the
+  // glass. An event outside the crop is not an event about this tank.
+  const ok = (bid, prob, cut, hasClip, cropped) =>
+    hasClip && !cropped && prob >= cut && bid !== 255;
+  // the same build events seen from the other side: predicted as building,
+  // inside the day and hour window, and thrown out by one of the filters
+  // above. Clustering is still required, because an unclustered transition
+  // is not an event at all and belongs in the set aside row.
+  const dropped = (bid, prob, cut, hasClip, cropped) =>
+    !ok(bid, prob, cut, hasClip, cropped) && bid !== 255;
+  if (key === 'buildNetFail')
+    return { spit: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.p,
+             scoop: (b, p, c, h, x) => dropped(b, p, c, h, x) && b === code.c };
   if (key === 'buildNet')
     // signed: a spit puts sand down and a scoop takes it away, so summing them
     // shows where the bower is being built against where it is being dug out
-    return { spit: (b, p, c, h) => ok(b, p, c, h) && b === code.p,
-             scoop: (b, p, c, h) => ok(b, p, c, h) && b === code.c };
+    return { spit: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.p,
+             scoop: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.c };
   if (key === 'build')
-    return { scoop: (b, p, c, h) => ok(b, p, c, h) && b === code.c,
-             spit: (b, p, c, h) => ok(b, p, c, h) && b === code.p,
-             multiple: (b, p, c, h) => ok(b, p, c, h) && b === code.b };
+    return { scoop: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.c,
+             spit: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.p,
+             multiple: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.b };
   if (key === 'feed')
-    return { scoop: (b, p, c, h) => ok(b, p, c, h) && b === code.f,
-             spit: (b, p, c, h) => ok(b, p, c, h) && b === code.t,
-             multiple: (b, p, c, h) => ok(b, p, c, h) && b === code.m };
+    return { scoop: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.f,
+             spit: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.t,
+             multiple: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.m };
   if (key === 'spawn')
-    return { spawn: (b, p, c, h) => ok(b, p, c, h) && b === code.s };
+    return { spawn: (b, p, c, h, x) => ok(b, p, c, h, x) && b === code.s };
   return { noclip: (b, p, c, hasClip) => !hasClip,
            cropped: (b, p, c, hasClip, cropped) => hasClip && cropped };
 }
@@ -374,8 +407,12 @@ function build() {
   const summary = EVENTS.summary || {};
   document.getElementById('meta').innerHTML =
     [['Tank', D.tankID], ['Events', EVENTS.n],
-     ['No clip', summary.noClip || 0],
-     ['Days', D.days.length], ['Trials', D.trials.length]]
+     ['No clip', summary.noClip || 0]]
+    .concat(summary.bySex
+      ? [['Male', summary.bySex.Male || 0],
+         ['Female', summary.bySex.Female || 0]]
+      : [])
+    .concat([['Days', D.days.length], ['Trials', D.trials.length]])
     .map(([k, v]) => '<div>' + k + '<b>' + v + '</b></div>').join('');
 
   const bar = document.getElementById('controls');
@@ -384,8 +421,18 @@ function build() {
     '<input type="range" id="cr" min="0" max="0.99" step="0.01" value="' +
       CONFIDENCE + '">' +
     '<label>Hours <b id="hv">' + HOUR_FROM + '\u2013' + HOUR_TO + '</b></label>' +
-    '<input type="range" id="h1" min="0" max="24" step="1" value="' + HOUR_FROM + '">' +
-    '<input type="range" id="h2" min="0" max="24" step="1" value="' + HOUR_TO + '">' +
+    '<input type="range" id="h1" min="' + HOUR_MIN + '" max="' + HOUR_MAX +
+      '" step="1" value="' + HOUR_FROM + '">' +
+    '<input type="range" id="h2" min="' + HOUR_MIN + '" max="' + HOUR_MAX +
+      '" step="1" value="' + HOUR_TO + '">' +
+    (EVENTS.sex
+      ? '<label>Fish <select id="sx">' +
+          '<option value="0">any</option>' +
+          '<option value="1">male</option>' +
+          '<option value="2">female</option>' +
+        '</select></label>'
+      : '<span class="stat">no sex column in this project’s cluster ' +
+        'file — recollect to filter by fish</span>') +
     '<label>Bin <b id="bv">' + BIN + '</b> px</label>' +
     '<input type="range" id="br" min="5" max="80" step="5" value="' + BIN + '">' +
     '<span class="spacer"></span><span class="stat" id="note"></span>';
@@ -416,6 +463,11 @@ function build() {
     BIN = parseInt(event.target.value, 10);
     bar.querySelector('#bv').textContent = BIN;
     later();
+  });
+  const sexControl = bar.querySelector('#sx');
+  if (sexControl) sexControl.addEventListener('change', event => {
+    SEX = parseInt(event.target.value, 10);
+    draw();
   });
 
   const tabs = document.getElementById('tabs');

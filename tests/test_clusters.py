@@ -182,3 +182,45 @@ def test_an_ordinary_bundle_reports_nothing_clipped(tmp_path):
     size, clipped = B.write_bundle(tmp_path / 'b.npz',
                                    {'first': np.full((2, 4, 4), 60.0)})
     assert clipped == 0
+
+
+def test_sex_is_packed_per_event_and_unknown_is_its_own_code():
+    """The cluster file carries Sex on every row beside TrackID, so there is
+    no track table to join -- but an event the tracker could not attribute
+    must stay unknown rather than being folded into one of the sexes."""
+    table = make_table(30)
+    table['Sex'] = (['Male', 'Female', 'Unknown'] * 10)[:len(table)]
+    packed = C.pack(table, [])
+    sex = unpack(packed, 'sex', np.uint8)
+    assert packed['sexes'] == ['Unknown', 'Male', 'Female']
+    assert len(sex) == len(table)
+    assert set(sex.tolist()) == {0, 1, 2}
+    # the codes line up with the names, row by row
+    for value, name in zip(sex, table['Sex']):
+        assert C.SEXES[value] == name
+
+
+def test_an_unrecognised_sex_falls_back_to_unknown():
+    """Anything the file calls something else -- a blank, a new label from a
+    later pipeline -- is unknown, not silently male."""
+    table = make_table(6)
+    table['Sex'] = ['Male', '', 'Indeterminate', None, 'Female', 'male']
+    sex = unpack(C.pack(table, []), 'sex', np.uint8)
+    assert sex.tolist() == [1, 0, 0, 0, 2, 0]
+
+
+def test_a_cluster_file_without_sex_omits_the_key_rather_than_zeroing_it():
+    """Everything collected before Sex was packed has no such column. Absent
+    and 'every event unknown' are different states: the page offers the
+    filter only in the first case, and would otherwise show a control that
+    can only empty itself."""
+    packed = C.pack(make_table(10), [])
+    assert 'sex' not in packed
+    assert 'sexes' not in packed
+
+
+def test_the_summary_counts_by_sex():
+    table = make_table(30)
+    table['Sex'] = (['Male', 'Female', 'Unknown'] * 10)[:len(table)]
+    out = C.summarise(table)
+    assert out['bySex'] == {'Male': 10, 'Female': 10, 'Unknown': 10}

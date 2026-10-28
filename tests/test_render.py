@@ -212,6 +212,78 @@ def test_a_new_bower_mark_shortens_the_trial_on_the_features_page():
 
 
 @needs_jsdom
+def test_the_cluster_page_applies_the_crop_and_shows_what_it_dropped():
+    """The four point crop was computed every redraw and then used only to
+    colour the set aside row, so Build, Feed, Spawning and Building all drew
+    events from outside the tray -- feeding spits on the glass.
+
+    The fixture fails a known share of events three ways. Both halves have to
+    be non-empty, and together they have to account for every build event:
+    a kept row that still drew the rejects would leave the dropped row at
+    zero, and a dropped row double counting would break the sum.
+    """
+    import re
+    text = _render('clusters')
+    assert 'Building, kept' in text
+    assert 'Building, dropped' in text
+
+    kept = [int(m) for m in re.findall(r'\+(\d+) spits', text)]
+    # the counts run on from the end of the row's own caption, and adjacent
+    # cells abut in the flattened text, so only the two ends can be read
+    tail = text.split('the filters reject', 1)[1].split('Build by type', 1)[0]
+    assert kept, text[:400]
+
+    # trial one's fixture holds 332 build spits. The page drew all 332 while
+    # the crop went unapplied; it now keeps 275 and drops 57, which is the
+    # whole of them and no more.
+    assert kept[4] == 275, kept
+    assert tail.startswith('11 / 11'), tail
+    assert tail.endswith('57 / 56'), tail
+
+
+@needs_jsdom
+def test_the_cluster_hours_cannot_leave_the_lit_period():
+    """8am to 6pm are the ends, and the page used to open on 0 to 24 -- so it
+    disagreed with every number features.py computed from the same events."""
+    text = _render('clusters')
+    assert 'Hours 8–18' in text
+
+
+@needs_jsdom
+def test_the_fish_filter_actually_narrows_every_row():
+    """Working the control the way a person would, and checking the maps
+    moved. A filter wired to nothing renders identically, which is the only
+    failure worth testing for here.
+
+    The two sexes must not sum to all: most events are unattributed, and
+    filtering drops those rather than splitting them between the sexes.
+    """
+    import re
+    import subprocess
+
+    def kept(sex):
+        result = subprocess.run(['node', str(HARNESS), 'clusters', '--text',
+                                 '--sex', str(sex)], cwd=str(ROOT),
+                                capture_output=True, encoding='utf-8',
+                                timeout=120)
+        out = (result.stdout or '') + (result.stderr or '')
+        assert result.returncode == 0, out
+        text = [l[6:] for l in out.splitlines() if l.startswith('TEXT  ')][0]
+        return [int(m) for m in re.findall(r'\+(\d+) spits', text)]
+
+    everyone, male, female = kept(0), kept(1), kept(2)
+    assert everyone[4] == 275, everyone
+    # each sex is a real, non-empty subset
+    assert 0 < male[4] < everyone[4], (male, everyone)
+    assert 0 < female[4] < everyone[4], (female, everyone)
+    # and the unattributed events are dropped, not handed to a sex
+    assert male[4] + female[4] < everyone[4], (male, female, everyone)
+    # the cumulative maps still accumulate under the filter: a sex landing on
+    # two days out of ten looks frozen, which the fixture's strides avoid
+    assert male[0] < male[4], male
+
+
+@needs_jsdom
 def test_every_depth_map_states_its_scale():
     """A diverging ramp centred on zero looks identical at 0.5 cm and at
     5 cm, so a map without its ends written down cannot be read. Drawn into

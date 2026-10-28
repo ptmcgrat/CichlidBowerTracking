@@ -31,6 +31,14 @@ LABELS = {'c': 'bower scoop', 'p': 'bower spit', 'b': 'bower multiple',
           'x': 'no fish other'}
 NO_PREDICTION = 255
 
+# Sex as the cluster file writes it, packed to a byte. Unknown is its own
+# value rather than a missing one: an event the tracker could not attribute
+# is a fact about the data, and folding it into either sex would invent
+# evidence. Anything the file calls something else lands on unknown.
+SEXES = ('Unknown', 'Male', 'Female')
+SEX_CODE = {name: index for index, name in enumerate(SEXES)}
+SEX_UNKNOWN = 0
+
 FLAG_CLIP = 1          # a clip was cut, so the event could be classified
 FLAG_CLUSTERED = 2     # LID is not -1: the detection joined a cluster
 FLAG_CLUSTERED = 2     # LID is not -1: the transitions grouped into an event
@@ -100,7 +108,16 @@ def pack(table: pd.DataFrame, days: List[dict]) -> Dict[str, object]:
         return base64.b64encode(
             np.ascontiguousarray(values, dtype=dtype).tobytes()).decode('ascii')
 
-    return {
+    # Sex rides on the event itself, so there is nothing to join: the cluster
+    # file carries it per row beside TrackID. Older cluster files have no such
+    # column, and the key is then left out entirely rather than filled with
+    # zeros -- absent and 'every event unknown' are different states, and the
+    # page says so instead of offering a filter that can only empty itself.
+    sex = None
+    if 'Sex' in table.columns:
+        sex = table['Sex'].map(SEX_CODE).fillna(SEX_UNKNOWN).astype(np.uint8)
+
+    packed = {
         'n': int(count),
         'bids': list(BIDS),
         'labels': LABELS,
@@ -114,6 +131,10 @@ def pack(table: pd.DataFrame, days: List[dict]) -> Dict[str, object]:
         'hour': encode(times.hour.to_numpy(), np.uint8),
         'minute': encode(times.minute.to_numpy(), np.uint8),
     }
+    if sex is not None:
+        packed['sexes'] = list(SEXES)
+        packed['sex'] = encode(sex, np.uint8)
+    return packed
 
 
 def summarise(table: pd.DataFrame) -> dict:
@@ -125,6 +146,9 @@ def summarise(table: pd.DataFrame) -> dict:
         out['noPrediction'] = int(table['Prediction'].isna().sum())
     if 'ClipCreated' in table.columns:
         out['noClip'] = int((table['ClipCreated'] != 'Yes').sum())
+    if 'Sex' in table.columns:
+        counts = table['Sex'].value_counts()
+        out['bySex'] = {str(k): int(v) for k, v in counts.items()}
     if 'LID' in table.columns:
         unclustered = int((table['LID'].astype('Int64') == -1).sum())
         out['unclustered'] = unclustered

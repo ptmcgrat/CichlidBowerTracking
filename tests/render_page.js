@@ -26,16 +26,35 @@ if (markAt > 0 && process.argv[markAt+1] !== undefined)
 // --- payloads the page will ask for -----------------------------------
 const ND=10, N=6000, BIDS=['c','p','b','f','t','m','s','d','o','x'];
 function enc(a,T){return Buffer.from(new T(a).buffer).toString('base64');}
-const x=[],y=[],bid=[],prob=[],flags=[],day=[],trial=[],hour=[];
+const x=[],y=[],bid=[],prob=[],flags=[],day=[],trial=[],hour=[],sex=[];
+// A share of these have to FAIL, or the filters are never exercised: a page
+// that drew every event regardless would look identical on an all-clean
+// fixture, which is how the crop went unapplied for as long as it did. Three
+// ways to fail, none overlapping: outside the four point crop, no clip, and
+// under the confidence cut.
 for(let i=0;i<N;i++){const d=i%ND;
-  x.push(200+((i*37)%900)); y.push(150+((i*53)%700));
+  const outside = i%13===0, noclip = i%23===0 && !outside,
+        unsure = i%17===0 && !outside && !noclip;
+  // the glass either side of the tray, well outside the crop polygon
+  if (outside) { x.push(i%2 ? 40 : 1260); y.push(150+((i*53)%700)); }
+  else { x.push(200+((i*37)%900)); y.push(150+((i*53)%700)); }
   bid.push(BIDS.indexOf(['c','p','b','f','t','m','s','o','x'][i%9]));
-  prob.push(200); flags.push(3); day.push(d);
-  trial.push(d<5?1:2); hour.push(8+(i%10));}
+  prob.push(unsure ? 100 : 200); flags.push(noclip ? 2 : 3); day.push(d);
+  trial.push(d<5?1:2); hour.push(8+(i%10));
+  // mostly unattributed, as the real cluster files are: 0 unknown, 1 male,
+  // 2 female. The two sexes deliberately do not sum to the whole. The strides
+  // are coprime with ND, or the sexes land on two days out of ten and the
+  // cumulative maps look frozen for a reason that is the fixture's fault.
+  // 13 is the out-of-crop stride and 17 the low-confidence one, so a sex
+  // sharing either would be filtered away entirely and read as a wired-up
+  // control doing nothing
+  sex.push(i%7===0 ? 1 : (i%19===0 ? 2 : 0));}
 const packed={n:N,bids:BIDS,labels:{},x:enc(x,Uint16Array),y:enc(y,Uint16Array),
   bid:enc(bid,Uint8Array),prob:enc(prob,Uint8Array),flags:enc(flags,Uint8Array),
   day:enc(day,Uint16Array),trial:enc(trial,Uint8Array),hour:enc(hour,Uint8Array),
-  summary:{n:N,noClip:120,unclustered:90,clusteredFraction:0.985}};
+  sexes:['Unknown','Male','Female'],sex:enc(sex,Uint8Array),
+  summary:{n:N,noClip:120,unclustered:90,clusteredFraction:0.985,
+           bySex:{Unknown:4458,Male:1200,Female:342}}};
 const png=u=>({url:u,width:64,height:48,scale:0.01,offset:0});
 const days=[...Array(ND)].map((_,i)=>({index:i,trial:i<5?1:2,
   date:'2025-08-0'+((i%9)+1),hours:9.6,
@@ -176,7 +195,7 @@ const dom=new JSDOM(inlined,{runScripts:'dangerously',virtualConsole:vc,
   }});
 const w=dom.window;
 
-setTimeout(()=>{
+setTimeout(async ()=>{
   const body=w.document.getElementById('body');
   const visible=body?body.children.length:-1;
   const text=(body?body.textContent:'').trim().slice(0,140);
@@ -244,6 +263,18 @@ setTimeout(()=>{
     console.log('HOVER  named ' + right + ', misnamed ' + wrong +
                 ', silent ' + quiet + ' of ' + sample.length);
     process.exit(right === sample.length ? 0 : 1);
+  }
+
+  // --sex <0|1|2>: work the fish control the way a person would, then let the
+  // page redraw. A filter that is wired to nothing renders identically, which
+  // is the only thing this proves and the whole reason to prove it.
+  const sexAt = process.argv.indexOf('--sex');
+  if (sexAt > 0 && process.argv[sexAt+1] !== undefined) {
+    const select = w.document.getElementById('sx');
+    if (!select) { console.log('SEX  no control'); process.exit(1); }
+    select.value = String(process.argv[sexAt+1]);
+    select.dispatchEvent(new w.Event('change'));
+    await new Promise(r => setTimeout(r, 600));
   }
 
   if (process.argv.indexOf('--text') > 0) {
